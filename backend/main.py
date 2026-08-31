@@ -1,3 +1,15 @@
+import sys
+import os
+from pathlib import Path
+
+# Add parent directory to sys.path so 'backend.xxx' package imports work seamlessly
+current_dir = Path(__file__).resolve().parent
+parent_dir = current_dir.parent
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import router as health_router
