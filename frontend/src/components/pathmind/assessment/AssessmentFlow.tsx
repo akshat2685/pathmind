@@ -100,23 +100,27 @@ export function AssessmentFlow() {
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   
+  // Real User Data from Onboarding (pulled from localStorage)
+  const [userName, setUserName] = useState<string>("");
+  const [userIdentity, setUserIdentity] = useState<string>("");
+  const [userGoal, setUserGoal] = useState<string>("");
+
   // Real User Evidence State
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [showEvidenceDrawer, setShowEvidenceDrawer] = useState(false);
   const [portfolioLink, setPortfolioLink] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load evidence from localStorage on mount
+  // Load all user data from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       try {
         const stored = localStorage.getItem("pathmind_user_evidence");
-        if (stored) {
-          setEvidenceList(JSON.parse(stored));
-        }
-      } catch {
-        // ignore JSON parse error
-      }
+        if (stored) setEvidenceList(JSON.parse(stored));
+      } catch { /* ignore */ }
+      setUserName(localStorage.getItem("pathmind_user_name") || "");
+      setUserIdentity(localStorage.getItem("pathmind_user_identity") || "");
+      setUserGoal(localStorage.getItem("pathmind_user_goal") || "");
     }
   }, []);
 
@@ -196,18 +200,23 @@ export function AssessmentFlow() {
           SelfEfficacy: Number(newResponses["se1"] || 0)
         };
 
+        // Build dynamic user context — entirely from what the user provided
+        const personId = userName ? userName.toLowerCase().replace(/\s+/g, "-") : "anonymous-scholar";
+        const goals = userGoal ? [userGoal] : [];
+        const constraints = userIdentity ? [`Life stage: ${userIdentity}`] : [];
+
         const res = await fetch(`${baseUrl}/api/counseling/synthesize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            person_id: "scholar-candidate",
-            goals: ["Master AI / Machine Learning and Systems Engineering"],
-            constraints: ["Requires strictly grounded evidence"],
-            evidence: evidenceList, // REAL user-supplied evidence (empty if none uploaded)
+            person_id: personId,
+            goals,
+            constraints,
+            evidence: evidenceList, // user-supplied (empty array if none uploaded)
             assessment_results: [
               {
                 assessment_id: "riasec-scct-comprehensive-v1",
-                person_id: "scholar-candidate",
+                person_id: personId,
                 timestamp: new Date().toISOString(),
                 schema_type: "RIASEC_SCCT",
                 raw_responses: newResponses,
@@ -227,8 +236,8 @@ export function AssessmentFlow() {
         console.error(err);
         setProfile({
           error: {
-            code: "SOURCE_UNAVAILABLE",
-            message: "The strict ADK counseling backend is initializing."
+            code: "CONNECTION_ERROR",
+            message: "We could not reach the counseling service. Please check your connection and try again."
           }
         });
       } finally {
@@ -250,16 +259,25 @@ export function AssessmentFlow() {
               <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
                 psychology_alt
               </span>
-              <span className="font-note-handwritten text-xl font-medium">Chapter III: Strict Psychometrics</span>
+              <span className="font-note-handwritten text-xl font-medium">
+                {userName ? `${userName}'s Assessment` : "Psychometric Assessment"}
+              </span>
             </div>
             
             <h1 className="font-headline-lg text-4xl sm:text-5xl text-on-surface mb-4">
-              Evidence-Informed <br />
-              <span className="text-secondary italic">Psychometric Engine</span>
+              {userName ? `Welcome, ${userName}` : "Career Assessment"}<br />
+              <span className="text-secondary italic">Let&apos;s find your path</span>
             </h1>
             
+            {userGoal && (
+              <div className="mb-4 px-4 py-3 sketch-border bg-surface-container-low/80 text-left">
+                <span className="font-label-md text-xs uppercase tracking-wider text-outline block mb-1">Your stated goal</span>
+                <p className="font-note-handwritten text-xl text-on-surface">&ldquo;{userGoal}&rdquo;</p>
+              </div>
+            )}
+
             <p className="font-body-md text-lg text-on-surface-variant mb-6 leading-relaxed max-w-lg mx-auto">
-              Evaluates your true Holland RIASEC interests and SCCT self-efficacy strictly without bias or flattering assumptions.
+              Answer each question honestly. Your results are used to give you a personalized, evidence-grounded career assessment.
             </p>
 
             {/* Evidence Quick Panel */}

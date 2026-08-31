@@ -13,7 +13,8 @@ import { SynthesisStep } from "./steps/SynthesisStep";
 export function OnboardingFlow() {
   const [step, setStep] = useState(0);
   
-  // State to hold collected user data
+  // State to hold collected user data — all from real user input
+  const [userName, setUserName] = useState<string>("");
   const [identity, setIdentity] = useState<string>("");
   const [goal, setGoal] = useState<string>("");
   const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
@@ -30,7 +31,17 @@ export function OnboardingFlow() {
           <div className="w-full max-w-3xl mx-auto">
             <AnimatePresence mode="wait">
               {step === 0 && (
-                <IntroStep key="intro" onNext={nextStep} />
+                <IntroStep
+                  key="intro"
+                  onNext={(name) => {
+                    setUserName(name);
+                    // Save name to localStorage so AssessmentFlow can pick it up
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("pathmind_user_name", name);
+                    }
+                    nextStep();
+                  }}
+                />
               )}
               
               {step === 1 && (
@@ -38,6 +49,9 @@ export function OnboardingFlow() {
                   key="identity" 
                   onNext={(id) => {
                     setIdentity(id);
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("pathmind_user_identity", id);
+                    }
                     nextStep();
                   }} 
                   onBack={prevStep} 
@@ -49,6 +63,9 @@ export function OnboardingFlow() {
                   key="goal"
                   onNext={(g) => {
                     setGoal(g);
+                    if (typeof window !== "undefined") {
+                      localStorage.setItem("pathmind_user_goal", g);
+                    }
                     nextStep();
                   }}
                   onBack={prevStep}
@@ -69,6 +86,7 @@ export function OnboardingFlow() {
               {step === 4 && (
                 <SynthesisStep 
                   key="synthesis"
+                  userName={userName}
                   identity={identity}
                   goal={goal}
                   evidence={evidence}

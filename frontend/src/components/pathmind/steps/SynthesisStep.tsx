@@ -6,21 +6,33 @@ import { useRouter } from "next/navigation";
 import { EvidenceItem } from "./EvidenceStep";
 
 interface SynthesisStepProps {
+  userName: string;
   identity: string;
   goal: string;
   evidence: EvidenceItem[];
 }
 
-export function SynthesisStep({ identity, goal, evidence }: SynthesisStepProps) {
+const IDENTITY_LABELS: Record<string, string> = {
+  school: "School Student",
+  college: "College Student",
+  professional: "Professional",
+  switcher: "Career Switcher",
+  lifelong: "Lifelong Scholar",
+};
+
+export function SynthesisStep({ userName, identity, goal, evidence }: SynthesisStepProps) {
   const [isSynthesizing, setIsSynthesizing] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsSynthesizing(false);
-    }, 1800);
+    }, 1600);
     return () => clearTimeout(timer);
   }, []);
+
+  const displayName = userName || "Scholar";
+  const displayIdentity = IDENTITY_LABELS[identity] || identity || "Self-Directed Scholar";
 
   return (
     <motion.div
@@ -37,8 +49,8 @@ export function SynthesisStep({ identity, goal, evidence }: SynthesisStepProps) 
             </span>
           </div>
           <div>
-            <h2 className="font-headline-lg text-3xl text-on-surface mb-2">Synthesizing Scholar Profile...</h2>
-            <p className="font-note-handwritten text-2xl text-on-surface-variant">The ADK counseling reasoning agent is reviewing your goals and attached evidence.</p>
+            <h2 className="font-headline-lg text-3xl text-on-surface mb-2">Scribing {displayName}&apos;s Profile...</h2>
+            <p className="font-note-handwritten text-2xl text-on-surface-variant">Recording your goals and evidence for the counseling engine.</p>
           </div>
         </div>
       ) : (
@@ -53,28 +65,35 @@ export function SynthesisStep({ identity, goal, evidence }: SynthesisStepProps) 
                 auto_stories
               </span>
             </div>
-            <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-1">Scholar Profile Scribed</h2>
+            <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-1">
+              Profile Scribed, {displayName}!
+            </h2>
             <p className="font-note-handwritten text-2xl text-secondary">
-              First ink marks recorded in the journal.
+              Your journey has been recorded.
             </p>
           </div>
 
           <div className="sketch-border p-8 mb-10 bg-surface-container-low space-y-6">
             <div>
-              <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Context &amp; Persona</span>
-              <p className="font-headline-sm text-2xl text-on-surface capitalize">{identity ? identity.replace("-", " ") : "Self-Directed Scholar"}</p>
+              <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Name</span>
+              <p className="font-headline-sm text-2xl text-on-surface">{displayName}</p>
             </div>
             
             <div className="pt-4 border-t border-outline-variant/30">
+              <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Current Stage</span>
+              <p className="font-headline-sm text-xl text-on-surface">{displayIdentity}</p>
+            </div>
+
+            <div className="pt-4 border-t border-outline-variant/30">
               <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Stated Goal</span>
-              <p className="font-note-handwritten text-2xl text-on-surface leading-relaxed border-l-3 border-tertiary pl-4">
-                &ldquo;{goal || "Exploring emerging disciplines & technical trajectories"}&rdquo;
+              <p className="font-note-handwritten text-2xl text-on-surface leading-relaxed border-l-4 border-tertiary pl-4">
+                &ldquo;{goal || "Exploring emerging disciplines and career pathways"}&rdquo;
               </p>
             </div>
 
             <div className="pt-4 border-t border-outline-variant/30">
               <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-2 block">
-                Attached Portfolio &amp; Evidence ({evidence.length})
+                Attached Evidence ({evidence.length})
               </span>
               {evidence.length > 0 ? (
                 <div className="space-y-2">
@@ -89,19 +108,19 @@ export function SynthesisStep({ identity, goal, evidence }: SynthesisStepProps) 
                 </div>
               ) : (
                 <p className="font-note-handwritten text-lg text-tertiary">
-                  No portfolio attached — Zero-assumption policy will request portfolio verification during assessment.
+                  No portfolio attached — the counselor will ask for relevant proof during assessment.
                 </p>
               )}
             </div>
           </div>
 
-          <div className="flex justify-center gap-4">
+          <div className="flex justify-center">
             <button 
               type="button"
               onClick={() => router.push("/assessment")}
               className="ink-wash-btn-primary px-10 py-3 text-2xl flex items-center gap-3 cursor-pointer"
             >
-              <span>Proceed to Assessment Engine</span>
+              <span>Proceed to Psychometric Assessment</span>
               <span className="material-symbols-outlined text-lg">east</span>
             </button>
           </div>
