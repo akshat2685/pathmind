@@ -25,17 +25,17 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
         <p className="text-slate-500">Based on your assessments, evidence, and stated goals.</p>
       </div>
 
-      {profile.error && (
+      {Boolean(profile.error) && (
         <div className="mb-8 p-6 bg-red-500/10 border border-red-500/20 rounded-2xl">
           <div className="flex items-start gap-4">
             <AlertCircle className="w-6 h-6 text-red-500 shrink-0 mt-1" />
             <div>
               <h3 className="text-red-500 font-medium text-lg mb-2">Synthesis Failed</h3>
               <p className="text-sm text-slate-700 dark:text-slate-300 mb-2">
-                <strong>Error Code:</strong> {String((profile.error as Record<string, unknown>).code)}
+                <strong>Error Code:</strong> {String((profile.error as Record<string, unknown>)?.code || "UNKNOWN")}
               </p>
               <p className="text-sm text-slate-700 dark:text-slate-300">
-                {String((profile.error as Record<string, unknown>).message)}
+                {String((profile.error as Record<string, unknown>)?.message || "An unexpected error occurred.")}
               </p>
             </div>
           </div>
