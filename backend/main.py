@@ -30,6 +30,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {
+        "service": "PATHMIND MVP API",
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 app.include_router(health_router)
 app.include_router(assessment_router)
 app.include_router(counseling_router)

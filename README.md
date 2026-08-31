@@ -26,7 +26,7 @@ Firestore Database
 ## Tech Stack
 - **Frontend**: Next.js 15 (Turbopack, App Router), Tailwind CSS, Framer Motion
 - **Backend**: Python 3.14, FastAPI, google-generativeai, google-cloud-firestore
-- **Deployment**: GitHub Pages (Frontend), Cloud Run (Backend)
+- **Deployment**: GitHub Pages (Frontend), Render Web Service (Backend)
 
 ## Local Development
 
@@ -53,8 +53,10 @@ Create a `.env` file in the `backend` directory based on `.env.example`:
 
 ## Deployment
 - **Frontend**: Automatically deployed to GitHub Pages via `.github/workflows/deploy-frontend.yml` upon push to `main` or `test/hackathon-demo`.
-- **Backend**: Deployed to Google Cloud Run.
+- **Backend**: Deployed to Render Web Service (`pathmind-api`).
 
-## Demo
-- **Frontend**: `https://akshat2685.github.io/pathmind`
-- **Backend API**: `Pending Deployment (Cloud Run Billing Issue)`
+## Live URLs
+- **Frontend (GitHub Pages)**: `https://akshat2685.github.io/pathmind`
+- **Backend API (Render)**: `https://pathmind-api.onrender.com`
+- **API Health Check**: `https://pathmind-api.onrender.com/health`
+- **API Docs (Swagger)**: `https://pathmind-api.onrender.com/docs`
