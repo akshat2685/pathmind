@@ -1,0 +1,650 @@
+PATHMIND
+Antigravity MVP Implementation Prompt Pack
+UI/UX + Agent Architecture + Delivery + Git Workflow
+Purpose: give Google Antigravity a disciplined sequence of implementation prompts for the PATHMIND MVP. The prompts are deliberately opinionated: premium product UI, real agent behavior, no fake integrations, no invented credentials, and no uncontrolled rewrites of the existing structure.
+0. Non-Negotiable Rules for Antigravity
+Treat the existing codebase as the source of truth. Inspect the current structure before modifying files.
+Do not rewrite or replace working architecture unless a concrete incompatibility requires it. Prefer incremental changes.
+Use Google ADK as the actual agent orchestration layer, not as a decorative dependency.
+Use Gemini through the configured Google Gen AI / Vertex path already selected for the project.
+Use shadcn/ui and KokonutUI for primitives and premium interaction patterns; use Motion/Framer Motion intentionally for transitions and state changes.
+Avoid generic AI-dashboard aesthetics: no excessive gradients, floating glassmorphism everywhere, giant rounded cards, noisy glow effects, or fake terminal visuals.
+The UI must feel like a premium learning product first and an AI product second.
+Do not hardcode API keys, tokens, service-account JSON, credentials, URLs containing secrets, or fabricated integration IDs.
+Whenever execution requires a credential or API key that is not already safely available in the environment, STOP at the relevant step and explicitly ask the developer for the exact credential or for permission to use the configured environment/secret store.
+Never generate placeholder secrets such as 'YOUR_API_KEY', fake keys, fake service IDs, or hardcoded credentials just to make the app appear functional.
+Use environment variables or the project's secure secret mechanism for all credentials. Validate presence at startup and fail clearly if required secrets are missing.
+Never fabricate job, internship, certification, course, salary, or application links. Unavailable external data must be labeled as such.
+Do not expose chain-of-thought. UI should show concise decision summaries, evidence, actions, confidence, and state transitions.
+Every phase must end with: tests, type-check/build validation, a short change summary, and a list of any blockers or missing credentials.
+Commit work in small logical units. Do not mix unrelated UI, backend, and infra changes in one giant commit.
+1. UI/UX Direction
+Visual direction: premium, editorial, intelligent, calm, and highly intentional. Think 'high-end learning OS' rather than 'AI SaaS admin panel'.
+Typography: strong typographic hierarchy, restrained use of bold, generous whitespace, excellent line length, and readable body copy.
+Layout: asymmetric compositions, large editorial sections, persistent context rail where useful, and focused single-primary-action screens.
+Color: neutral foundation with one restrained accent and semantic colors only when they convey state. Avoid rainbow AI palettes.
+Surfaces: use depth through spacing, borders, subtle shadows, and material hierarchy rather than blur-heavy glass cards.
+Animation: use Motion for page transitions, progressive reveal, timeline movement, locked-to-unlocked states, evidence evaluation, and subtle microinteractions. Avoid animation for decoration.
+KokonutUI: selectively use distinctive interaction components where they improve the experience. Do not install components merely to advertise the library.
+shadcn/ui: use as the base component system and keep variants consistent.
+Accessibility: keyboard navigation, visible focus, reduced-motion support, adequate contrast, semantic landmarks, and screen-reader labels.
+Responsive behavior: desktop-first for the hackathon demo, but no broken tablet/mobile layouts.
+The dashboard should communicate 'where I am, why I am here, what I need to do next' within seconds.
+2. Prompt 01 — Codebase Reconnaissance + Guardrails
+Paste this FIRST.
+You are working on the PATHMIND MVP.
+
+Before changing anything:
+1. Inspect the complete existing repository structure.
+2. Identify frontend framework, routing, styling, component system, backend entry points, ADK code, Gemini/Gen AI integration, Cloud configuration, database access, environment-variable handling, test setup, and existing UI patterns.
+3. Identify what is already implemented and what is missing relative to the PATHMIND PRD.
+4. Do not rewrite the project.
+5. Do not introduce a second styling system if the current project already has one.
+6. Reuse the existing structure wherever practical.
+
+Create:
+- docs/CURRENT_STATE.md
+- docs/IMPLEMENTATION_STATUS.md
+- docs/DECISIONS.md
+
+In IMPLEMENTATION_STATUS.md, classify each PRD capability as:
+READY / PARTIAL / MISSING / BLOCKED.
+
+In CURRENT_STATE.md document the actual stack and entry points.
+
+Then propose the smallest implementation sequence needed to reach the hackathon MVP.
+
+Do not modify application behavior in this phase unless required to add the documentation.
+
+Credential rule:
+If any API key, secret, service account, OAuth credential, or external integration credential is required later and is not already safely configured, do NOT invent one. Mark the dependency as BLOCKED and state exactly which credential is needed and where it must be configured.
+3. Prompt 02 — Premium Design System + Shell
+Implement the PATHMIND visual system without building feature pages yet.
+
+Use the existing framework plus:
+- shadcn/ui as the base component system
+- KokonutUI where it genuinely improves interaction quality
+- Motion / Framer Motion for intentional animation
+
+Create a cohesive design system:
+- typography scale
+- spacing scale
+- radius rules
+- border rules
+- semantic color tokens
+- page background
+- elevated surface
+- muted surface
+- success/warning/error states
+- focus states
+- dark/light behavior only if the existing project already supports both
+
+Create reusable components:
+- AppShell
+- Sidebar / ContextRail
+- TopBar
+- SectionHeader
+- ProgressIndicator
+- LockedStage
+- EvidenceCard
+- TrajectoryCard
+- PathCard
+- ResourceCard
+- MemoryMoment
+- AgentActivity
+- EmptyState
+- LoadingState
+- ErrorState
+- ConfirmDialog
+- Command/Search surface
+
+Design constraints:
+- no generic SaaS dashboard look
+- no giant glass cards
+- no excessive gradients
+- no random glow effects
+- no decorative AI circuitry
+- no fake analytics
+- no lorem ipsum
+- no fake interaction
+
+Use realistic PATHMIND copy.
+
+Create one polished design-system demo route so we can inspect all primitives in one place.
+
+Do not build the full product yet.
+Run typecheck/build/tests before finishing.
+4. Prompt 03 — Landing + Identity Experience
+Build the PATHMIND entry experience.
+
+The product should immediately communicate:
+'Your learning journey has memory.'
+
+Create a premium onboarding flow:
+1. Intro
+2. Who are you? (school student / college student / professional / career switcher / lifelong learner)
+3. What are you trying to achieve?
+4. Upload/import available background evidence
+5. Initial profile synthesis state
+
+Use progressive disclosure.
+Do not show a huge form on one screen.
+
+The visual story should feel like a guided conversation between a sophisticated learning system and the user.
+
+Animation requirements:
+- smooth page/step transitions
+- input focus transitions
+- subtle progress motion
+- polished upload-state feedback
+
+The experience must work with local/demo data without pretending external integrations exist.
+
+Do not expose hidden implementation details to the user.
+No fake success messages.
+5. Prompt 04 — Counseling Experience
+Implement the PATHMIND counseling flow as a serious assessment experience, not a personality quiz.
+
+The frontend must support:
+- structured academic/context intake
+- interests
+- activities
+- goals
+- constraints
+- RIASEC-oriented interest inputs
+- self-efficacy / outcome-expectation / contextual-barrier inputs inspired by validated career-development constructs
+
+Important:
+Do not call the system a clinical psychological assessment.
+Do not diagnose mental-health conditions.
+Do not claim deterministic psychological profiling.
+
+UX:
+- one conceptual question at a time where appropriate
+- explain why a question matters
+- show progress without creating pressure
+- allow back/edit
+- preserve partial state
+- produce a concise 'What we learned about you' summary
+
+The output should show:
+Strengths
+Interests
+Evidence
+Constraints
+Open questions
+Confidence
+
+Avoid arbitrary 'personality percentages' unless they are explicitly tied to a defined assessment model.
+6. Prompt 05 — Trajectory Brain + Path Discovery
+Implement the trajectory-based recommendation experience.
+
+The second brain should be represented as structured trajectory knowledge, not as a pile of biographies.
+
+Create demo-safe trajectory records containing:
+- background
+- starting conditions
+- interests
+- skills
+- decisions
+- milestones
+- projects
+- internships
+- failures
+- turning points
+- outcomes
+- lessons
+
+Create the retrieval and synthesis path:
+Student profile
+→ relevant trajectories
+→ common patterns
+→ differences
+→ candidate paths
+→ critic/review
+→ final recommendations
+
+The UI should show:
+- 2–3 candidate paths
+- fit explanation
+- confidence
+- evidence used
+- missing evidence
+- advantages
+- disadvantages
+- skill/experience requirements
+
+Add a 'Why this path?' interaction that reveals evidence and trajectory patterns.
+
+Never say the AI knows the student's future.
+Use 'candidate', 'fit', 'evidence', 'confidence', and 'recommendation' language.
+7. Prompt 06 — Progressive Roadmap / Locked Levels
+Implement the signature PATHMIND experience: the student does NOT receive the entire roadmap at once.
+
+The backend may generate the full roadmap, but the UI exposes only the current stage plus a carefully designed preview of what exists ahead.
+
+Create:
+- roadmap timeline
+- current stage
+- locked future stages
+- stage dependencies
+- mission cards
+- evidence requirements
+- completion state
+- fallback/remedial state
+
+Interaction:
+1. Current stage is active.
+2. Future stages are locked.
+3. Completion evidence is submitted.
+4. Agent evaluates evidence.
+5. Progress state changes.
+6. Next stage unlock animation plays.
+7. The newly unlocked stage becomes the focal point.
+
+Important:
+The lock mechanism must be enforced in backend state, not only hidden in the UI.
+
+Use Motion for:
+- unlock transition
+- progress interpolation
+- timeline reveal
+- evidence evaluation state
+- subtle celebration, not gamification overload.
+8. Prompt 07 — Evidence + Learning Evaluation
+Implement evidence-based progression.
+
+A resource being opened or a video being watched must NOT automatically mean mastery.
+
+Support MVP evidence types:
+- short quiz
+- written answer
+- project text/link
+- coding/project artifact metadata
+- reflection
+
+Create an evaluation flow where the agent returns:
+- mastery estimate
+- what is demonstrated
+- what remains weak
+- recommended reinforcement
+- readiness decision
+
+Possible states:
+READY
+REINFORCE
+BLOCKED
+
+The UI should make the reasoning understandable without revealing chain-of-thought.
+
+Show concise evidence such as:
+'You demonstrated X. Y is still weak. Complete this reinforcement task before the next stage.'
+
+The backend must persist evidence and evaluation results.
+9. Prompt 08 — Persistent Personal Memory
+Implement PATHMIND's longitudinal memory layer.
+
+Separate:
+PRIVATE STUDENT MEMORY
+from
+SHARED GENERALIZED KNOWLEDGE.
+
+Private memory categories:
+- episodic learning moments
+- semantic learning facts
+- preferences
+- goals
+- evidence
+- important prior explanations
+- progress history
+
+Each memory should store:
+- student_id
+- timestamp
+- topic
+- source/context
+- confidence
+- related concepts
+
+Implement a natural recall interaction.
+
+Example:
+User: 'Do you remember the recursion problem we solved earlier?'
+
+The agent should retrieve a factual memory if one exists and answer from stored evidence.
+
+Do not fabricate memories.
+If memory is unavailable, say so.
+
+Cross-student learning:
+The system may learn generalized patterns from many students, but NEVER expose another student's raw private memory, identity, exact conversation, timestamp, or private details.
+
+Build the data-access layer so student_id scoping is enforced server-side.
+10. Prompt 09 — Accountability Partner
+Implement the accountability layer.
+
+The agent should understand:
+- current mission
+- expected pace
+- missed commitments
+- current goal
+- recent evidence
+- learning preferences
+- upcoming checkpoint
+
+Interactions should feel like a thoughtful mentor, not a notification bot.
+
+Examples:
+- 'You planned to finish this stage by Friday. You're two days behind.'
+- 'Your last two attempts struggled with the same concept. I changed the next task to reinforce it.'
+- 'You have enough evidence to start looking at internship opportunities.'
+
+Allow the user to:
+- continue current path
+- re-plan schedule
+- reduce weekly hours
+- switch goals
+
+Never shame the user.
+Never use manipulative gamification.
+11. Prompt 10 — Career / Certification / Opportunity Engine
+Extend the same system from students to lifelong career users.
+
+Support target states such as:
+- role
+- specialization
+- certification
+- promotion
+- career transition
+- graduate study
+- entrepreneurship goal
+
+For each target, generate a gap model:
+Skills
+Education
+Certifications
+Experience
+Portfolio evidence
+Projects
+Networking
+Opportunity readiness
+
+Certifications must be classified:
+- mandatory
+- strongly useful
+- optional
+- low-value
+
+Do not recommend certifications merely because they are popular.
+
+When live opportunity search is enabled, every job/internship result must include:
+- source
+- direct URL
+- eligibility
+- match reasoning
+- missing requirements
+- checked timestamp
+
+Never fabricate listings or application links.
+
+Resume generation:
+Maintain a canonical verified profile and produce role-specific variants without inventing experience, projects, achievements, grades, or employment.
+12. Prompt 11 — Adaptation / Replanning Engine
+Implement the PATHMIND adaptation loop.
+
+The roadmap is versioned.
+
+When new evidence arrives:
+- update student state
+- compare against prior state
+- determine whether the current path remains appropriate
+- propose a revised roadmap only when meaningful change is detected
+
+Inputs may include:
+- new assessment results
+- performance
+- new interests
+- new constraints
+- missed goals
+- demonstrated strengths
+- new external opportunity conditions
+
+The user must retain agency.
+
+If a user chooses a path against the model recommendation:
+- accept the choice
+- explain risks/trade-offs once
+- construct the chosen path
+- monitor outcomes
+- revisit at strategic checkpoints
+
+Do not constantly nag the user to switch back.
+13. Prompt 12 — Agent Orchestration with Google ADK
+Audit and implement the actual ADK orchestration.
+
+Use a small number of focused agents rather than a fake swarm.
+
+Recommended MVP roles:
+- ProfileAgent
+- CounselorAgent
+- TrajectoryAgent
+- PathArchitectAgent
+- ProgressAgent
+- MemoryAgent
+
+Use deterministic application logic for:
+- authorization
+- student_id scoping
+- lock enforcement
+- validation
+- persistence
+- safety boundaries
+
+Use ADK agents for:
+- profile interpretation
+- counseling synthesis
+- trajectory reasoning
+- recommendation synthesis
+- evidence interpretation
+- memory retrieval/use
+- roadmap adaptation
+
+Every tool must have a narrow contract and explicit input/output schema.
+
+Instrument agent calls and state transitions with concise observability events.
+
+Do not expose chain-of-thought.
+
+Use summaries such as:
+'Profile extracted'
+'12 relevant trajectories retrieved'
+'3 candidate paths synthesized'
+'Evidence evaluated'
+'Stage 2 unlocked'.
+14. Prompt 13 — API Key / Credential Discipline
+Apply strict credential handling across the entire project.
+
+Rules:
+1. Search the repository for hardcoded secrets, tokens, API keys, private-key blocks, credentials, or suspicious configuration values.
+2. Remove any real secret from source code immediately.
+3. Add safe environment-variable/configuration handling.
+4. Provide .env.example ONLY with variable names and comments explaining what each variable is for. Never put fake credentials in it.
+5. Add startup validation for required credentials.
+6. If a required credential is missing, produce an actionable error.
+
+Most important:
+Whenever you reach a feature that requires a credential not already configured in the environment, STOP and ASK ME for that credential.
+
+Do not:
+- invent a key
+- use a placeholder as a fake working value
+- silently downgrade to a fake provider
+- hardcode a token
+- commit secrets
+- encode credentials into URLs
+
+Required credentials may include, depending on the actual implementation:
+- Gemini / Google API credential
+- Google Cloud project configuration
+- Firestore credentials
+- external job/internship provider API keys
+- OAuth credentials
+
+Only ask for a credential when the next implementation step truly requires it.
+15. Prompt 14 — Testing + Demo Reliability
+Build a deterministic hackathon demo path.
+
+Create a seeded demo student profile and demo trajectory dataset.
+
+The demo flow must be:
+1. Create/import student profile
+2. Counseling synthesis
+3. Show 3 paths
+4. Select one
+5. Generate hidden roadmap
+6. Show Stage 1
+7. Submit evidence
+8. Evaluate
+9. Unlock Stage 2
+10. Ask memory question
+11. Show memory recall
+12. Change weekly time constraint
+13. Show roadmap adaptation
+
+All demo data must be clearly marked as DEMO/SEED where appropriate.
+
+Create automated tests for:
+- roadmap lock enforcement
+- student memory isolation
+- evidence gating
+- path selection
+- roadmap versioning
+- missing credential errors
+
+Also create a simple health endpoint for backend readiness.
+16. Prompt 15 — Final Polish / Anti-AI-Slop Pass
+Perform a final product-design audit.
+
+Do NOT add features.
+
+Audit every major screen for:
+- generic dashboard appearance
+- excessive rounded containers
+- weak typography
+- inconsistent spacing
+- too many badges
+- redundant cards
+- decorative gradients
+- meaningless charts
+- fake AI activity
+- excessive animation
+- unclear CTA hierarchy
+- poor empty states
+- accidental jargon
+- verbose copy
+
+Improve the product using:
+- hierarchy
+- whitespace
+- typography
+- composition
+- meaningful state
+- interaction quality
+- purposeful motion
+
+Motion should communicate:
+change
+progress
+causality
+unlocking
+context
+
+Remove motion that exists only because animation is available.
+
+The end result should feel like a carefully designed premium learning product, not a template assembled from UI components.
+17. Git / Version-Control Strategy
+Recommended branch model for a two-person hackathon team:
+main — submission-ready, protected conceptually; only merge tested work.
+develop — integration branch for completed feature work.
+feature/* — individual implementation branches.
+test/* — temporary integration or judge-flow verification branches when necessary.
+hotfix/* — urgent fixes against main.
+Recommended flow:
+feature/profile-onboarding → PR → develop
+feature/trajectory-brain → PR → develop
+feature/progressive-roadmap → PR → develop
+feature/memory → PR → develop
+feature/career-engine → PR → develop
+develop → test/hackathon-demo → validation
+test/hackathon-demo → main only after final smoke test
+18. Commit Convention
+feat(profile): add student profile ingestion
+feat(roadmap): enforce progressive stage locking
+feat(memory): add private episodic recall
+feat(agent): add ADK trajectory synthesis
+ui(roadmap): refine locked-stage interaction
+fix(auth): reject requests without student scope
+fix(memory): prevent cross-student retrieval
+chore(ci): add typecheck and build validation
+docs(prd): document trajectory data model
+19. PR Checklist
+Feature is narrowly scoped.
+No secrets or credentials committed.
+No fake integrations or fabricated external data.
+Student-level data access is isolated.
+Typecheck passes.
+Build passes.
+Relevant tests pass.
+UI states include loading/error/empty/success where applicable.
+Accessibility basics checked.
+No unrelated refactors.
+Screenshots/video notes added when the UI meaningfully changed.
+PR description explains behavior, not implementation fluff.
+20. Suggested Two-Person Work Split
+Person A — Product/UI:
+design system, onboarding, counseling UI, path comparison, roadmap, memory UI, polish.
+
+Person B — Agent/backend:
+ADK agents, Gemini integration, trajectory retrieval, Firestore state, evidence evaluation, memory, API routes, Cloud Run configuration.
+
+Both:
+integration, tests, smoke demo, README, architecture diagram, final deployment evidence.
+21. GitHub Setup Commands
+Because the connected GitHub tool in this environment can manage repositories/files/branches/PRs but does not expose a repository-creation mutation, the remote repository itself must be created once through GitHub's UI (or locally with an authenticated GitHub CLI). After that, use the following local commands:
+
+git init
+git branch -M main
+git add .
+git commit -m "chore(init): bootstrap PATHMIND"
+git remote add origin <YOUR_REAL_REPOSITORY_URL>
+git push -u origin main
+
+git checkout -b develop
+git push -u origin develop
+
+git checkout -b feature/bootstrap-ui
+git push -u origin feature/bootstrap-ui
+
+Do not replace <YOUR_REAL_REPOSITORY_URL> with a fake URL. Use the real repository URL after creation.
+22. Final Antigravity Execution Rule
+Work phase-by-phase.
+
+For each phase:
+1. Inspect current code.
+2. State exactly what you will change.
+3. Implement the smallest coherent change.
+4. Run validation.
+5. Fix regressions caused by your changes.
+6. Report files changed, tests run, and blockers.
+7. Stop.
+
+Do not automatically continue into the next phase.
+
+When a credential is required:
+STOP → ASK FOR THE CREDENTIAL → WAIT FOR CONFIGURATION → CONTINUE.
+
+When requirements conflict:
+prefer the existing codebase, the PATHMIND PRD, security, correctness, and minimal-change strategy in that order.
+
+The goal is not maximum code.
+The goal is a polished, credible, demonstrable MVP.

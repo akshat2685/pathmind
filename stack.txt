@@ -1,0 +1,100 @@
+PATHMIND — MVP TECH STACK & IMPLEMENTATION BASELINE
+Google ADK + Google Gen AI SDK + Gemini + Google Cloud
+Purpose. This document defines the recommended technology stack for the hackathon MVP only. The implementation should favor speed, reliability, clean separation of concerns, and easy deployment over unnecessary infrastructure.
+1. Recommended MVP Architecture
+Browser → Next.js/React → FastAPI → Google ADK → Gemini
+                               │
+                 ┌─────────────┼─────────────┐
+                 ▼             ▼             ▼
+             Firestore      Pub/Sub      Cloud Storage
+                 │
+                 ▼
+        Student Memory + Roadmap + Trajectory Brain
+Architecture rule: ADK is the agent orchestration layer. The Google Gen AI SDK is the model/API client layer. Firestore is the source of truth for persistent application state. Cloud Run is the primary backend deployment target.
+2. Agent Topology for the MVP
+Root Orchestrator Agent — receives the mission/request and delegates to the relevant specialist.
+Profile & Counseling Agent — converts user-provided education, activities, goals, constraints and assessment answers into structured profile data.
+Trajectory/Path Agent — retrieves relevant trajectory records, compares patterns and produces 2–3 candidate paths with evidence and trade-offs.
+Roadmap Agent — creates the full hidden roadmap and returns only the currently unlocked stage to the frontend.
+Progress & Evidence Agent — evaluates submitted evidence, updates mastery/state, unlocks or routes to remediation, and triggers re-planning.
+Memory Service/Agent — writes and retrieves student-specific memories and produces generalized learning patterns only through a privacy-safe aggregation step.
+3. State That Must Live Outside the Model
+Do not rely on conversation context as the source of truth. Persist these in Firestore:
+student profile and assessment outputs
+current path and roadmap version
+current stage and locked/unlocked state
+missions and evidence
+memory records and provenance
+trajectory knowledge records
+resource metadata
+job/internship opportunities and source timestamps
+audit/event records for important agent actions
+4. API Key and Secret Policy — NON-NEGOTIABLE
+Never hardcode API keys, service-account secrets, tokens, passwords, private URLs, or other credentials anywhere in source code, prompts, tests, fixtures, Dockerfiles, frontend bundles, or committed config files.
+If a required API key/credential is missing, STOP the relevant setup step and explicitly ask the user/developer to provide/configure it. Do not invent one.
+Use environment variables locally (for example, GEMINI_API_KEY) and Google Cloud Secret Manager / runtime environment configuration in deployment.
+The frontend must never receive a server-side Gemini API key. All Gemini calls must be server-side.
+Provide a .env.example containing ONLY variable names and safe descriptions, with no fake, sample, placeholder, or reusable secret values.
+Do not use strings such as YOUR_API_KEY, sk-..., fake tokens, dummy service-account JSON, or hardcoded fallback credentials in executable code.
+At startup, validate required secrets and fail clearly with an actionable message that names the missing variable but never prints its value.
+For Google Cloud deployment, prefer workload identity / attached service identity and Secret Manager over embedding service-account JSON in the repository.
+The coding agent must ask for credentials whenever a live integration genuinely requires them instead of silently substituting mocked keys or fake external results.
+5. Environment Configuration
+GEMINI_API_KEY=                # required when using Gemini API key auth
+GOOGLE_CLOUD_PROJECT=           # required for Google Cloud resources
+GOOGLE_CLOUD_LOCATION=          # deployment/model location as configured
+FIRESTORE_DATABASE=             # optional if using a non-default DB
+PUBSUB_TOPIC=                   # optional for async MVP flow
+STORAGE_BUCKET=                 # optional for document uploads
+Important: These lines are configuration names only. The actual values must be supplied by the developer through the runtime environment or secret manager. The implementation must never insert placeholder values into executable configuration.
+6. Gemini / Gen AI SDK Policy
+Use the current official Google Gen AI SDK (google-genai), not the legacy google-generativeai package for new work.
+Prefer the current Gemini API interface documented by Google for new applications; the Interactions API is the current recommended interface as of August 2026.
+Keep the model identifier in configuration so the hackathon-eligible model can be changed without editing application logic.
+Use structured outputs/Pydantic models wherever practical for student profiles, candidate paths, roadmap stages, evidence evaluations and opportunity records.
+Do not expose hidden chain-of-thought. Store concise decisions, evidence references, tool calls and outcome/status events instead.
+7. ADK Usage Policy
+Use Google ADK as the actual orchestration framework, not merely as an unused dependency added for compliance.
+Specialist agents should have clearly separated responsibilities and tools.
+Use deterministic application code for persistence, authentication/authorization, scoring constraints and safety checks where possible; let the model handle reasoning and synthesis.
+Persist important workflow checkpoints so a mission can resume after a request failure or process restart.
+Keep agent prompts/versioned instructions in source control and separate from secrets.
+Treat tool outputs as untrusted data and validate them before they change persistent state.
+8. Firestore Collections — Minimal MVP
+students/{studentId}
+profiles/{studentId}
+roadmaps/{studentId}
+stages/{studentId_stageId}
+memories/{studentId_memoryId}
+trajectories/{trajectoryId}
+resources/{resourceId}
+opportunities/{opportunityId}
+events/{eventId}
+9. Authentication
+MVP recommendation: Keep authentication minimal unless it is required for the demo. If implemented, use Google Identity / Firebase Authentication rather than building custom password authentication. Do not store raw passwords.
+10. Retrieval Strategy
+MVP: store trajectory records as structured JSON/Firestore documents with normalized tags and fields.
+Use metadata filtering first: career domain, education level, interests, region, goals, skills, constraints.
+Use Gemini to synthesize patterns across the retrieved trajectories.
+Only add a vector database if the seed knowledge base becomes large enough that metadata retrieval is insufficient. Avoid adding infrastructure merely for architectural decoration.
+11. Why This Stack
+Python + FastAPI + ADK keeps the agent layer fast to build and easy to reason about.
+The official Google Gen AI SDK gives a current, supported Gemini client path and supports the modern Gemini API interfaces.
+Firestore is enough for the MVP because the product is state-heavy rather than relational-query-heavy.
+Cloud Run provides the simplest strong proof of Google Cloud deployment.
+Pub/Sub adds a clean path to asynchronous/background execution without forcing a heavyweight queue or orchestration platform.
+Next.js/TypeScript provides a fast path to a polished, demo-ready frontend.
+12. Hackathon Scope Constraint
+Do not add infrastructure unless it directly enables an MVP requirement. For the first version, avoid Kubernetes/GKE, Neo4j, Redis, Kafka, dedicated vector databases, custom model hosting, complex microservices, and separate workflow engines. These can be introduced later when the product has real scale requirements.
+13. Required Developer-Agent Behavior
+Before implementing any live external integration, check whether credentials are required.
+If credentials are required and not available, ask the user to provide/configure them; do not continue with a fabricated credential.
+Never silently mock a live integration when the demo depends on proving that the integration works. If a mock is used intentionally, label it clearly as a mock in code and UI.
+Never commit secrets.
+Never put secret values into client-side JavaScript, public environment variables, screenshots, logs or the README.
+Make every external dependency replaceable through configuration and small adapter modules.
+14. Official References Verified for Current Stack
+Google Gemini API documentation — current Gemini API and Interactions API guidance (updated August 2026): https://ai.google.dev/gemini-api/docs
+Google Gen AI SDK migration/current SDK guidance: https://ai.google.dev/gemini-api/docs/migrate
+Google ADK documentation: https://google.github.io/adk-docs/
+Google Cloud Run + Pub/Sub integration: https://docs.cloud.google.com/pubsub/docs/use-with-cloud-run
