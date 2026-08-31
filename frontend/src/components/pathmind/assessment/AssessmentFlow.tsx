@@ -34,19 +34,51 @@ export function AssessmentFlow() {
       setIsSynthesizing(true);
       
       try {
-        setTimeout(() => {
-          setProfile({
-            strengths: [{ claim: "High self-efficacy and problem solving", confidence: "HIGH" }],
-            candidate_directions: ["Software Engineering", "Data Analysis"],
-            contradictions: [{
-              reported_preference: "I hate programming.",
-              observed_evidence: "Student has built 4 mobile apps.",
-              suggested_clarification: "Explore specific aspects of programming disliked."
-            }]
-          });
-          setIsSynthesizing(false);
-        }, 2000);
-      } catch {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+        const res = await fetch(`${baseUrl}/api/counseling/synthesize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            person_id: "demo-user",
+            goals: ["Explore AI / ML engineering"],
+            constraints: ["Needs fully remote"],
+            evidence: [
+              {
+                source: "student",
+                type: "self_report",
+                description: "Built 4 mobile apps",
+                confidence: "HIGH",
+                timestamp: new Date().toISOString()
+              }
+            ],
+            assessment_results: [
+              {
+                assessment_id: "demo-assessment-1",
+                person_id: "demo-user",
+                timestamp: new Date().toISOString(),
+                schema_type: "RIASEC",
+                raw_responses: newResponses,
+                computed_scores: {}
+              }
+            ]
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error("Backend synchronization failed.");
+        }
+
+        const data = await res.json();
+        setProfile(data);
+      } catch (err) {
+        console.error(err);
+        setProfile({
+          error: {
+            code: "SOURCE_UNAVAILABLE",
+            message: "The ADK backend is currently unavailable."
+          }
+        });
+      } finally {
         setIsSynthesizing(false);
       }
     }
