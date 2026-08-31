@@ -28,9 +28,8 @@ async def synthesize_profile(
     try:
         person_id = x_person_id or (body.person_id if body else None) or "demo-user"
         
-        # Check if inline assessment results were provided in the request body
+        # Parse inline assessment results if provided
         if body and body.assessment_results and len(body.assessment_results) > 0:
-            from backend.core.assessment_schemas import AssessmentResult, AssessmentResponse
             parsed_results = []
             for r in body.assessment_results:
                 raw_resp = [
@@ -41,7 +40,7 @@ async def synthesize_profile(
                 parsed_results.append(
                     AssessmentResult(
                         person_id=person_id,
-                        assessment_id=r.get("assessment_id", "assessment-1"),
+                        assessment_id=r.get("assessment_id", "riasec-assessment"),
                         version="1.0.0",
                         timestamp="2026-08-31T00:00:00Z",
                         raw_responses=raw_resp,
@@ -49,29 +48,39 @@ async def synthesize_profile(
                     )
                 )
         else:
-            # Fallback to fetching from Firestore store
+            # Fallback to store
             results = await store.get_assessment_results(person_id)
             if not results:
-                # Provide deterministic fallback seed result for demo purposes
-                from backend.core.assessment_schemas import AssessmentResult, AssessmentResponse
                 results = [{
                     "person_id": person_id,
                     "assessment_id": "riasec-interest-inventory",
                     "version": "1.0.0",
                     "timestamp": "2026-08-31T00:00:00Z",
                     "raw_responses": [
-                        {"item_id": "r1", "response_value": 5, "timestamp": "2026-08-31T00:00:00Z"},
-                        {"item_id": "i1", "response_value": 5, "timestamp": "2026-08-31T00:00:00Z"}
+                        {"item_id": "r1", "response_value": 3, "timestamp": "2026-08-31T00:00:00Z"},
+                        {"item_id": "i1", "response_value": 4, "timestamp": "2026-08-31T00:00:00Z"}
                     ],
-                    "calculated_scores": {"R": 5, "I": 5}
+                    "calculated_scores": {"R": 3, "I": 4}
                 }]
-            from backend.core.assessment_schemas import AssessmentResult
             parsed_results = [AssessmentResult(**r) for r in results]
         
-        background_context = "12th-grade student interested in technology, stated interest in AI/ML, built 4 projects."
-        if body and body.evidence:
-            background_context += f" Observable evidence: {json.dumps(body.evidence)}"
+        # Build strictly factual background context without hallucinating unprovided evidence
+        context_parts = []
+        if body and body.goals and len(body.goals) > 0:
+            context_parts.append(f"Stated Career Aspirations / Goals: {', '.join(body.goals)}")
+        else:
+            context_parts.append("Stated Career Aspirations / Goals: Not explicitly declared.")
             
+        if body and body.constraints and len(body.constraints) > 0:
+            context_parts.append(f"Stated Constraints: {', '.join(body.constraints)}")
+            
+        if body and body.evidence and len(body.evidence) > 0:
+            context_parts.append(f"Provided Observable Evidence & Work Artifacts: {json.dumps(body.evidence)}")
+        else:
+            context_parts.append("Provided Observable Evidence: NONE PROVIDED. The candidate has NOT submitted any portfolio, code repositories, work samples, or transcripts.")
+            
+        background_context = "\n".join(context_parts)
+        
         profile = agent.synthesize_profile(person_id, parsed_results, background_context)
         return profile
     except Exception as e:

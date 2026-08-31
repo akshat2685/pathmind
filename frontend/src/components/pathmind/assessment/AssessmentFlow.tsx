@@ -5,35 +5,90 @@ import { AnimatePresence } from "framer-motion";
 import { QuestionCard } from "./QuestionCard";
 import { CounselingDashboard } from "./CounselingDashboard";
 
+// Standardized Holland RIASEC & SCCT Items for Strict Psychometric Evaluation
 const QUESTIONS = [
   { 
     id: "r1", 
-    section: "RIASEC Interests", 
-    text: "I like to build, repair, or engineer complex technical systems and tools.", 
+    section: "RIASEC: Realistic (R)", 
+    text: "I enjoy building, repairing, or engineering concrete technical systems and physical/hardware components.", 
     options: [
-      { value: 1, label: "Strongly Dislike" }, 
-      { value: 3, label: "Neutral / Ambivalent" }, 
-      { value: 5, label: "Strongly Like & Enjoy" }
+      { value: 1, label: "1 — Strongly Dislike / Not Me" }, 
+      { value: 2, label: "2 — Slight Disinterest" },
+      { value: 3, label: "3 — Neutral / Ambivalent" }, 
+      { value: 4, label: "4 — Moderate Interest" },
+      { value: 5, label: "5 — Strongly Like & Enjoy" }
     ] 
   },
   { 
     id: "i1", 
-    section: "RIASEC Interests", 
-    text: "I like to analyze empirical data, discover patterns, and solve abstract problems.", 
+    section: "RIASEC: Investigative (I)", 
+    text: "I enjoy analyzing abstract datasets, formulating hypotheses, and solving algorithmic problems.", 
     options: [
-      { value: 1, label: "Strongly Dislike" }, 
-      { value: 3, label: "Neutral / Ambivalent" }, 
-      { value: 5, label: "Strongly Like & Enjoy" }
+      { value: 1, label: "1 — Strongly Dislike / Not Me" }, 
+      { value: 2, label: "2 — Slight Disinterest" },
+      { value: 3, label: "3 — Neutral / Ambivalent" }, 
+      { value: 4, label: "4 — Moderate Interest" },
+      { value: 5, label: "5 — Strongly Like & Enjoy" }
+    ] 
+  },
+  { 
+    id: "a1", 
+    section: "RIASEC: Artistic (A)", 
+    text: "I enjoy designing intuitive visual interfaces, creative workflows, and aesthetic human-computer experiences.", 
+    options: [
+      { value: 1, label: "1 — Strongly Dislike / Not Me" }, 
+      { value: 2, label: "2 — Slight Disinterest" },
+      { value: 3, label: "3 — Neutral / Ambivalent" }, 
+      { value: 4, label: "4 — Moderate Interest" },
+      { value: 5, label: "5 — Strongly Like & Enjoy" }
+    ] 
+  },
+  { 
+    id: "s1", 
+    section: "RIASEC: Social (S)", 
+    text: "I enjoy mentoring team members, teaching technical concepts, and collaborating to resolve people challenges.", 
+    options: [
+      { value: 1, label: "1 — Strongly Dislike / Not Me" }, 
+      { value: 2, label: "2 — Slight Disinterest" },
+      { value: 3, label: "3 — Neutral / Ambivalent" }, 
+      { value: 4, label: "4 — Moderate Interest" },
+      { value: 5, label: "5 — Strongly Like & Enjoy" }
+    ] 
+  },
+  { 
+    id: "e1", 
+    section: "RIASEC: Enterprising (E)", 
+    text: "I enjoy pitching product strategy, taking ownership of business milestones, and persuading stakeholders.", 
+    options: [
+      { value: 1, label: "1 — Strongly Dislike / Not Me" }, 
+      { value: 2, label: "2 — Slight Disinterest" },
+      { value: 3, label: "3 — Neutral / Ambivalent" }, 
+      { value: 4, label: "4 — Moderate Interest" },
+      { value: 5, label: "5 — Strongly Like & Enjoy" }
+    ] 
+  },
+  { 
+    id: "c1", 
+    section: "RIASEC: Conventional (C)", 
+    text: "I enjoy enforcing structured protocols, schema validations, and detail-oriented data governance.", 
+    options: [
+      { value: 1, label: "1 — Strongly Dislike / Not Me" }, 
+      { value: 2, label: "2 — Slight Disinterest" },
+      { value: 3, label: "3 — Neutral / Ambivalent" }, 
+      { value: 4, label: "4 — Moderate Interest" },
+      { value: 5, label: "5 — Strongly Like & Enjoy" }
     ] 
   },
   { 
     id: "se1", 
-    section: "Self Efficacy", 
-    text: "How confident are you that you can master a difficult new domain through consistent deliberate practice?", 
+    section: "SCCT: Self-Efficacy", 
+    text: "How confident are you in your ability to learn difficult technical foundations through disciplined practice?", 
     options: [
-      { value: 1, label: "Unconfident" }, 
-      { value: 3, label: "Somewhat Confident" }, 
-      { value: 5, label: "Extremely Confident" }
+      { value: 1, label: "1 — Very Low Confidence" }, 
+      { value: 2, label: "2 — Low Confidence" },
+      { value: 3, label: "3 — Moderate Confidence" }, 
+      { value: 4, label: "4 — High Confidence" },
+      { value: 5, label: "5 — Extremely High Confidence" }
     ] 
   },
 ];
@@ -59,30 +114,34 @@ export function AssessmentFlow() {
       
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
+        
+        // Calculate scores strictly
+        const computedScores = {
+          R: Number(newResponses["r1"] || 0),
+          I: Number(newResponses["i1"] || 0),
+          A: Number(newResponses["a1"] || 0),
+          S: Number(newResponses["s1"] || 0),
+          E: Number(newResponses["e1"] || 0),
+          C: Number(newResponses["c1"] || 0),
+          SelfEfficacy: Number(newResponses["se1"] || 0)
+        };
+
         const res = await fetch(`${baseUrl}/api/counseling/synthesize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            person_id: "demo-user",
-            goals: ["Explore AI / ML engineering"],
-            constraints: ["Needs fully remote"],
-            evidence: [
-              {
-                source: "student",
-                type: "self_report",
-                description: "Built 4 mobile apps",
-                confidence: "HIGH",
-                timestamp: new Date().toISOString()
-              }
-            ],
+            person_id: "scholar-candidate",
+            goals: ["Master AI / Machine Learning and Systems Engineering"],
+            constraints: ["Requires strictly grounded evidence"],
+            evidence: [], // Strict: No assumed evidence provided unless uploaded by candidate
             assessment_results: [
               {
-                assessment_id: "demo-assessment-1",
-                person_id: "demo-user",
+                assessment_id: "riasec-scct-comprehensive-v1",
+                person_id: "scholar-candidate",
                 timestamp: new Date().toISOString(),
-                schema_type: "RIASEC",
+                schema_type: "RIASEC_SCCT",
                 raw_responses: newResponses,
-                computed_scores: {}
+                computed_scores: computedScores
               }
             ]
           })
@@ -99,7 +158,7 @@ export function AssessmentFlow() {
         setProfile({
           error: {
             code: "SOURCE_UNAVAILABLE",
-            message: "The ADK backend is currently unavailable or initializing."
+            message: "The strict ADK counseling backend is initializing."
           }
         });
       } finally {
@@ -121,23 +180,33 @@ export function AssessmentFlow() {
               <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
                 psychology_alt
               </span>
-              <span className="font-note-handwritten text-xl font-medium">Chapter III: Evidence Counseling</span>
+              <span className="font-note-handwritten text-xl font-medium">Chapter III: Strict Psychometrics</span>
             </div>
             
             <h1 className="font-headline-lg text-4xl sm:text-5xl text-on-surface mb-4">
               Evidence-Informed <br />
-              <span className="text-secondary italic">Counseling Engine</span>
+              <span className="text-secondary italic">Psychometric Engine</span>
             </h1>
             
-            <p className="font-body-md text-lg text-on-surface-variant mb-10 leading-relaxed max-w-lg mx-auto">
-              Gather structured psychometric signals about your interests, self-efficacy, and learning patterns to generate an AI-synthesized career profile.
+            <p className="font-body-md text-lg text-on-surface-variant mb-4 leading-relaxed max-w-lg mx-auto">
+              Evaluates your true Holland RIASEC interests and SCCT self-efficacy strictly without bias or flattering assumptions.
             </p>
+
+            <div className="p-4 mb-8 sketch-border-subtle bg-surface-container-low/70 max-w-md mx-auto text-left">
+              <div className="flex items-center gap-2 text-primary font-headline-sm text-base mb-1">
+                <span className="material-symbols-outlined text-lg">verified_user</span>
+                <span>Zero-Assumption Rule</span>
+              </div>
+              <p className="font-note-handwritten text-lg text-on-surface-variant leading-snug">
+                The agent will not assume past project achievements unless verified by portfolio artifacts.
+              </p>
+            </div>
             
             <button 
               onClick={handleStart} 
               className="ink-wash-btn-primary px-10 py-3 text-2xl flex items-center gap-3 mx-auto cursor-pointer"
             >
-              <span>Begin Assessment</span>
+              <span>Begin Psychometric Assessment</span>
               <span className="material-symbols-outlined text-lg">east</span>
             </button>
           </div>
@@ -163,8 +232,8 @@ export function AssessmentFlow() {
                 progress_activity
               </span>
             </div>
-            <h2 className="font-headline-lg text-3xl text-on-surface mb-2">Synthesizing Profile...</h2>
-            <p className="font-note-handwritten text-2xl text-on-surface-variant">The ADK Counseling agent is evaluating evidence and psychometrics.</p>
+            <h2 className="font-headline-lg text-3xl text-on-surface mb-2">Executing Psychometric Synthesis...</h2>
+            <p className="font-note-handwritten text-2xl text-on-surface-variant">Calibrating Holland Code congruence and checking evidence gaps.</p>
           </div>
         )}
 

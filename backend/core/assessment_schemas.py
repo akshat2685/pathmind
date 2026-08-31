@@ -35,7 +35,7 @@ class AssessmentResult(BaseModel):
     calculated_scores: Dict[str, Any]
 
 class CounselingFact(BaseModel):
-    category: str # OBSERVED, ASSESSED, INFERRED, UNKNOWN, RECOMMENDATION
+    category: str # OBSERVED, ASSESSED, INFERRED, UNKNOWN, EVIDENCE_GAP, RECOMMENDATION
     claim: str
     evidence: List[str]
     confidence: str # HIGH, MEDIUM, LOW, INSUFFICIENT_EVIDENCE
@@ -56,3 +56,7 @@ class CounselingProfile(BaseModel):
     candidate_directions: List[str]
     contradictions: List[Contradiction]
     next_questions: List[str]
+    evidence_gaps: Optional[List[str]] = Field(
+        default_factory=list,
+        description="Crucial portfolio, transcripts, or verifiable proof items that the candidate must provide."
+    )
