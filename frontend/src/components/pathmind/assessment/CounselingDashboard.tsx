@@ -27,30 +27,30 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
       <div className="mb-8 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/15 text-primary border border-primary/30 mb-3">
           <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-            balance
+            psychology
           </span>
         </div>
         <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-2">
-          Strict Psychometric &amp; Evidence Synthesis
+          Your Personalized Career &amp; Psychometric Profile
         </h2>
         <p className="font-note-handwritten text-2xl text-on-surface-variant">
-          Unbiased evaluation grounded strictly in RIASEC psychometrics and observable evidence.
+          Carefully evaluated across Holland RIASEC dimensions and self-efficacy foundations.
         </p>
       </div>
 
       {/* Error Fallback Banner */}
       {Boolean(profile.error) && (
-        <div className="mb-8 p-6 sketch-border border-error bg-error-container/40">
+        <div className="mb-8 p-6 sketch-border border-secondary bg-secondary-fixed/30">
           <div className="flex items-start gap-4">
-            <span className="material-symbols-outlined text-error text-3xl shrink-0 mt-0.5">
-              error
+            <span className="material-symbols-outlined text-secondary text-3xl shrink-0 mt-0.5">
+              info
             </span>
             <div>
-              <h3 className="font-headline-sm text-lg text-error mb-1">
-                Synthesis Status: {String((profile.error as Record<string, unknown>)?.code || "INITIALIZING")}
+              <h3 className="font-headline-sm text-lg text-secondary mb-1">
+                Assessment In Progress
               </h3>
-              <p className="font-body-md text-sm text-on-surface-variant mb-2">
-                {String((profile.error as Record<string, unknown>)?.message || "ADK reasoning engine is calibrating.")}
+              <p className="font-body-md text-sm text-on-surface mb-2">
+                We are currently processing your answers. Please ensure your assessment answers are complete, or try submitting again in a moment.
               </p>
             </div>
           </div>
@@ -59,9 +59,9 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
 
       {!profile.error && (
         <>
-          {/* EVIDENCE GAP & PORTFOLIO DEMAND NOTICE */}
+          {/* POLITE PORTFOLIO & EVIDENCE REQUEST BANNER */}
           {evidenceGaps.length > 0 && (
-            <div className="mb-8 p-6 sketch-border border-secondary bg-secondary-fixed/50">
+            <div className="mb-8 p-6 sketch-border border-secondary bg-secondary-fixed/40">
               <div className="flex items-start gap-4">
                 <span className="material-symbols-outlined text-secondary text-3xl shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>
                   fact_check
@@ -69,14 +69,14 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
                 <div className="flex-1">
                   <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                     <h3 className="font-headline-sm text-xl text-secondary">
-                      Observable Evidence Verification Required
+                      Portfolio &amp; Project Experience Request
                     </h3>
                     <span className="font-note-handwritten text-base text-secondary sketchy-chip px-3 py-0.5 bg-surface/80">
-                      Zero-Assumption Policy Enforced
+                      Help us substantiate your roadmap
                     </span>
                   </div>
                   <p className="font-body-md text-sm text-on-surface mb-3 leading-relaxed">
-                    The agent did not find portfolio or work artifacts attached to support your aspirations. To prevent hallucination or flattering assumptions, candidate claims remain unverified until concrete proof is provided.
+                    To help us give you the most accurate and actionable recommendations, please consider sharing links to your project portfolio, code repositories, or course transcripts.
                   </p>
                   <div className="space-y-2 mb-4">
                     {evidenceGaps.map((gap, i) => (
@@ -93,38 +93,38 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
                     className="ink-wash-btn-primary px-6 py-2 text-lg inline-flex items-center gap-2"
                   >
                     <span className="material-symbols-outlined text-sm">upload_file</span>
-                    <span>Attach Portfolio &amp; Project Links</span>
+                    <span>Upload Portfolio or Repositories</span>
                   </Link>
                 </div>
               </div>
             </div>
           )}
 
-          {/* CONTRADICTION CALLOUT */}
+          {/* POLITE CONTRADICTION / MENTOR ADVICE */}
           {contradictions.length > 0 && (
             <div className="mb-8 p-6 sketch-border border-tertiary bg-tertiary-fixed/40">
               <div className="flex items-start gap-4">
                 <span className="material-symbols-outlined text-tertiary text-3xl shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  psychology
+                  tips_and_updates
                 </span>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="font-headline-sm text-xl text-tertiary">
-                      Psychometric Mismatch / Cognitive Dissonance
+                      Counselor Guidance on Aspirations &amp; Profile Fit
                     </h3>
                     <span className="font-note-handwritten text-base text-tertiary sketchy-chip px-2 py-0.5">
-                      Diagnostic Alert
+                      Career Alignment Note
                     </span>
                   </div>
                   <p className="font-body-md text-sm text-on-surface mb-1.5">
-                    <strong>Reported Aspiration:</strong> &ldquo;{String(contradictions[0].reported_preference)}&rdquo;
+                    <strong>Stated Goal:</strong> &ldquo;{String(contradictions[0].reported_preference)}&rdquo;
                   </p>
                   <p className="font-body-md text-sm text-on-surface mb-3">
-                    <strong>Assessed Score Reality:</strong> &ldquo;{String(contradictions[0].observed_evidence)}&rdquo;
+                    <strong>Psychometric Indicator:</strong> &ldquo;{String(contradictions[0].observed_evidence)}&rdquo;
                   </p>
                   <div className="p-3 bg-surface-container-low/90 rounded border-l-4 border-tertiary">
-                    <p className="font-note-handwritten text-xl text-on-surface-variant italic">
-                      Mentor Note: {String(contradictions[0].suggested_clarification)}
+                    <p className="font-note-handwritten text-xl text-on-surface-variant leading-relaxed">
+                      Counselor Advice: {String(contradictions[0].suggested_clarification)}
                     </p>
                   </div>
                 </div>
@@ -132,17 +132,17 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
             </div>
           )}
 
-          {/* TWO COLUMN GRID: Psychometric Strengths vs Predictive Trajectories */}
+          {/* TWO COLUMN GRID: Assessed Strengths vs Recommended Directions */}
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             
             {/* Assessed Strengths & Interests */}
             <div className="sketch-border p-6 bg-surface-container-low/90 flex flex-col">
               <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-outline-variant/30">
                 <span className="material-symbols-outlined text-primary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  analytics
+                  verified
                 </span>
                 <h3 className="font-headline-sm text-xl text-on-surface">
-                  Psychometric Profile &amp; Grounded Signals
+                  Core Strengths &amp; Interests
                 </h3>
               </div>
               <ul className="space-y-3.5 flex-1">
@@ -154,15 +154,14 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
                       </span>
                       <span className={`font-note-handwritten text-xs px-2 py-0.5 rounded border ${
                         String(s.confidence) === 'HIGH' ? 'bg-primary-fixed text-primary border-primary' :
-                        String(s.confidence) === 'INSUFFICIENT_EVIDENCE' ? 'bg-error-container text-error border-error' :
                         'bg-surface-container-high text-on-surface-variant border-outline'
                       }`}>
-                        {String(s.confidence)}
+                        {String(s.confidence) === 'HIGH' ? 'Verified Fit' : 'Emerging'}
                       </span>
                     </div>
                     {Array.isArray(s.evidence) && s.evidence.length > 0 && (
                       <p className="font-note-handwritten text-sm text-on-surface-variant">
-                        Basis: {s.evidence.join(", ")}
+                        Context: {s.evidence.join(", ")}
                       </p>
                     )}
                   </li>
@@ -180,24 +179,24 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
               </ul>
             </div>
 
-            {/* True Predictive Trajectories */}
+            {/* Recommended Future Directions */}
             <div className="sketch-border p-6 bg-surface-container-low/90 flex flex-col">
               <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-outline-variant/30">
                 <span className="material-symbols-outlined text-tertiary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  insights
+                  explore
                 </span>
                 <h3 className="font-headline-sm text-xl text-on-surface">
-                  True Predictive Future Trajectories
+                  Recommended Learning Pathways
                 </h3>
               </div>
               <p className="font-body-md text-xs text-on-surface-variant mb-3">
-                Calibrated predictions based on measured psychometric congruence and verifiable foundation.
+                Tailored pathways to explore based on your measured personality traits and learning style.
               </p>
               <ul className="space-y-3 flex-1">
                 {candidateDirections.map((d, i) => (
                   <li key={i} className="flex items-start gap-2.5 p-3 rounded bg-surface-container/40 border border-outline-variant/20">
                     <span className="material-symbols-outlined text-tertiary text-lg shrink-0 mt-0.5">
-                      timeline
+                      arrow_forward_ios
                     </span>
                     <span className="font-body-md text-sm text-on-surface leading-snug">
                       {d}
@@ -209,12 +208,12 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
 
           </div>
 
-          {/* CRITICAL NEXT QUESTIONS & ARTIFACT PROMPTS */}
+          {/* NEXT QUESTIONS & GUIDANCE */}
           {nextQuestions.length > 0 && (
             <div className="mb-8 p-6 sketch-border bg-surface-container-low/90">
               <h3 className="font-headline-sm text-lg text-on-surface mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">contact_support</span>
-                <span>Verification Inquiries from Counseling Agent</span>
+                <span className="material-symbols-outlined text-primary text-xl">help_outline</span>
+                <span>Recommended Questions for Further Reflection</span>
               </h3>
               <ul className="space-y-2">
                 {nextQuestions.map((q, i) => (
@@ -237,14 +236,14 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
           className="ink-wash-btn px-8 py-2.5 text-xl flex items-center gap-2"
         >
           <span className="material-symbols-outlined text-sm">home</span>
-          <span>The Initiation</span>
+          <span>Home</span>
         </Link>
         <Link
           href="/onboarding"
           className="ink-wash-btn-primary px-8 py-2.5 text-xl flex items-center gap-2"
         >
-          <span>Retake &amp; Attach Proof</span>
-          <span className="material-symbols-outlined text-sm">upload</span>
+          <span>Update Portfolio &amp; Goals</span>
+          <span className="material-symbols-outlined text-sm">edit_note</span>
         </Link>
       </div>
 

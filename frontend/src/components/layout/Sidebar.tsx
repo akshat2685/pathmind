@@ -11,7 +11,7 @@ export function Sidebar() {
       href: "/",
       icon: "history_edu",
       label: "The Initiation",
-      sub: "Tracing the ink trail...",
+      sub: "Home & Pathways",
     },
     {
       href: "/onboarding",
@@ -23,22 +23,16 @@ export function Sidebar() {
       href: "/assessment",
       icon: "psychology_alt",
       label: "Counseling Engine",
-      sub: "Evidence & Synthesis",
-    },
-    {
-      href: "/design-system",
-      icon: "draw",
-      label: "Living Sketchbook",
-      sub: "Design Artifacts",
+      sub: "Psychometric Assessment",
     },
   ];
 
   return (
-    <nav className="hidden md:flex fixed left-0 top-0 h-full flex-col pt-12 w-72 journal-spine z-40">
+    <nav className="hidden md:flex fixed left-0 top-0 h-full flex-col pt-10 pb-6 w-72 journal-spine z-40 bg-surface border-r-2 border-outline-variant/60">
       {/* Brand Header */}
       <div className="px-6 mb-8">
         <Link href="/" className="group block">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <span className="material-symbols-outlined text-secondary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
               auto_stories
             </span>
@@ -53,7 +47,7 @@ export function Sidebar() {
       </div>
 
       {/* Navigation Links */}
-      <div className="flex flex-col gap-2.5 px-4 flex-grow">
+      <div className="flex flex-col gap-3 px-4">
         <div className="px-3 text-xs uppercase tracking-wider font-label-md text-on-surface-variant/70 mb-1">
           Journal Chapters
         </div>
@@ -89,15 +83,15 @@ export function Sidebar() {
       </div>
 
       {/* Bottom Scholar Info Card */}
-      <div className="p-5 m-4 sketch-border-subtle bg-surface-container-low/80">
+      <div className="mt-auto mx-4 p-4 sketch-border-subtle bg-surface-container-low/90">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center text-primary font-headline-sm text-lg">
+          <div className="w-10 h-10 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center text-primary font-headline-sm text-lg shrink-0">
             <span className="material-symbols-outlined text-xl">person</span>
           </div>
-          <div className="flex flex-col">
-            <span className="font-headline-sm text-sm font-medium">Student Scholar</span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-headline-sm text-sm font-medium text-on-surface truncate">Student Scholar</span>
             <span className="font-note-handwritten text-sm text-primary font-medium">
-              ADK Reasoning Active
+              Active Evaluation Mode
             </span>
           </div>
         </div>

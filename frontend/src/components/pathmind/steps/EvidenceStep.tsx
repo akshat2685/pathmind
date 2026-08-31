@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useState, useRef } from "react";
+import { validateMeaningfulText } from "./GoalStep";
 
 export interface EvidenceItem {
   source: string;
@@ -22,13 +23,15 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [activeTab, setActiveTab] = useState<"files" | "links" | "projects">("files");
   
-  // Link form state
+  // Link form state & validation
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
+  const [linkError, setLinkError] = useState("");
 
-  // Project form state
+  // Project form state & validation
   const [projectTitle, setProjectTitle] = useState("");
   const [projectDesc, setProjectDesc] = useState("");
+  const [projectError, setProjectError] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,40 +56,69 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
     }
   };
 
-  // Add Link
+  // Add Link with URL validation
   const handleAddLink = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkUrl.trim()) return;
+    setLinkError("");
 
-    const newItem: EvidenceItem = {
-      source: "candidate_portfolio_link",
-      type: "link",
-      name: linkLabel.trim() || linkUrl.trim(),
-      description: `Portfolio URL / Code Repository: ${linkUrl.trim()}`,
-      url: linkUrl.trim(),
-      confidence: "HIGH",
-      timestamp: new Date().toISOString()
-    };
+    const trimmedUrl = linkUrl.trim();
+    if (!trimmedUrl) {
+      setLinkError("Please enter a URL.");
+      return;
+    }
 
-    const updated = [...evidenceList, newItem];
-    setEvidenceList(updated);
-    setLinkUrl("");
-    setLinkLabel("");
-    if (typeof window !== "undefined") {
-      localStorage.setItem("pathmind_user_evidence", JSON.stringify(updated));
+    try {
+      const parsed = new URL(trimmedUrl.startsWith("http") ? trimmedUrl : `https://${trimmedUrl}`);
+      if (!parsed.hostname.includes(".")) {
+        setLinkError("Please enter a valid web domain (e.g. github.com/username).");
+        return;
+      }
+
+      const finalUrl = parsed.href;
+      const newItem: EvidenceItem = {
+        source: "candidate_portfolio_link",
+        type: "link",
+        name: linkLabel.trim() || parsed.hostname + parsed.pathname,
+        description: `Portfolio / Project URL: ${finalUrl}`,
+        url: finalUrl,
+        confidence: "HIGH",
+        timestamp: new Date().toISOString()
+      };
+
+      const updated = [...evidenceList, newItem];
+      setEvidenceList(updated);
+      setLinkUrl("");
+      setLinkLabel("");
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pathmind_user_evidence", JSON.stringify(updated));
+      }
+    } catch {
+      setLinkError("Please enter a valid URL (e.g., https://github.com/my-project).");
     }
   };
 
-  // Add Project
+  // Add Project with Text Validation
   const handleAddProject = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectTitle.trim()) return;
+    setProjectError("");
+
+    const titleVal = validateMeaningfulText(projectTitle, 2, 4);
+    if (!titleVal.isValid) {
+      setProjectError("Please enter a descriptive project title (e.g. 'Healthcare Mobile App in Flutter').");
+      return;
+    }
+
+    const descVal = validateMeaningfulText(projectDesc, 3, 10);
+    if (!descVal.isValid) {
+      setProjectError("Please provide a brief description of what you built and your role (at least 3 words).");
+      return;
+    }
 
     const newItem: EvidenceItem = {
       source: "candidate_project_record",
       type: "project_description",
       name: projectTitle.trim(),
-      description: projectDesc.trim() || `Verified project artifact: ${projectTitle.trim()}`,
+      description: projectDesc.trim(),
       confidence: "HIGH",
       timestamp: new Date().toISOString()
     };
@@ -122,10 +154,10 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
           Evidence Scribing
         </span>
         <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-2">
-          Upload Portfolio &amp; Evidence
+          Share Your Portfolio &amp; Evidence
         </h2>
         <p className="font-body-md text-on-surface-variant max-w-lg mx-auto">
-          Upload project files, GitHub repositories, or transcripts. The zero-assumption counseling agent requires concrete evidence to substantiate your career trajectory.
+          Please provide your project repositories, transcripts, or portfolios so we can substantiate your hands-on experience and give you an accurate, personalized career assessment.
         </p>
       </div>
 
@@ -187,7 +219,7 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
               Click to select files from your computer
             </p>
             <p className="font-note-handwritten text-lg text-on-surface-variant">
-              PDF Resumes, transcripts, project documentation, markdown, or code packages
+              PDF Resumes, academic transcripts, project documentation, or code packages
             </p>
           </div>
         </div>
@@ -201,12 +233,18 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
               Portfolio / GitHub / Project Link
             </label>
             <input
-              type="url"
+              type="text"
               value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://github.com/username/project or portfolio link"
+              onChange={(e) => {
+                setLinkUrl(e.target.value);
+                if (linkError) setLinkError("");
+              }}
+              placeholder="e.g. https://github.com/username/project"
               className="w-full hand-drawn-input px-2 py-1 text-lg"
             />
+            {linkError && (
+              <p className="text-xs text-error mt-1 font-body-md">{linkError}</p>
+            )}
           </div>
           <div>
             <label className="font-label-md text-xs uppercase tracking-wider text-outline block mb-1">
@@ -216,7 +254,7 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
               type="text"
               value={linkLabel}
               onChange={(e) => setLinkLabel(e.target.value)}
-              placeholder="e.g. Distributed Cloud Systems GitHub Repo"
+              placeholder="e.g. Distributed Systems Final Project"
               className="w-full hand-drawn-input px-2 py-1 text-lg"
             />
           </div>
@@ -234,27 +272,36 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
         <form onSubmit={handleAddProject} className="mb-8 p-6 sketch-border bg-surface-container-low/90 space-y-4">
           <div>
             <label className="font-label-md text-xs uppercase tracking-wider text-outline block mb-1">
-              Project Title &amp; Domain
+              Project Title &amp; Focus Area
             </label>
             <input
               type="text"
               value={projectTitle}
-              onChange={(e) => setProjectTitle(e.target.value)}
+              onChange={(e) => {
+                setProjectTitle(e.target.value);
+                if (projectError) setProjectError("");
+              }}
               placeholder="e.g., High-Throughput Distributed Cache in Rust"
               className="w-full hand-drawn-input px-2 py-1 text-lg"
             />
           </div>
           <div>
             <label className="font-label-md text-xs uppercase tracking-wider text-outline block mb-1">
-              Key Contributions &amp; Applied Technologies
+              Key Responsibilities &amp; Applied Technologies
             </label>
             <textarea
               value={projectDesc}
-              onChange={(e) => setProjectDesc(e.target.value)}
-              placeholder="Describe what you built, architecture decisions, and results..."
+              onChange={(e) => {
+                setProjectDesc(e.target.value);
+                if (projectError) setProjectError("");
+              }}
+              placeholder="Describe what you designed, built, and learned..."
               className="w-full h-24 bg-transparent hand-drawn-input resize-none text-base"
             />
           </div>
+          {projectError && (
+            <p className="text-xs text-error font-body-md">{projectError}</p>
+          )}
           <div className="flex justify-end pt-2">
             <button type="submit" className="ink-wash-btn-primary px-6 py-1.5 text-lg flex items-center gap-2">
               <span className="material-symbols-outlined text-sm">add</span>
@@ -273,7 +320,7 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
           </span>
           {evidenceList.length === 0 && (
             <span className="font-note-handwritten text-base text-tertiary">
-              No artifacts attached yet (Agent will demand proof)
+              No artifacts attached yet
             </span>
           )}
         </h3>
@@ -312,7 +359,7 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
         ) : (
           <div className="p-4 sketch-border-subtle bg-surface-container-low/50 text-center">
             <p className="font-note-handwritten text-lg text-on-surface-variant">
-              You can proceed without evidence, but the agent will enforce the zero-assumption rule and flag unverified claims.
+              You can also continue without evidence — the counselor will assess your psychometrics and suggest relevant portfolio items to develop.
             </p>
           </div>
         )}
@@ -332,7 +379,7 @@ export function EvidenceStep({ onNext, onBack }: EvidenceStepProps) {
           onClick={() => onNext(evidenceList)}
           className="ink-wash-btn-primary px-8 py-2.5 text-xl flex items-center gap-2 cursor-pointer"
         >
-          <span>{evidenceList.length > 0 ? `Continue with ${evidenceList.length} Artifacts` : "Skip for now"}</span>
+          <span>{evidenceList.length > 0 ? `Continue with ${evidenceList.length} Artifacts` : "Continue to Assessment"}</span>
           <span className="material-symbols-outlined text-sm">east</span>
         </button>
       </div>
