@@ -1,15 +1,14 @@
+import json
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Header
-from typing import List
-from backend.core.assessment_schemas import CounselingProfile
+from backend.core.assessment_schemas import CounselingProfile, AssessmentResult, AssessmentResponse
 from backend.services.store import FirestoreStore
 from backend.services.counseling import CounselingAgent
 
 router = APIRouter(prefix="/api/counseling", tags=["Counseling"])
 store = FirestoreStore()
 agent = CounselingAgent()
-
-from pydantic import BaseModel
-from typing import Optional, Any
 
 class SynthesizeRequest(BaseModel):
     person_id: Optional[str] = "demo-user"
