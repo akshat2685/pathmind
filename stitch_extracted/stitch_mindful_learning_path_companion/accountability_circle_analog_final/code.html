@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Path - The Circle</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500&amp;family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&amp;family=Source+Serif+4:opsz,wght@8..60,400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface": "#fdfae7",
+                    "tertiary": "#8b4c50",
+                    "inverse-surface": "#313124",
+                    "primary": "#4a654e",
+                    "on-secondary": "#ffffff",
+                    "outline": "#737972",
+                    "on-primary-fixed-variant": "#334d38",
+                    "primary-fixed": "#cceace",
+                    "background": "#fdfae7",
+                    "primary-fixed-dim": "#b0ceb2",
+                    "inverse-primary": "#b0ceb2",
+                    "surface-container": "#f1eedb",
+                    "on-primary": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed": "#07200f",
+                    "on-error": "#ffffff",
+                    "on-surface": "#1c1c11",
+                    "on-secondary-fixed-variant": "#623f18",
+                    "secondary": "#7d562d",
+                    "surface-dim": "#dddbc8",
+                    "on-error-container": "#93000a",
+                    "on-surface-variant": "#424842",
+                    "on-secondary-container": "#7a532a",
+                    "surface-tint": "#4a654e",
+                    "error": "#ba1a1a",
+                    "surface-container-highest": "#e6e3d0",
+                    "outline-variant": "#c2c8c0",
+                    "surface-bright": "#fdfae7",
+                    "on-background": "#1c1c11",
+                    "surface-container-high": "#ece9d6",
+                    "secondary-container": "#ffca98",
+                    "on-primary-container": "#233d29",
+                    "tertiary-fixed-dim": "#ffb3b5",
+                    "tertiary-container": "#d88d90",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-container": "#8ba88e",
+                    "inverse-on-surface": "#f4f1de",
+                    "secondary-fixed": "#ffdcbd",
+                    "on-secondary-fixed": "#2c1600",
+                    "error-container": "#ffdad6",
+                    "surface-variant": "#e6e3d0",
+                    "on-tertiary-fixed": "#380b10",
+                    "secondary-fixed-dim": "#f0bd8b",
+                    "on-tertiary-fixed-variant": "#6f3539",
+                    "on-tertiary-container": "#5d272b",
+                    "surface-container-low": "#f7f4e1",
+                    "tertiary-fixed": "#ffdada"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-page": "40px",
+                    "safe-area": "32px",
+                    "gutter-organic": "24px",
+                    "unit": "8px"
+            },
+            "fontFamily": {
+                    "body-lg": [
+                            "\"Source Serif 4\""
+                    ],
+                    "label-md": [
+                            "Be Vietnam Pro"
+                    ],
+                    "note-handwritten": [
+                            "Bricolage Grotesque"
+                    ],
+                    "headline-sm": [
+                            "Bricolage Grotesque"
+                    ],
+                    "body-md": [
+                            "\"Source Serif 4\""
+                    ],
+                    "headline-md": [
+                            "Bricolage Grotesque"
+                    ],
+                    "headline-lg": [
+                            "Bricolage Grotesque"
+                    ]
+            },
+            "fontSize": {
+                    "body-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "label-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "letterSpacing": "0.05em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "note-handwritten": [
+                            "18px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-sm": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "body-md": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-md": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.surface');
+            background-image: 
+                radial-gradient(circle at 10% 20%, theme('colors.secondary-container/0.15') 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, theme('colors.primary-container/0.15') 0%, transparent 40%),
+                url('data:image/svg+xml;utf8,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100" height="100" filter="url(%23noise)" opacity="0.05"/></svg>');
+        }
+        
+        .sketch-frame {
+            border: 2px solid theme('colors.outline-variant');
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            background-color: theme('colors.surface-container-lowest');
+        }
+
+        .journal-entry {
+            border-bottom: 2px solid theme('colors.outline-variant/30');
+            border-bottom-left-radius: 30px 3px;
+            border-bottom-right-radius: 15px 5px;
+        }
+        
+        .hand-drawn-avatar {
+            border: 1px solid theme('colors.outline-variant');
+            border-radius: 50% 40% 60% 40% / 40% 50% 40% 60%;
+        }
+
+        .notebook-spine {
+            border-right: 6px double theme('colors.outline-variant/50');
+            box-shadow: 4px 0 12px rgba(61,52,48,0.03);
+        }
+    </style>
+</head>
+<body class="text-on-surface font-body-md min-h-screen flex flex-col md:flex-row pb-20 md:pb-0 relative">
+<!-- Ink Splatter Overlays -->
+<div class="fixed top-20 left-1/4 w-32 h-32 bg-secondary-container/10 rounded-full blur-2xl pointer-events-none z-0"></div>
+<div class="fixed bottom-40 right-1/4 w-48 h-48 bg-primary-container/10 rounded-full blur-3xl pointer-events-none z-0"></div>
+<!-- SideNavBar (Hidden on Mobile) -->
+<nav class="hidden md:flex bg-surface notebook-spine h-full w-72 left-0 fixed top-0 flex-col pt-20 z-40 relative">
+<div class="px-6 pb-8 border-b border-outline-variant/20">
+<img class="w-20 h-20 hand-drawn-avatar object-cover mb-4 shadow-sm" data-alt="A hand-drawn charcoal portrait of an old scholar with a long beard, minimalist sketch style on textured paper, light mode." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFlDuKAhIse-7Am5vtyEGmV-rwS7HSPoQxCkS0Wkti1sFA9FqtdfNOcIwYrTD4SBdvkFaafXGo-fmD-xVkEgu9GNEZOga8207YfMknnFwjcm9LauOYIq-W9sYBgGFO2lNotJQCfGEPDplNthc7hGJh7S7kXSmFno_DGEjyDX55JOOyAJQIYiFLWW6MZzhDAT8SzjIc9jbLApKtMZ7VxSC6MrVec5Aco0uIY8Tc22sDrNj72ToQi-Vs"/>
+<h2 class="font-note-handwritten text-headline-sm text-secondary mb-1">The Scholar</h2>
+<p class="font-body-md text-label-md text-on-surface-variant italic">Tracing the ink trail</p>
+</div>
+<div class="flex-1 py-6 flex flex-col gap-3 px-4">
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low px-3 py-2 rounded-lg transition-colors flex items-center gap-3 group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors transform -rotate-3">history_edu</span>
+<span class="font-note-handwritten text-lg">Current Lesson</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low px-3 py-2 rounded-lg transition-colors flex items-center gap-3 group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors transform rotate-2">draw</span>
+<span class="font-note-handwritten text-lg">Sketchbook</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low px-3 py-2 rounded-lg transition-colors flex items-center gap-3 group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors transform -rotate-1">explore</span>
+<span class="font-note-handwritten text-lg">Travel Log</span>
+</a>
+<a class="text-tertiary bg-tertiary-container/10 border-l-2 border-tertiary/50 px-3 py-2 rounded-r-lg flex items-center gap-3" href="#">
+<span class="material-symbols-outlined transform rotate-3">comment</span>
+<span class="font-note-handwritten text-lg">Mentor Notes</span>
+</a>
+<a class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low px-3 py-2 rounded-lg transition-colors flex items-center gap-3 group" href="#">
+<span class="material-symbols-outlined text-outline group-hover:text-primary transition-colors transform -rotate-2">inventory_2</span>
+<span class="font-note-handwritten text-lg">Archives</span>
+</a>
+</div>
+<div class="p-6">
+<button class="w-full bg-surface-container-low text-on-surface font-note-handwritten text-lg py-3 sketch-frame hover:bg-surface-container transition-colors shadow-sm text-center">New Entry</button>
+</div>
+</nav>
+<!-- TopAppBar (Web & Mobile) -->
+<header class="docked full-width top-0 border-b border-outline-variant/30 bg-surface/80 backdrop-blur-sm flex justify-between items-center px-margin-page py-4 w-full md:pl-[calc(288px+40px)] z-30 fixed">
+<div class="font-note-handwritten text-headline-md italic text-secondary">Path</div>
+<nav class="hidden md:flex gap-8">
+<a class="text-on-surface-variant font-note-handwritten text-lg hover:text-tertiary transition-colors duration-300" href="#">Journal</a>
+<a class="text-on-surface-variant font-note-handwritten text-lg hover:text-tertiary transition-colors duration-300" href="#">Map</a>
+<a class="text-primary font-note-handwritten text-lg border-b-2 border-primary/50 hover:text-tertiary transition-colors duration-300" href="#">Library</a>
+</nav>
+<div class="flex gap-4 text-outline">
+<button class="scale-95 hover:text-primary transition-colors"><span class="material-symbols-outlined transform -rotate-6">menu_book</span></button>
+<button class="scale-95 hover:text-primary transition-colors"><span class="material-symbols-outlined transform rotate-6">ink_pen</span></button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 w-full max-w-4xl mx-auto pt-28 px-gutter-organic md:pl-[312px] flex flex-col items-center relative z-10">
+<!-- Recessed Sketchbook Area -->
+<div class="w-full max-w-2xl aspect-[4/3] sketch-frame p-8 mb-12 relative flex items-center justify-center overflow-hidden shadow-sm">
+<!-- Watercolor accents -->
+<div class="absolute -top-10 -right-10 w-40 h-40 bg-secondary-container/30 rounded-full blur-3xl"></div>
+<div class="absolute -bottom-10 -left-10 w-60 h-60 bg-primary-container/30 rounded-full blur-3xl"></div>
+<!-- Concept Diagram Image -->
+<img class="w-full h-full object-contain mix-blend-multiply opacity-90" data-alt="A detailed, hand-drawn concept diagram illustrating the cycle of reflection and learning, featuring organic interconnecting nodes and subtle watercolor washes in sage green and soft terracotta on parchment paper." src="https://lh3.googleusercontent.com/aida-public/AB6AXuARTuCug1kQOZ-9nkVhjvuU0z8dIK6Aii5sE4UvfR7gpKn78qNYcTPHE2CpkmdgatMb2ywa6hhlgDBeYQIRrOy9CMb6EAOU8sbyyoWxtMF6HVxVUIB-a68LdkAPPGhpclx21ZScrGFadbjLkri-grBNzr7drjP7Hk2MQSE90s7YrmtV_M_mXzvbjILPVtdtur5opkeUSkKhlpLI6b9J-YfDe3y5JE01daYkpJJdQmF4SHSun5v9fHLX"/>
+</div>
+<!-- Reflection Stream -->
+<div class="w-full max-w-2xl flex flex-col gap-10 pb-32">
+<!-- Agent Thought -->
+<div class="flex gap-4 w-full items-start">
+<div class="w-8 h-8 rounded-full border border-outline-variant/50 flex-shrink-0 flex items-center justify-center bg-surface-container-low overflow-hidden mt-1">
+<span class="material-symbols-outlined text-secondary/70 text-sm">psychology</span>
+</div>
+<div class="flex-1 journal-entry pb-4 bg-surface/30 px-2">
+<p class="font-body-md text-body-md text-on-surface leading-relaxed italic">I noticed in your recent entries a recurring theme of hesitation when approaching new frameworks. Let's unpack that. How did it feel when you were outlining the architecture yesterday?</p>
+</div>
+</div>
+<!-- User Thought -->
+<div class="flex gap-4 w-full flex-row-reverse items-start">
+<div class="w-8 h-8 hand-drawn-avatar flex-shrink-0 flex items-center justify-center bg-primary-container/30 overflow-hidden mt-1">
+<span class="material-symbols-outlined text-on-primary-container/70 text-sm">person</span>
+</div>
+<div class="flex-1 journal-entry pb-4 bg-surface/30 px-2 text-right">
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">It felt overwhelming, honestly. Like trying to sketch a whole forest before understanding how a single leaf is structured.</p>
+</div>
+</div>
+<!-- Agent Thought -->
+<div class="flex gap-4 w-full items-start">
+<div class="w-8 h-8 rounded-full border border-outline-variant/50 flex-shrink-0 flex items-center justify-center bg-surface-container-low overflow-hidden mt-1">
+<span class="material-symbols-outlined text-secondary/70 text-sm">psychology</span>
+</div>
+<div class="flex-1 journal-entry pb-4 bg-surface/30 px-2">
+<p class="font-body-md text-body-md text-on-surface leading-relaxed italic">That's a beautiful analogy. What if we focus just on sketching that one leaf today? Look at the diagram above; let's isolate the core component first.</p>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="fixed bottom-20 md:bottom-8 left-0 md:left-72 right-0 px-gutter-organic flex justify-center pb-safe z-20 bg-gradient-to-t from-surface via-surface/90 to-transparent pt-10">
+<div class="w-full max-w-2xl relative">
+<input class="w-full bg-surface-container-lowest/50 border-0 journal-entry focus:border-outline-variant focus:ring-0 font-note-handwritten text-xl text-on-surface placeholder:text-on-surface-variant/50 py-3 px-4 transition-colors" placeholder="Trace your thoughts..." type="text"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-primary transition-colors p-2">
+<span class="material-symbols-outlined transform -rotate-12" style="font-variation-settings: 'FILL' 1;">edit</span>
+</button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden bg-surface notebook-spine fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 px-4 pb-safe border-t border-outline-variant/30">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-on-surface transition-all py-1 px-2 group" href="#">
+<span class="material-symbols-outlined mb-1 transform group-hover:-rotate-6 transition-transform">edit_note</span>
+<span class="font-note-handwritten text-sm">Today</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-on-surface transition-all py-1 px-2 group" href="#">
+<span class="material-symbols-outlined mb-1 transform group-hover:rotate-6 transition-transform">auto_stories</span>
+<span class="font-note-handwritten text-sm">Pathways</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary transform -translate-y-2 group" href="#">
+<div class="bg-surface-container-low sketch-frame p-2 rounded-full shadow-sm mb-1 group-hover:bg-primary-container/20 transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">self_improvement</span>
+</div>
+<span class="font-note-handwritten text-sm">Reflect</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-on-surface transition-all py-1 px-2 group" href="#">
+<span class="material-symbols-outlined mb-1 transform group-hover:rotate-12 transition-transform">settings</span>
+<span class="font-note-handwritten text-sm">Settings</span>
+</a>
+</nav>
+</body></html>

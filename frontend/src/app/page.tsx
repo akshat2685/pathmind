@@ -1,103 +1,146 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { TopBar } from "@/components/layout/TopBar";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const router = useRouter();
+  const [curiosity, setCuriosity] = useState("");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+  const suggestions = [
+    "Machine Learning & Generative AI",
+    "Distributed Cloud Architectures",
+    "Human-Computer Interaction",
+    "Data Systems & Analytics",
+  ];
+
+  const handleEmbark = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (curiosity.trim()) {
+      router.push(`/onboarding?goal=${encodeURIComponent(curiosity)}`);
+    } else {
+      router.push("/onboarding");
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen bg-surface">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0 md:ml-72">
+        <TopBar />
+        <main className="flex-1 flex flex-col justify-center items-center px-6 md:px-12 pt-24 md:pt-16 pb-24 relative z-10">
+          <div className="w-full max-w-3xl mx-auto flex flex-col items-center">
+            
+            {/* Hero Prompt */}
+            <div className="text-center mb-10 transform md:-translate-y-4">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 sketchy-chip text-tertiary mb-6">
+                <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  eco
+                </span>
+                <span className="font-note-handwritten text-xl font-medium">Chapter I: The Initiation</span>
+              </div>
+              <h2 className="font-headline-lg text-4xl sm:text-5xl text-on-surface mb-4">
+                Where does your journey begin?
+              </h2>
+              <p className="font-note-handwritten text-2xl sm:text-3xl text-on-surface-variant max-w-xl mx-auto opacity-90 leading-relaxed">
+                Scribe your current curiosity. The path forms as you walk it.
+              </p>
+            </div>
+
+            {/* Input Area Card */}
+            <div className="w-full max-w-2xl p-8 sm:p-10 relative sketch-border bg-surface-container-low/90">
+              <div className="absolute -top-4 -left-4 text-tertiary opacity-70 transform -rotate-12">
+                <span className="material-symbols-outlined text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  eco
+                </span>
+              </div>
+
+              <form onSubmit={handleEmbark} className="flex flex-col gap-8 w-full mt-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={curiosity}
+                    onChange={(e) => setCuriosity(e.target.value)}
+                    placeholder="e.g., The origins of machine intelligence..."
+                    className="w-full hand-drawn-input text-center placeholder:text-outline/60 px-4 py-2"
+                  />
+                </div>
+
+                <div className="flex justify-center mt-2">
+                  <button
+                    type="submit"
+                    className="ink-wash-btn-primary px-10 py-3 text-2xl flex items-center gap-3 cursor-pointer"
+                  >
+                    <span>Embark</span>
+                    <span className="material-symbols-outlined text-lg">east</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Suggestion Washi Tape Chips */}
+            <div className="mt-8 flex flex-wrap justify-center gap-3 opacity-90">
+              {suggestions.map((s, idx) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setCuriosity(s)}
+                  className={`font-note-handwritten text-xl text-on-surface-variant sketchy-chip px-4 py-1.5 cursor-pointer hover:bg-surface-container-highest transition-all transform ${
+                    idx % 2 === 0 ? "rotate-1 hover:rotate-0" : "-rotate-2 hover:rotate-0"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Quick Pathways Grid */}
+            <div className="mt-16 w-full grid md:grid-cols-2 gap-6">
+              <Link
+                href="/onboarding"
+                className="sketch-border p-6 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full border border-secondary flex items-center justify-center text-secondary bg-secondary/10 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-2xl">ink_pen</span>
+                  </div>
+                  <div>
+                    <h3 className="font-headline-sm text-xl text-secondary mb-1">
+                      The First Step
+                    </h3>
+                    <p className="font-body-md text-sm text-on-surface-variant">
+                      Build your longitudinal scholar profile with aspirations and behavioral signals.
+                    </p>
+                  </div>
+                </div>
+              </Link>
+
+              <Link
+                href="/assessment"
+                className="sketch-border p-6 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full border border-tertiary flex items-center justify-center text-tertiary bg-tertiary/10 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-2xl">psychology_alt</span>
+                  </div>
+                  <div>
+                    <h3 className="font-headline-sm text-xl text-tertiary mb-1">
+                      Counseling Engine
+                    </h3>
+                    <p className="font-body-md text-sm text-on-surface-variant">
+                      Complete structured RIASEC/SCCT assessments synthesized by Gemini ADK reasoning.
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            </div>
+
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

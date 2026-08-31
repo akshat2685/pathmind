@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { TopBar } from "@/components/layout/TopBar";
 import { IntroStep } from "./steps/IntroStep";
 import { IdentityStep } from "./steps/IdentityStep";
 import { GoalStep } from "./steps/GoalStep";
@@ -19,54 +21,57 @@ export function OnboardingFlow() {
   const prevStep = () => setStep((s) => Math.max(0, s - 1));
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fafafa] dark:bg-[#09090b] selection:bg-indigo-500/30">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-500/10 dark:bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
-      
-      <div className="w-full relative z-10">
-        <AnimatePresence mode="wait">
-          {step === 0 && (
-            <IntroStep key="intro" onNext={nextStep} />
-          )}
-          
-          {step === 1 && (
-            <IdentityStep 
-              key="identity" 
-              onNext={(id) => {
-                setIdentity(id);
-                nextStep();
-              }} 
-              onBack={prevStep} 
-            />
-          )}
+    <div className="flex min-h-screen bg-surface">
+      <Sidebar />
+      <div className="flex-1 flex flex-col min-w-0 md:ml-72">
+        <TopBar />
+        <main className="flex-1 flex items-center justify-center p-6 md:p-12 relative z-10">
+          <div className="w-full max-w-3xl mx-auto">
+            <AnimatePresence mode="wait">
+              {step === 0 && (
+                <IntroStep key="intro" onNext={nextStep} />
+              )}
+              
+              {step === 1 && (
+                <IdentityStep 
+                  key="identity" 
+                  onNext={(id) => {
+                    setIdentity(id);
+                    nextStep();
+                  }} 
+                  onBack={prevStep} 
+                />
+              )}
 
-          {step === 2 && (
-            <GoalStep 
-              key="goal"
-              onNext={(g) => {
-                setGoal(g);
-                nextStep();
-              }}
-              onBack={prevStep}
-            />
-          )}
+              {step === 2 && (
+                <GoalStep 
+                  key="goal"
+                  onNext={(g) => {
+                    setGoal(g);
+                    nextStep();
+                  }}
+                  onBack={prevStep}
+                />
+              )}
 
-          {step === 3 && (
-            <EvidenceStep 
-              key="evidence"
-              onNext={nextStep}
-              onBack={prevStep}
-            />
-          )}
+              {step === 3 && (
+                <EvidenceStep 
+                  key="evidence"
+                  onNext={nextStep}
+                  onBack={prevStep}
+                />
+              )}
 
-          {step === 4 && (
-            <SynthesisStep 
-              key="synthesis"
-              identity={identity}
-              goal={goal}
-            />
-          )}
-        </AnimatePresence>
+              {step === 4 && (
+                <SynthesisStep 
+                  key="synthesis"
+                  identity={identity}
+                  goal={goal}
+                />
+              )}
+            </AnimatePresence>
+          </div>
+        </main>
       </div>
     </div>
   );

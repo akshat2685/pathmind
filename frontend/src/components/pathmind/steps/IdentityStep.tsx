@@ -1,8 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { GraduationCap, Briefcase, RefreshCw, BookOpen, User } from "lucide-react";
 import { useState } from "react";
 
 interface IdentityStepProps {
@@ -11,28 +9,15 @@ interface IdentityStepProps {
 }
 
 const personas = [
-  { id: "school", title: "School Student", icon: User, desc: "Exploring future possibilities" },
-  { id: "college", title: "College Student", icon: GraduationCap, desc: "Choosing a major and preparing for graduation" },
-  { id: "professional", title: "Professional", icon: Briefcase, desc: "Advancing in my current career track" },
-  { id: "switcher", title: "Career Switcher", icon: RefreshCw, desc: "Transitioning to a new field" },
-  { id: "lifelong", title: "Lifelong Learner", icon: BookOpen, desc: "Learning for personal growth" },
+  { id: "school", title: "School Student", icon: "school", desc: "Exploring future horizons and possibilities" },
+  { id: "college", title: "College Student", icon: "account_balance", desc: "Choosing a major and preparing for graduation" },
+  { id: "professional", title: "Professional", icon: "work", desc: "Advancing within my current field and craft" },
+  { id: "switcher", title: "Career Switcher", icon: "alt_route", desc: "Transitioning toward a completely new discipline" },
+  { id: "lifelong", title: "Lifelong Scholar", icon: "menu_book", desc: "Pursuing self-directed intellectual mastery" },
 ];
 
 export function IdentityStep({ onNext, onBack }: IdentityStepProps) {
   const [selected, setSelected] = useState<string | null>(null);
-
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 10 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.4 } }
-  };
 
   return (
     <motion.div
@@ -42,55 +27,65 @@ export function IdentityStep({ onNext, onBack }: IdentityStepProps) {
       transition={{ duration: 0.4 }}
       className="max-w-3xl mx-auto px-4 py-8"
     >
-      <div className="mb-10 text-center">
-        <h2 className="text-3xl font-medium tracking-tight mb-3">Who are you?</h2>
-        <p className="text-slate-500 dark:text-slate-400">
-          This helps PATHMIND contextualize your trajectory.
+      <div className="mb-8 text-center">
+        <span className="font-note-handwritten text-xl text-tertiary sketchy-chip px-3 py-1 mb-2 inline-block">
+          Identity Calibration
+        </span>
+        <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-2">Who are you?</h2>
+        <p className="font-body-md text-on-surface-variant max-w-md mx-auto">
+          This anchors your learning companion to your current life stage.
         </p>
       </div>
 
-      <motion.div 
-        variants={container} 
-        initial="hidden" 
-        animate="show"
-        className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12"
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
         {personas.map((persona) => (
-          <motion.button
+          <button
             key={persona.id}
-            variants={item}
+            type="button"
             onClick={() => setSelected(persona.id)}
             className={`
-              glass-card p-6 text-left rounded-2xl flex items-start gap-4 transition-all duration-300
+              p-5 text-left transition-all duration-200 cursor-pointer flex items-start gap-4 sketch-border
               ${selected === persona.id 
-                ? 'ring-2 ring-indigo-500 bg-indigo-500/10 shadow-[0_0_20px_-5px_rgba(99,102,241,0.3)]' 
-                : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:ring-1 hover:ring-indigo-500/30'
+                ? 'bg-primary-fixed/40 border-primary shadow-md scale-[1.02]' 
+                : 'bg-surface-container-low/70 hover:bg-surface-container-high/60 border-[#424842]'
               }
             `}
           >
             <div className={`
-              p-3 rounded-xl
-              ${selected === persona.id ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}
+              w-12 h-12 rounded-full flex items-center justify-center shrink-0 border
+              ${selected === persona.id 
+                ? 'bg-primary text-white border-primary-container' 
+                : 'bg-surface-container text-secondary border-outline/30'}
             `}>
-              <persona.icon className="w-6 h-6" />
+              <span className="material-symbols-outlined text-2xl">{persona.icon}</span>
             </div>
             <div>
-              <h3 className="font-medium text-slate-900 dark:text-white text-lg">{persona.title}</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{persona.desc}</p>
+              <h3 className="font-headline-sm text-lg text-on-surface mb-1">{persona.title}</h3>
+              <p className="font-body-md text-sm text-on-surface-variant leading-snug">{persona.desc}</p>
             </div>
-          </motion.button>
+          </button>
         ))}
-      </motion.div>
+      </div>
 
-      <div className="flex justify-between items-center">
-        <Button variant="ghost" onClick={onBack} className="text-slate-500">Back</Button>
-        <Button 
+      <div className="flex justify-between items-center pt-4 border-t border-outline-variant/40">
+        <button
+          type="button"
+          onClick={onBack}
+          className="ink-wash-btn px-6 py-2 text-xl cursor-pointer"
+        >
+          Back
+        </button>
+        <button 
+          type="button"
           disabled={!selected} 
           onClick={() => selected && onNext(selected)}
-          className="bg-indigo-600 hover:bg-indigo-500 min-w-[120px] rounded-full"
+          className={`px-8 py-2.5 text-xl flex items-center gap-2 cursor-pointer ${
+            selected ? 'ink-wash-btn-primary' : 'opacity-50 cursor-not-allowed bg-surface-dim border-2 border-outline text-outline'
+          }`}
         >
-          Continue
-        </Button>
+          <span>Continue</span>
+          <span className="material-symbols-outlined text-sm">east</span>
+        </button>
       </div>
     </motion.div>
   );

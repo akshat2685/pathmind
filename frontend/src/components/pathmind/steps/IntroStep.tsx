@@ -1,8 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
 
 interface IntroStepProps {
   onNext: () => void;
@@ -14,58 +12,51 @@ export function IntroStep({ onNext }: IntroStepProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-      className="flex flex-col items-center justify-center min-h-[60vh] text-center max-w-2xl mx-auto px-4"
+      transition={{ duration: 0.5, ease: "easeOut" }}
+      className="flex flex-col items-center justify-center text-center max-w-2xl mx-auto px-4 py-8"
     >
       <div className="space-y-6">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.8 }}
+          transition={{ delay: 0.1, duration: 0.6 }}
         >
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400 mb-8 ring-1 ring-indigo-500/20">
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full border-2 border-primary bg-primary/10 text-primary mb-4">
+            <span className="material-symbols-outlined text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+              history_edu
+            </span>
           </div>
         </motion.div>
         
-        <h1 className="text-4xl sm:text-5xl font-medium tracking-tight text-slate-900 dark:text-white">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 sketchy-chip text-tertiary">
+          <span className="font-note-handwritten text-xl font-medium">Chapter II: The First Step</span>
+        </div>
+
+        <h1 className="font-headline-lg text-4xl sm:text-5xl text-on-surface">
           Your learning journey <br className="hidden sm:block" />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-violet-500">
+          <span className="text-secondary italic">
             has memory.
           </span>
         </h1>
         
-        <p className="text-lg text-slate-600 dark:text-slate-400 max-w-lg mx-auto">
-          Welcome to PATHMIND. Let&apos;s create your longitudinal learning profile and discover the right trajectory for your career.
+        <p className="font-body-md text-lg text-on-surface-variant max-w-lg mx-auto leading-relaxed">
+          Welcome to PATHMIND. Let us scribe your longitudinal scholar profile and discover the right trajectory for your career.
         </p>
       </div>
 
       <motion.div 
-        className="mt-12"
+        className="mt-10"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.8, duration: 0.5 }}
+        transition={{ delay: 0.4, duration: 0.5 }}
       >
-        <Button 
+        <button 
           onClick={onNext}
-          size="lg"
-          className="rounded-full px-8 h-12 gap-2 text-base shadow-[0_0_20px_-5px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_-5px_rgba(99,102,241,0.5)] transition-all bg-indigo-600 hover:bg-indigo-500"
+          className="ink-wash-btn-primary px-10 py-3 text-2xl flex items-center gap-3 cursor-pointer"
         >
-          Begin
-          <ArrowRight className="h-4 w-4" />
-        </Button>
+          <span>Begin Scribing</span>
+          <span className="material-symbols-outlined text-lg">east</span>
+        </button>
       </motion.div>
     </motion.div>
   );

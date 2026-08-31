@@ -1,66 +1,107 @@
-import { cn } from "@/lib/utils";
-import { LayoutDashboard, Compass, CheckSquare, BrainCircuit, Search, Bell, Settings, User } from "lucide-react";
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function Sidebar() {
-  return (
-    <aside className="w-64 flex flex-col border-r border-border/50 glass h-screen sticky top-0 z-20">
-      <div className="h-16 flex items-center px-6 border-b border-border/50">
-        <div className="font-sans font-bold tracking-wide text-lg flex items-center gap-2 group cursor-pointer">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-            <BrainCircuit className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">PATHMIND</span>
-        </div>
-      </div>
-      
-      <div className="flex-1 overflow-auto py-6 px-4 flex flex-col gap-1">
-        <div className="text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest mb-3 px-2">Navigation</div>
-        <NavItem href="#" icon={<LayoutDashboard className="w-4 h-4" />} label="Dashboard" active />
-        <NavItem href="#" icon={<Compass className="w-4 h-4" />} label="Trajectories" />
-        <NavItem href="#" icon={<CheckSquare className="w-4 h-4" />} label="Evidence" />
-        <NavItem href="#" icon={<BrainCircuit className="w-4 h-4" />} label="Memory" />
-        
-        <div className="mt-8 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest mb-3 px-2">Settings</div>
-        <NavItem href="#" icon={<Settings className="w-4 h-4" />} label="Preferences" />
-      </div>
-      
-      <div className="p-4 m-4 rounded-xl glass-card flex items-center gap-3 hover:bg-muted/30 transition-colors cursor-pointer border border-border/50">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center border border-primary/20">
-          <User className="w-4 h-4 text-primary" />
-        </div>
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold">Student User</span>
-          <span className="text-xs text-primary/80 font-medium">Level 2 Explorer</span>
-        </div>
-      </div>
-    </aside>
-  );
-}
+  const pathname = usePathname();
 
-function NavItem({ href, icon, label, active }: { href: string; icon: React.ReactNode; label: string; active?: boolean }) {
+  const navItems = [
+    {
+      href: "/",
+      icon: "history_edu",
+      label: "The Initiation",
+      sub: "Tracing the ink trail...",
+    },
+    {
+      href: "/onboarding",
+      icon: "ink_pen",
+      label: "The First Step",
+      sub: "Longitudinal Profile",
+    },
+    {
+      href: "/assessment",
+      icon: "psychology_alt",
+      label: "Counseling Engine",
+      sub: "Evidence & Synthesis",
+    },
+    {
+      href: "/design-system",
+      icon: "draw",
+      label: "Living Sketchbook",
+      sub: "Design Artifacts",
+    },
+  ];
+
   return (
-    <Link 
-      href={href}
-      className={cn(
-        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-300 relative overflow-hidden group",
-        active 
-          ? "text-primary font-medium shadow-sm" 
-          : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {active && (
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/15 to-transparent opacity-100" />
-      )}
-      {!active && (
-        <div className="absolute inset-0 bg-muted/50 opacity-0 group-hover:opacity-100 transition-opacity" />
-      )}
-      <div className="relative z-10 flex items-center gap-3">
-        <div className={cn("transition-colors", active ? "text-primary" : "text-muted-foreground group-hover:text-primary/70")}>
-          {icon}
-        </div>
-        {label}
+    <nav className="hidden md:flex fixed left-0 top-0 h-full flex-col pt-12 w-72 journal-spine z-40">
+      {/* Brand Header */}
+      <div className="px-6 mb-8">
+        <Link href="/" className="group block">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-secondary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+              auto_stories
+            </span>
+            <h1 className="font-headline-md text-secondary text-2xl tracking-tight group-hover:text-primary transition-colors">
+              PATHMIND
+            </h1>
+          </div>
+          <p className="font-note-handwritten text-on-surface-variant text-xl mt-1">
+            Mindful Learning Companion
+          </p>
+        </Link>
       </div>
-    </Link>
+
+      {/* Navigation Links */}
+      <div className="flex flex-col gap-2.5 px-4 flex-grow">
+        <div className="px-3 text-xs uppercase tracking-wider font-label-md text-on-surface-variant/70 mb-1">
+          Journal Chapters
+        </div>
+        {navItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center gap-3.5 px-4 py-3 sketch-nav-item transition-all group ${
+                isActive ? "active bg-tertiary/10 border-[#333] text-tertiary shadow-sm" : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              <span
+                className={`material-symbols-outlined text-2xl transition-transform group-hover:scale-110 ${
+                  isActive ? "text-tertiary" : "text-on-surface-variant"
+                }`}
+                style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}
+              >
+                {item.icon}
+              </span>
+              <div className="flex flex-col">
+                <span className="font-headline-sm text-base leading-tight font-medium">
+                  {item.label}
+                </span>
+                <span className="font-note-handwritten text-sm text-on-surface-variant/80">
+                  {item.sub}
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Bottom Scholar Info Card */}
+      <div className="p-5 m-4 sketch-border-subtle bg-surface-container-low/80">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center text-primary font-headline-sm text-lg">
+            <span className="material-symbols-outlined text-xl">person</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-headline-sm text-sm font-medium">Student Scholar</span>
+            <span className="font-note-handwritten text-sm text-primary font-medium">
+              ADK Reasoning Active
+            </span>
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 }

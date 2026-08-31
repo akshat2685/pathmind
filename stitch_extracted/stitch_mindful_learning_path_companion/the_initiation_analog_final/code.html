@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Path - The Initiation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500&amp;family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600&amp;family=Source+Serif+4:opsz,wght@8..60,400&amp;family=Caveat:wght@400..700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface": "#fdfae7",
+                        "tertiary": "#8b4c50",
+                        "inverse-surface": "#313124",
+                        "primary": "#4a654e",
+                        "on-secondary": "#ffffff",
+                        "outline": "#737972",
+                        "on-primary-fixed-variant": "#334d38",
+                        "primary-fixed": "#cceace",
+                        "background": "#fdfae7",
+                        "primary-fixed-dim": "#b0ceb2",
+                        "inverse-primary": "#b0ceb2",
+                        "surface-container": "#f1eedb",
+                        "on-primary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#07200f",
+                        "on-error": "#ffffff",
+                        "on-surface": "#1c1c11",
+                        "on-secondary-fixed-variant": "#623f18",
+                        "secondary": "#7d562d",
+                        "surface-dim": "#dddbc8",
+                        "on-error-container": "#93000a",
+                        "on-surface-variant": "#424842",
+                        "on-secondary-container": "#7a532a",
+                        "surface-tint": "#4a654e",
+                        "error": "#ba1a1a",
+                        "surface-container-highest": "#e6e3d0",
+                        "outline-variant": "#c2c8c0",
+                        "surface-bright": "#fdfae7",
+                        "on-background": "#1c1c11",
+                        "surface-container-high": "#ece9d6",
+                        "secondary-container": "#ffca98",
+                        "on-primary-container": "#233d29",
+                        "tertiary-fixed-dim": "#ffb3b5",
+                        "tertiary-container": "#d88d90",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-container": "#8ba88e",
+                        "inverse-on-surface": "#f4f1de",
+                        "secondary-fixed": "#ffdcbd",
+                        "on-secondary-fixed": "#2c1600",
+                        "error-container": "#ffdad6",
+                        "surface-variant": "#e6e3d0",
+                        "on-tertiary-fixed": "#380b10",
+                        "secondary-fixed-dim": "#f0bd8b",
+                        "on-tertiary-fixed-variant": "#6f3539",
+                        "on-tertiary-container": "#5d272b",
+                        "surface-container-low": "#f7f4e1",
+                        "tertiary-fixed": "#ffdada"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-page": "40px",
+                        "safe-area": "32px",
+                        "gutter-organic": "24px",
+                        "unit": "8px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["\"Source Serif 4\""],
+                        "label-md": ["Be Vietnam Pro"],
+                        "note-handwritten": ["Caveat", "Bricolage Grotesque"],
+                        "headline-sm": ["Bricolage Grotesque"],
+                        "body-md": ["\"Source Serif 4\""],
+                        "headline-md": ["Bricolage Grotesque"],
+                        "headline-lg": ["Bricolage Grotesque"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "note-handwritten": ["24px", { "lineHeight": "32px", "fontWeight": "400" }],
+                        "headline-sm": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["32px", { "lineHeight": "40px", "fontWeight": "500" }],
+                        "headline-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f3efe0; /* parchment base */
+            background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuCTheeXZw7ZsKvgT3LuHAu9Nehu22Ho2e1di2G2UQK0Fh2dOaAXBtlkqLfJR041lTH8sL1rSnr7VqA_m1ayt3IzbLBvGMbXVvRPWqpQ8AZDzBVI3GZ1HXThZZ5WRsNCOhOvUzMSpKGuz1EqFbk4fZhX33wv63S3AJLXfU86ZRnizV_1sCbZQbSmt9g4Pjp0cBA1sjW_zHLPcT5HJv1TEEkVaO579m8yrX8G1drj4-V_4NED6xyErkLZ);
+            background-size: cover;
+            background-position: center bottom;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+        }
+
+        .watercolor-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to bottom, rgba(243, 239, 224, 0.95) 0%, rgba(243, 239, 224, 0.4) 100%);
+            z-index: -1;
+        }
+
+        .paper-texture {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            opacity: 0.6;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml;utf8,<svg viewBox=\"0 0 200 200\" xmlns=\"http://www.w3.org/2000/svg\"><filter id=\"noiseFilter\"><feTurbulence type=\"fractalNoise\" baseFrequency=\"0.8\" numOctaves=\"4\" stitchTiles=\"stitch\"/></filter><rect width=\"100%\" height=\"100%\" filter=\"url(%23noiseFilter)\" opacity=\"0.08\"/></svg>");
+            z-index: 10;
+            mix-blend-mode: multiply;
+        }
+
+        /* Hand-drawn UI Elements */
+        .sketch-border {
+            border: 2px solid #333;
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            background: rgba(253, 250, 231, 0.85);
+            box-shadow: 2px 3px 0 rgba(0,0,0,0.1);
+        }
+        
+        .sketch-border-subtle {
+            border: 1px solid #555;
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            background: transparent;
+        }
+
+        .sketch-nav-item {
+            border: 1px solid transparent;
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            transition: all 0.2s;
+        }
+        
+        .sketch-nav-item:hover, .sketch-nav-item.active {
+            border-color: #333;
+            background: rgba(139, 76, 80, 0.1); /* light tertiary */
+            transform: rotate(-1deg);
+        }
+
+        .hand-drawn-input {
+            border: none;
+            border-bottom: 2px solid #333;
+            background: transparent;
+            border-radius: 0;
+            transition: all 0.3s ease;
+            font-family: 'Caveat', cursive;
+            font-size: 1.5rem;
+        }
+
+        .hand-drawn-input:focus {
+            outline: none;
+            border-bottom: 3px solid #4a654e;
+            box-shadow: none;
+        }
+
+        .ink-wash-btn {
+            background-color: transparent;
+            color: #111;
+            border: 2px solid #333;
+            border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 3px 4px 0 rgba(0,0,0,0.1);
+        }
+
+        .ink-wash-btn:hover {
+            background-color: rgba(74, 101, 78, 0.15); /* primary wash */
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 5px 0 rgba(0,0,0,0.15);
+        }
+        
+        .ink-wash-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0 rgba(0,0,0,0.1);
+        }
+
+        .journal-spine {
+            border-right: 2px solid #333;
+            background: rgba(243, 239, 224, 0.95);
+            box-shadow: 5px 0 15px rgba(0,0,0,0.05);
+        }
+        
+        .sketchy-chip {
+            border: 1px dashed #555;
+            background: rgba(253, 250, 231, 0.6);
+            border-radius: 2px 8px 3px 7px / 7px 3px 8px 2px;
+        }
+    </style>
+</head>
+<body class="text-on-surface antialiased font-body-md" data-alt="A serene watercolor landscape painting in light mode, featuring a gentle bridge over a calm stream with soft green hills in the distance, painted with delicate brushstrokes and a muted, calm palette of sage greens, earthy browns, and soft sky blues, evoking a sense of peaceful journey and new beginnings.">
+<div class="watercolor-overlay"></div>
+<div class="paper-texture"></div>
+<!-- SideNavBar (Desktop Only) -->
+<nav class="hidden md:flex fixed left-0 top-0 h-full flex-col pt-20 w-72 journal-spine z-40">
+<div class="px-6 mb-10">
+<h1 class="font-headline-md text-headline-md text-secondary mb-1">Path</h1>
+<p class="font-note-handwritten text-on-surface-variant text-xl">Tracing the ink trail...</p>
+</div>
+<div class="flex flex-col gap-3 px-4 flex-grow">
+<!-- Active Tab -->
+<a class="flex items-center gap-4 text-tertiary px-4 py-3 sketch-nav-item active group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">history_edu</span>
+<span class="font-note-handwritten text-xl">Current Lesson</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 sketch-nav-item group transition-colors" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">draw</span>
+<span class="font-note-handwritten text-xl">Sketchbook</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 sketch-nav-item group transition-colors" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">explore</span>
+<span class="font-note-handwritten text-xl">Travel Log</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 sketch-nav-item group transition-colors" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">comment</span>
+<span class="font-note-handwritten text-xl">Mentor Notes</span>
+</a>
+<a class="flex items-center gap-4 text-on-surface-variant px-4 py-3 sketch-nav-item group transition-colors" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">inventory_2</span>
+<span class="font-note-handwritten text-xl">Archives</span>
+</a>
+</div>
+<div class="p-6 mb-4">
+<button class="w-full py-3 px-4 ink-wash-btn font-note-handwritten text-xl flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                New Entry
+            </button>
+</div>
+</nav>
+<!-- TopAppBar (Mobile Only) -->
+<header class="md:hidden flex justify-between items-center px-margin-page py-4 w-full fixed top-0 left-0 bg-surface-container-low/90 backdrop-blur-sm border-b-2 border-outline-variant shadow-sm z-40 sketch-border-subtle rounded-none border-t-0 border-l-0 border-r-0">
+<h1 class="font-headline-lg text-headline-lg italic text-secondary">Path</h1>
+<div class="flex gap-4">
+<button class="text-primary hover:text-tertiary transition-colors duration-300 scale-95 active:opacity-80">
+<span class="material-symbols-outlined">menu_book</span>
+</button>
+<button class="text-primary hover:text-tertiary transition-colors duration-300 scale-95 active:opacity-80">
+<span class="material-symbols-outlined">ink_pen</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-72 flex flex-col justify-center items-center px-6 md:px-margin-page pt-24 md:pt-0 pb-32 md:pb-0 min-h-screen relative z-10">
+<div class="w-full max-w-2xl mx-auto flex flex-col items-center">
+<!-- Hero Prompt -->
+<div class="text-center mb-12 transform md:-translate-y-8">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-4">Where does your journey begin?</h2>
+<p class="font-note-handwritten text-2xl text-on-surface-variant max-w-lg mx-auto opacity-80">
+                    Scribe your current curiosity. The path forms as you walk it.
+                </p>
+</div>
+<!-- Input Area -->
+<div class="w-full max-w-xl p-8 md:p-10 relative sketch-border">
+<div class="absolute -top-4 -left-4 text-tertiary opacity-60 transform -rotate-12">
+<span class="material-symbols-outlined text-4xl" style="font-variation-settings: 'FILL' 1;">eco</span>
+</div>
+<form class="flex flex-col gap-10 w-full mt-4">
+<div class="relative">
+<input autocomplete="off" class="w-full hand-drawn-input text-center placeholder:text-outline/70" placeholder="e.g., The origins of watercolor..." type="text"/>
+</div>
+<div class="flex justify-center mt-2">
+<button class="ink-wash-btn px-10 py-3 font-note-handwritten text-2xl flex items-center gap-3" type="button">
+<span>Embark</span>
+<span class="material-symbols-outlined text-sm">east</span>
+</button>
+</div>
+</form>
+</div>
+<!-- Subtle suggestive chips -->
+<div class="mt-16 flex flex-wrap justify-center gap-4 opacity-80">
+<span class="font-note-handwritten text-xl text-on-surface-variant sketchy-chip px-4 py-1 transform rotate-2 cursor-pointer hover:bg-surface-container-highest transition-colors">History of Maps</span>
+<span class="font-note-handwritten text-xl text-on-surface-variant sketchy-chip px-4 py-1 transform -rotate-3 cursor-pointer hover:bg-surface-container-highest transition-colors">Botany Sketches</span>
+<span class="font-note-handwritten text-xl text-on-surface-variant sketchy-chip px-4 py-1 transform rotate-1 cursor-pointer hover:bg-surface-container-highest transition-colors">Pigment Mixing</span>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center h-20 px-4 pb-safe bg-surface-container border-t-2 border-outline-variant sketch-border-subtle rounded-none border-b-0 border-l-0 border-r-0">
+<a class="flex flex-col items-center justify-center text-tertiary transform -translate-y-1 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">edit_note</span>
+<span class="font-note-handwritten text-lg">Today</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all px-4 py-1" href="#">
+<span class="material-symbols-outlined mb-1">auto_stories</span>
+<span class="font-note-handwritten text-lg">Pathways</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all px-4 py-1" href="#">
+<span class="material-symbols-outlined mb-1">self_improvement</span>
+<span class="font-note-handwritten text-lg">Reflect</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant transition-all px-4 py-1" href="#">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span class="font-note-handwritten text-lg">Settings</span>
+</a>
+</nav>
+</body></html>

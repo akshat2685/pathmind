@@ -1,28 +1,33 @@
-import { Search, Bell } from "lucide-react";
-import { Input } from "@/components/ui/input";
+"use client";
+
+import Link from "next/link";
 
 export function TopBar() {
   return (
-    <header className="h-16 border-b border-border/50 glass flex items-center justify-between px-8 sticky top-0 z-10">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-        <span className="hover:text-primary transition-colors cursor-pointer">Dashboard</span>
-        <span className="text-border">/</span>
-        <span className="text-foreground bg-clip-text">Overview</span>
-      </div>
-      
-      <div className="flex items-center gap-6">
-        <div className="relative w-64 hidden md:block">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            type="search" 
-            placeholder="Search resources, paths..." 
-            className="w-full bg-muted/50 border-none pl-9 focus-visible:ring-1"
-          />
-        </div>
-        <button className="relative text-muted-foreground hover:text-foreground transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-0 right-0 w-2 h-2 bg-primary rounded-full ring-2 ring-background"></span>
-        </button>
+    <header className="md:hidden flex justify-between items-center px-6 py-4 w-full fixed top-0 left-0 bg-surface-container-low/95 backdrop-blur-md border-b-2 border-outline-variant shadow-sm z-40">
+      <Link href="/" className="flex items-center gap-2">
+        <span className="material-symbols-outlined text-secondary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+          auto_stories
+        </span>
+        <h1 className="font-headline-lg text-2xl italic text-secondary tracking-tight">
+          Pathmind
+        </h1>
+      </Link>
+      <div className="flex gap-3">
+        <Link
+          href="/onboarding"
+          className="text-primary hover:text-tertiary transition-colors duration-200"
+          title="Onboarding"
+        >
+          <span className="material-symbols-outlined text-2xl">menu_book</span>
+        </Link>
+        <Link
+          href="/assessment"
+          className="text-primary hover:text-tertiary transition-colors duration-200"
+          title="Assessment"
+        >
+          <span className="material-symbols-outlined text-2xl">ink_pen</span>
+        </Link>
       </div>
     </header>
   );

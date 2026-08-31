@@ -4,17 +4,42 @@ import { useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { QuestionCard } from "./QuestionCard";
 import { CounselingDashboard } from "./CounselingDashboard";
-import { Loader2 } from "lucide-react";
 
-// Mocking the questions for the frontend MVP demo
 const QUESTIONS = [
-  { id: "r1", section: "RIASEC Interests", text: "I like to build, repair, or maintain things.", options: [{value: 1, label: "Strongly Dislike"}, {value: 3, label: "Neutral"}, {value: 5, label: "Strongly Like"}] },
-  { id: "i1", section: "RIASEC Interests", text: "I like to analyze data and solve complex problems.", options: [{value: 1, label: "Strongly Dislike"}, {value: 3, label: "Neutral"}, {value: 5, label: "Strongly Like"}] },
-  { id: "se1", section: "Self Efficacy", text: "How confident are you that you can learn a difficult subject if you practice consistently?", options: [{value: 1, label: "Not Confident"}, {value: 3, label: "Somewhat Confident"}, {value: 5, label: "Very Confident"}] },
+  { 
+    id: "r1", 
+    section: "RIASEC Interests", 
+    text: "I like to build, repair, or engineer complex technical systems and tools.", 
+    options: [
+      { value: 1, label: "Strongly Dislike" }, 
+      { value: 3, label: "Neutral / Ambivalent" }, 
+      { value: 5, label: "Strongly Like & Enjoy" }
+    ] 
+  },
+  { 
+    id: "i1", 
+    section: "RIASEC Interests", 
+    text: "I like to analyze empirical data, discover patterns, and solve abstract problems.", 
+    options: [
+      { value: 1, label: "Strongly Dislike" }, 
+      { value: 3, label: "Neutral / Ambivalent" }, 
+      { value: 5, label: "Strongly Like & Enjoy" }
+    ] 
+  },
+  { 
+    id: "se1", 
+    section: "Self Efficacy", 
+    text: "How confident are you that you can master a difficult new domain through consistent deliberate practice?", 
+    options: [
+      { value: 1, label: "Unconfident" }, 
+      { value: 3, label: "Somewhat Confident" }, 
+      { value: 5, label: "Extremely Confident" }
+    ] 
+  },
 ];
 
 export function AssessmentFlow() {
-  const [currentIdx, setCurrentIdx] = useState(-1); // -1 = Intro
+  const [currentIdx, setCurrentIdx] = useState(-1);
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
@@ -29,12 +54,11 @@ export function AssessmentFlow() {
     if (currentIdx < QUESTIONS.length - 1) {
       setCurrentIdx(currentIdx + 1);
     } else {
-      // Done with questions, trigger synthesis
       setCurrentIdx(QUESTIONS.length);
       setIsSynthesizing(true);
       
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
         const res = await fetch(`${baseUrl}/api/counseling/synthesize`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -75,7 +99,7 @@ export function AssessmentFlow() {
         setProfile({
           error: {
             code: "SOURCE_UNAVAILABLE",
-            message: "The ADK backend is currently unavailable."
+            message: "The ADK backend is currently unavailable or initializing."
           }
         });
       } finally {
@@ -89,16 +113,32 @@ export function AssessmentFlow() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center relative">
+    <div className="min-h-[75vh] flex items-center justify-center relative w-full">
       <AnimatePresence mode="wait">
         {currentIdx === -1 && (
-          <div key="intro" className="text-center max-w-2xl px-4">
-            <h1 className="text-4xl font-medium tracking-tight mb-4">Evidence-Informed Counseling</h1>
-            <p className="text-lg text-slate-500 mb-8">
-              Let&apos;s gather some structured signals about your interests, self-efficacy, and learning patterns.
+          <div key="intro" className="text-center max-w-2xl px-4 py-8">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 sketchy-chip text-tertiary mb-6">
+              <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>
+                psychology_alt
+              </span>
+              <span className="font-note-handwritten text-xl font-medium">Chapter III: Evidence Counseling</span>
+            </div>
+            
+            <h1 className="font-headline-lg text-4xl sm:text-5xl text-on-surface mb-4">
+              Evidence-Informed <br />
+              <span className="text-secondary italic">Counseling Engine</span>
+            </h1>
+            
+            <p className="font-body-md text-lg text-on-surface-variant mb-10 leading-relaxed max-w-lg mx-auto">
+              Gather structured psychometric signals about your interests, self-efficacy, and learning patterns to generate an AI-synthesized career profile.
             </p>
-            <button onClick={handleStart} className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full font-medium transition-all shadow-[0_0_20px_-5px_rgba(99,102,241,0.4)]">
-              Begin Assessment
+            
+            <button 
+              onClick={handleStart} 
+              className="ink-wash-btn-primary px-10 py-3 text-2xl flex items-center gap-3 mx-auto cursor-pointer"
+            >
+              <span>Begin Assessment</span>
+              <span className="material-symbols-outlined text-lg">east</span>
             </button>
           </div>
         )}
@@ -117,10 +157,14 @@ export function AssessmentFlow() {
         )}
 
         {currentIdx === QUESTIONS.length && isSynthesizing && (
-          <div key="synthesizing" className="text-center flex flex-col items-center">
-            <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-            <h2 className="text-2xl font-medium">Synthesizing Profile...</h2>
-            <p className="text-slate-500 mt-2">The ADK Counseling agent is evaluating evidence.</p>
+          <div key="synthesizing" className="text-center flex flex-col items-center py-16">
+            <div className="w-16 h-16 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center mb-4">
+              <span className="material-symbols-outlined text-3xl text-primary animate-spin">
+                progress_activity
+              </span>
+            </div>
+            <h2 className="font-headline-lg text-3xl text-on-surface mb-2">Synthesizing Profile...</h2>
+            <p className="font-note-handwritten text-2xl text-on-surface-variant">The ADK Counseling agent is evaluating evidence and psychometrics.</p>
           </div>
         )}
 
