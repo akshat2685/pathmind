@@ -7,7 +7,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { IntroStep } from "./steps/IntroStep";
 import { IdentityStep } from "./steps/IdentityStep";
 import { GoalStep } from "./steps/GoalStep";
-import { EvidenceStep } from "./steps/EvidenceStep";
+import { EvidenceStep, EvidenceItem } from "./steps/EvidenceStep";
 import { SynthesisStep } from "./steps/SynthesisStep";
 
 export function OnboardingFlow() {
@@ -16,6 +16,7 @@ export function OnboardingFlow() {
   // State to hold collected user data
   const [identity, setIdentity] = useState<string>("");
   const [goal, setGoal] = useState<string>("");
+  const [evidence, setEvidence] = useState<EvidenceItem[]>([]);
 
   const nextStep = () => setStep((s) => s + 1);
   const prevStep = () => setStep((s) => Math.max(0, s - 1));
@@ -57,7 +58,10 @@ export function OnboardingFlow() {
               {step === 3 && (
                 <EvidenceStep 
                   key="evidence"
-                  onNext={nextStep}
+                  onNext={(evList) => {
+                    setEvidence(evList);
+                    nextStep();
+                  }}
                   onBack={prevStep}
                 />
               )}
@@ -67,6 +71,7 @@ export function OnboardingFlow() {
                   key="synthesis"
                   identity={identity}
                   goal={goal}
+                  evidence={evidence}
                 />
               )}
             </AnimatePresence>

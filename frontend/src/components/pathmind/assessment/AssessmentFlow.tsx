@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
 import { QuestionCard } from "./QuestionCard";
 import { CounselingDashboard } from "./CounselingDashboard";
+import { EvidenceItem } from "@/components/pathmind/steps/EvidenceStep";
 
 // Standardized Holland RIASEC & SCCT Items for Strict Psychometric Evaluation
 const QUESTIONS = [
@@ -98,6 +99,75 @@ export function AssessmentFlow() {
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  
+  // Real User Evidence State
+  const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
+  const [showEvidenceDrawer, setShowEvidenceDrawer] = useState(false);
+  const [portfolioLink, setPortfolioLink] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load evidence from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("pathmind_user_evidence");
+        if (stored) {
+          setEvidenceList(JSON.parse(stored));
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+    }
+  }, []);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const files = Array.from(e.target.files);
+    const newItems: EvidenceItem[] = files.map((file) => ({
+      source: "candidate_upload",
+      type: "file",
+      name: file.name,
+      description: `Uploaded file (${(file.size / 1024).toFixed(1)} KB, type: ${file.type || "document"})`,
+      confidence: "HIGH",
+      timestamp: new Date().toISOString()
+    }));
+
+    const updated = [...evidenceList, ...newItems];
+    setEvidenceList(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pathmind_user_evidence", JSON.stringify(updated));
+    }
+  };
+
+  const handleAddLink = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!portfolioLink.trim()) return;
+
+    const newItem: EvidenceItem = {
+      source: "candidate_portfolio_link",
+      type: "link",
+      name: portfolioLink.trim(),
+      description: `Portfolio URL / Code Repository: ${portfolioLink.trim()}`,
+      url: portfolioLink.trim(),
+      confidence: "HIGH",
+      timestamp: new Date().toISOString()
+    };
+
+    const updated = [...evidenceList, newItem];
+    setEvidenceList(updated);
+    setPortfolioLink("");
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pathmind_user_evidence", JSON.stringify(updated));
+    }
+  };
+
+  const handleRemoveEvidence = (idx: number) => {
+    const updated = evidenceList.filter((_, i) => i !== idx);
+    setEvidenceList(updated);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pathmind_user_evidence", JSON.stringify(updated));
+    }
+  };
 
   const handleStart = () => setCurrentIdx(0);
 
@@ -133,7 +203,7 @@ export function AssessmentFlow() {
             person_id: "scholar-candidate",
             goals: ["Master AI / Machine Learning and Systems Engineering"],
             constraints: ["Requires strictly grounded evidence"],
-            evidence: [], // Strict: No assumed evidence provided unless uploaded by candidate
+            evidence: evidenceList, // REAL user-supplied evidence (empty if none uploaded)
             assessment_results: [
               {
                 assessment_id: "riasec-scct-comprehensive-v1",
@@ -188,18 +258,81 @@ export function AssessmentFlow() {
               <span className="text-secondary italic">Psychometric Engine</span>
             </h1>
             
-            <p className="font-body-md text-lg text-on-surface-variant mb-4 leading-relaxed max-w-lg mx-auto">
+            <p className="font-body-md text-lg text-on-surface-variant mb-6 leading-relaxed max-w-lg mx-auto">
               Evaluates your true Holland RIASEC interests and SCCT self-efficacy strictly without bias or flattering assumptions.
             </p>
 
-            <div className="p-4 mb-8 sketch-border-subtle bg-surface-container-low/70 max-w-md mx-auto text-left">
-              <div className="flex items-center gap-2 text-primary font-headline-sm text-base mb-1">
-                <span className="material-symbols-outlined text-lg">verified_user</span>
-                <span>Zero-Assumption Rule</span>
+            {/* Evidence Quick Panel */}
+            <div className="mb-8 p-5 sketch-border bg-surface-container-low/90 text-left">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <span className="font-headline-sm text-base text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-xl">folder_shared</span>
+                  <span>Attached Evidence &amp; Portfolios ({evidenceList.length})</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowEvidenceDrawer(!showEvidenceDrawer)}
+                  className="font-note-handwritten text-lg text-primary hover:underline cursor-pointer"
+                >
+                  {showEvidenceDrawer ? "Hide Upload Panel" : "+ Attach Portfolio / Links"}
+                </button>
               </div>
-              <p className="font-note-handwritten text-lg text-on-surface-variant leading-snug">
-                The agent will not assume past project achievements unless verified by portfolio artifacts.
-              </p>
+
+              {showEvidenceDrawer && (
+                <div className="pt-3 border-t border-outline-variant/30 space-y-3">
+                  <input
+                    type="file"
+                    multiple
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".pdf,.doc,.docx,.txt,.md,.json,.zip"
+                    className="hidden"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="ink-wash-btn px-4 py-1.5 text-base flex items-center gap-1.5"
+                    >
+                      <span className="material-symbols-outlined text-sm">upload_file</span>
+                      <span>Upload Files</span>
+                    </button>
+                  </div>
+                  <form onSubmit={handleAddLink} className="flex gap-2">
+                    <input
+                      type="url"
+                      value={portfolioLink}
+                      onChange={(e) => setPortfolioLink(e.target.value)}
+                      placeholder="https://github.com/... or portfolio URL"
+                      className="flex-1 hand-drawn-input px-2 py-1 text-sm"
+                    />
+                    <button type="submit" className="ink-wash-btn-primary px-4 py-1 text-base">
+                      Add Link
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {evidenceList.length > 0 ? (
+                <div className="space-y-2 mt-3 pt-2 border-t border-outline-variant/20">
+                  {evidenceList.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs bg-surface-container/60 p-2 rounded">
+                      <span className="truncate font-medium">{item.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveEvidence(idx)}
+                        className="text-error ml-2 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="font-note-handwritten text-base text-tertiary mt-1">
+                  Zero evidence attached. The counseling agent will enforce strict zero-assumption policy.
+                </p>
+              )}
             </div>
             
             <button 

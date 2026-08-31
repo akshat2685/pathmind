@@ -3,20 +3,22 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { EvidenceItem } from "./EvidenceStep";
 
 interface SynthesisStepProps {
   identity: string;
   goal: string;
+  evidence: EvidenceItem[];
 }
 
-export function SynthesisStep({ identity, goal }: SynthesisStepProps) {
+export function SynthesisStep({ identity, goal, evidence }: SynthesisStepProps) {
   const [isSynthesizing, setIsSynthesizing] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsSynthesizing(false);
-    }, 2000);
+    }, 1800);
     return () => clearTimeout(timer);
   }, []);
 
@@ -36,7 +38,7 @@ export function SynthesisStep({ identity, goal }: SynthesisStepProps) {
           </div>
           <div>
             <h2 className="font-headline-lg text-3xl text-on-surface mb-2">Synthesizing Scholar Profile...</h2>
-            <p className="font-note-handwritten text-2xl text-on-surface-variant">The ADK counseling reasoning agent is preparing your path.</p>
+            <p className="font-note-handwritten text-2xl text-on-surface-variant">The ADK counseling reasoning agent is reviewing your goals and attached evidence.</p>
           </div>
         </div>
       ) : (
@@ -51,7 +53,7 @@ export function SynthesisStep({ identity, goal }: SynthesisStepProps) {
                 auto_stories
               </span>
             </div>
-            <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-1">Scholar Profile Synthesized</h2>
+            <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface mb-1">Scholar Profile Scribed</h2>
             <p className="font-note-handwritten text-2xl text-secondary">
               First ink marks recorded in the journal.
             </p>
@@ -59,32 +61,37 @@ export function SynthesisStep({ identity, goal }: SynthesisStepProps) {
 
           <div className="sketch-border p-8 mb-10 bg-surface-container-low space-y-6">
             <div>
-              <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Context & Persona</span>
-              <p className="font-headline-sm text-2xl text-on-surface capitalize">{identity.replace("-", " ")}</p>
+              <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Context &amp; Persona</span>
+              <p className="font-headline-sm text-2xl text-on-surface capitalize">{identity ? identity.replace("-", " ") : "Self-Directed Scholar"}</p>
             </div>
             
             <div className="pt-4 border-t border-outline-variant/30">
               <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-1 block">Stated Goal</span>
               <p className="font-note-handwritten text-2xl text-on-surface leading-relaxed border-l-3 border-tertiary pl-4">
-                &ldquo;{goal}&rdquo;
+                &ldquo;{goal || "Exploring emerging disciplines & technical trajectories"}&rdquo;
               </p>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-outline-variant/30">
-              <div>
-                <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-2 block">Identified Capabilities</span>
-                <div className="flex flex-wrap gap-2">
-                  <span className="sketchy-chip px-3 py-1 font-note-handwritten text-lg text-primary">Autonomous Agency</span>
-                  <span className="sketchy-chip px-3 py-1 font-note-handwritten text-lg text-secondary">System Reasoning</span>
-                  <span className="sketchy-chip px-3 py-1 font-note-handwritten text-lg text-tertiary">Practical Artifacts</span>
+
+            <div className="pt-4 border-t border-outline-variant/30">
+              <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-2 block">
+                Attached Portfolio &amp; Evidence ({evidence.length})
+              </span>
+              {evidence.length > 0 ? (
+                <div className="space-y-2">
+                  {evidence.map((item, idx) => (
+                    <div key={idx} className="p-2.5 bg-surface-container/60 rounded border border-outline-variant/30 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-xl">
+                        {item.type === "file" ? "description" : item.type === "link" ? "link" : "code"}
+                      </span>
+                      <span className="font-headline-sm text-sm text-on-surface">{item.name}</span>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div>
-                <span className="font-label-md text-xs uppercase tracking-wider text-outline mb-2 block">Next Chapter</span>
-                <p className="font-body-md text-sm text-on-surface-variant">
-                  We invite you to take the structured evidence counseling assessment to unlock your tailored trajectory.
+              ) : (
+                <p className="font-note-handwritten text-lg text-tertiary">
+                  No portfolio attached — Zero-assumption policy will request portfolio verification during assessment.
                 </p>
-              </div>
+              )}
             </div>
           </div>
 
