@@ -260,24 +260,24 @@ export function MemoryVault() {
         <div className="flex flex-wrap gap-2 mb-4">
           <button
             type="button"
-            onClick={() => setRecallQuery("How did I learn recursion and what worked for me?")}
+            onClick={() => setRecallQuery("What learning strategies worked best for me?")}
             className="text-xs font-note-handwritten px-3 py-1 rounded border border-outline-variant/40 bg-surface-container hover:border-primary text-on-surface cursor-pointer"
           >
-            &ldquo;How did I learn recursion?&rdquo;
+            &ldquo;What strategies worked best for me?&rdquo;
           </button>
           <button
             type="button"
-            onClick={() => setRecallQuery("What learning format works best for me?")}
+            onClick={() => setRecallQuery("What were my key breakthroughs so far?")}
             className="text-xs font-note-handwritten px-3 py-1 rounded border border-outline-variant/40 bg-surface-container hover:border-primary text-on-surface cursor-pointer"
           >
-            &ldquo;What format works best for me?&rdquo;
+            &ldquo;What were my key breakthroughs?&rdquo;
           </button>
           <button
             type="button"
-            onClick={() => setRecallQuery("How has my career goal evolved?")}
+            onClick={() => setRecallQuery("How has my career direction evolved?")}
             className="text-xs font-note-handwritten px-3 py-1 rounded border border-outline-variant/40 bg-surface-container hover:border-primary text-on-surface cursor-pointer"
           >
-            &ldquo;How has my goal evolved?&rdquo;
+            &ldquo;How has my career goal evolved?&rdquo;
           </button>
         </div>
 
@@ -356,9 +356,25 @@ export function MemoryVault() {
         </div>
       )}
 
-      {error && !loading && (
-        <div className="p-4 sketch-border border-amber-600 bg-amber-950/20 text-on-surface text-center mb-8 text-xs">
-          <p>{error}</p>
+      {/* Authentic Empty State */}
+      {!loading && filteredMemories.length === 0 && (
+        <div className="sketch-border p-12 bg-surface-container-low/80 text-center mb-12">
+          <div className="w-16 h-16 rounded-full border border-secondary flex items-center justify-center text-secondary bg-secondary/10 mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl">psychology</span>
+          </div>
+          <h3 className="font-headline-sm text-xl text-on-surface font-bold mb-2">
+            No Longitudinal Memories Recorded Yet
+          </h3>
+          <p className="font-body-md text-xs text-on-surface-variant max-w-md mx-auto leading-relaxed mb-6">
+            Your personal agent vault is active and isolated. As you progress through your learning roadmap milestones, solve practical challenges, and submit evidence, your key breakthroughs and effective learning strategies will be preserved here automatically.
+          </p>
+          <Link
+            href="/journey"
+            className="ink-wash-btn-primary px-6 py-2 text-xs inline-flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-sm">map</span>
+            <span>Explore Learning Journey</span>
+          </Link>
         </div>
       )}
 

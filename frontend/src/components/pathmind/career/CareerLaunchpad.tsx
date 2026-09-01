@@ -181,11 +181,11 @@ export function CareerLaunchpad() {
         </p>
       </div>
 
-      {/* Universal Persona Switcher */}
+      {/* Background Profile Selector */}
       <div className="mb-8 p-4 sketch-border bg-surface-container-low/80 flex items-center justify-between flex-wrap gap-3 text-xs">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-secondary text-lg">badge</span>
-          <span className="font-bold text-on-surface">Universal Persona Mode:</span>
+          <span className="font-bold text-on-surface">Your Background Profile:</span>
         </div>
         <div className="flex flex-wrap gap-2">
           {[

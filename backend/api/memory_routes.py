@@ -16,7 +16,7 @@ store = FirestoreStore()
 
 def get_person_id(x_person_id: Optional[str] = Header(None)) -> str:
     if not x_person_id:
-        return "demo-user"
+        return "guest-user"
     return x_person_id
 
 @router.get("/personal", response_model=List[MemoryItem])
@@ -26,8 +26,6 @@ async def get_personal_memories(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        # Seed initial demo memories if person has none
-        await engine.seed_demo_memories_if_needed(person_id)
         raw_mems = await store.get_personal_memories(person_id, memory_type=memory_type, topic=topic)
         return [MemoryItem(**m) for m in raw_mems]
     except Exception as e:
@@ -84,10 +82,3 @@ async def get_shared_learning_patterns():
         return [SharedLearningPattern(**p) for p in raw_patterns]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve shared patterns: {str(e)}")
-
-@router.post("/demo-seed", response_model=List[MemoryItem])
-async def seed_demo_memories(person_id: str = Depends(get_person_id)):
-    try:
-        return await engine.seed_demo_memories_if_needed(person_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to seed demo memories: {str(e)}")
