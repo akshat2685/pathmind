@@ -15,6 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import router as health_router
 from backend.api.assessment_routes import router as assessment_router
 from backend.api.counseling_routes import router as counseling_router
+from backend.api.trajectory_routes import router as trajectory_router
+from backend.api.roadmap_routes import router as roadmap_router
+from backend.api.memory_routes import router as memory_router
+from backend.api.career_routes import router as career_router
 
 app = FastAPI(title="PATHMIND MVP API")
 
@@ -42,6 +46,10 @@ def root():
 app.include_router(health_router)
 app.include_router(assessment_router)
 app.include_router(counseling_router)
+app.include_router(trajectory_router)
+app.include_router(roadmap_router)
+app.include_router(memory_router)
+app.include_router(career_router)
 
 @app.get("/health")
 async def health_check():

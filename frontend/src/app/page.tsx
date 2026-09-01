@@ -98,21 +98,21 @@ export default function Home() {
             </div>
 
             {/* Quick Pathways Grid */}
-            <div className="mt-16 w-full grid md:grid-cols-2 gap-6">
+            <div className="mt-16 w-full grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <Link
                 href="/onboarding"
-                className="sketch-border p-6 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
+                className="sketch-border p-5 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
               >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full border border-secondary flex items-center justify-center text-secondary bg-secondary/10 group-hover:scale-105 transition-transform">
-                    <span className="material-symbols-outlined text-2xl">ink_pen</span>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full border border-secondary flex items-center justify-center text-secondary bg-secondary/10 group-hover:scale-105 transition-transform shrink-0">
+                    <span className="material-symbols-outlined text-xl">ink_pen</span>
                   </div>
                   <div>
-                    <h3 className="font-headline-sm text-xl text-secondary mb-1">
+                    <h3 className="font-headline-sm text-base text-secondary mb-0.5">
                       The First Step
                     </h3>
-                    <p className="font-body-md text-sm text-on-surface-variant">
-                      Build your longitudinal scholar profile with aspirations and behavioral signals.
+                    <p className="font-body-md text-xs text-on-surface-variant">
+                      Build your longitudinal scholar profile.
                     </p>
                   </div>
                 </div>
@@ -120,20 +120,102 @@ export default function Home() {
 
               <Link
                 href="/assessment"
-                className="sketch-border p-6 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
+                className="sketch-border p-5 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
               >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-full border border-tertiary flex items-center justify-center text-tertiary bg-tertiary/10 group-hover:scale-105 transition-transform">
-                    <span className="material-symbols-outlined text-2xl">psychology_alt</span>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full border border-tertiary flex items-center justify-center text-tertiary bg-tertiary/10 group-hover:scale-105 transition-transform shrink-0">
+                    <span className="material-symbols-outlined text-xl">psychology_alt</span>
                   </div>
                   <div>
-                    <h3 className="font-headline-sm text-xl text-tertiary mb-1">
-                      Counseling Engine
+                    <h3 className="font-headline-sm text-base text-tertiary mb-0.5">
+                      Counseling
                     </h3>
-                    <p className="font-body-md text-sm text-on-surface-variant">
-                      Complete structured RIASEC/SCCT assessments synthesized by Gemini ADK reasoning.
+                    <p className="font-body-md text-xs text-on-surface-variant">
+                      RIASEC &amp; SCCT psychometric assessments.
                     </p>
                   </div>
+                </div>
+              </Link>
+
+              <Link
+                href="/explorer"
+                className="sketch-border p-5 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full border border-primary flex items-center justify-center text-primary bg-primary/10 group-hover:scale-105 transition-transform shrink-0">
+                    <span className="material-symbols-outlined text-xl">alt_route</span>
+                  </div>
+                  <div>
+                    <h3 className="font-headline-sm text-base text-primary mb-0.5">
+                      Explorer
+                    </h3>
+                    <p className="font-body-md text-xs text-on-surface-variant">
+                      Discover 2–3 grounded candidate pathways.
+                    </p>
+                  </div>
+                </div>
+              </Link>
+
+              <Link
+                href="/journey"
+                className="sketch-border p-5 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full border border-emerald-500 flex items-center justify-center text-emerald-400 bg-emerald-500/10 group-hover:scale-105 transition-transform shrink-0">
+                    <span className="material-symbols-outlined text-xl">map</span>
+                  </div>
+                  <div>
+                    <h3 className="font-headline-sm text-base text-emerald-400 mb-0.5">
+                      Journey
+                    </h3>
+                    <p className="font-body-md text-xs text-on-surface-variant">
+                      Progressive roadmap &amp; evidence unlock.
+                    </p>
+                  </div>
+                </div>
+              </Link>
+
+              <Link
+                href="/memory"
+                className="sketch-border p-5 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group sm:col-span-2 lg:col-span-2"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full border border-secondary flex items-center justify-center text-secondary bg-secondary/10 group-hover:scale-105 transition-transform shrink-0">
+                      <span className="material-symbols-outlined text-xl">memory</span>
+                    </div>
+                    <div>
+                      <h3 className="font-headline-sm text-base text-secondary mb-0.5">
+                        Memory Vault
+                      </h3>
+                      <p className="font-body-md text-xs text-on-surface-variant">
+                        Longitudinal memories &amp; shared patterns.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-secondary text-sm shrink-0">east</span>
+                </div>
+              </Link>
+
+              <Link
+                href="/readiness"
+                className="sketch-border p-5 hover:translate-y-[-2px] transition-transform bg-surface-container-low/70 block group sm:col-span-2 lg:col-span-2"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full border border-primary flex items-center justify-center text-primary bg-primary/10 group-hover:scale-105 transition-transform shrink-0">
+                      <span className="material-symbols-outlined text-xl">rocket_launch</span>
+                    </div>
+                    <div>
+                      <h3 className="font-headline-sm text-base text-primary mb-0.5">
+                        Career Launchpad
+                      </h3>
+                      <p className="font-body-md text-xs text-on-surface-variant">
+                        Readiness gaps, mentor, and opportunities.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-primary text-sm shrink-0">east</span>
                 </div>
               </Link>
             </div>

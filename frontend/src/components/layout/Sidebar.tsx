@@ -25,6 +25,30 @@ export function Sidebar() {
       label: "Counseling Engine",
       sub: "Psychometric Assessment",
     },
+    {
+      href: "/explorer",
+      icon: "alt_route",
+      label: "Career Explorer",
+      sub: "Trajectory Discovery",
+    },
+    {
+      href: "/journey",
+      icon: "map",
+      label: "Learning Journey",
+      sub: "Progressive Roadmap",
+    },
+    {
+      href: "/memory",
+      icon: "memory",
+      label: "Memory Vault",
+      sub: "Personal Intelligence",
+    },
+    {
+      href: "/readiness",
+      icon: "rocket_launch",
+      label: "Career Launchpad",
+      sub: "Readiness & Opportunities",
+    },
   ];
 
   return (
