@@ -209,7 +209,7 @@ export function RecommendationDetailModal({
                 {/* FACTS */}
                 <div className="p-4 rounded-2xl bg-surface border border-emerald-500/30 space-y-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified Facts (ESCO Standard)
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Verified Facts (Standard Career Taxonomy: ESCO)
                   </span>
                   <ul className="space-y-1 text-[11px] text-on-surface-variant">
                     {explanation?.facts_summary.map((f, i) => (

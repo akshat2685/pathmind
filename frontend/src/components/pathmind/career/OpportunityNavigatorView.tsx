@@ -188,7 +188,7 @@ export function OpportunityNavigatorView() {
             <span>Universal Opportunity Intelligence</span>
           </div>
           <h1 className="text-3xl font-serif tracking-tight text-stone-900">
-            Opportunity Navigator & Matching
+            Opportunity Hub &amp; Matching
           </h1>
           <p className="text-stone-600 text-sm mt-1 max-w-2xl">
             Connecting your active goals and verified code evidence to authentic fellowships, internships, research positions, and open-source programs across India and Global Remote.
@@ -197,7 +197,7 @@ export function OpportunityNavigatorView() {
 
         <div className="flex items-center space-x-2 text-xs font-mono text-stone-700 bg-stone-100 border border-stone-200 px-3 py-1.5 rounded">
           <ShieldCheck className="w-4 h-4 text-emerald-700" />
-          <span>Strict Provenance • Zero Fabricated Listings</span>
+          <span>Verified Live Opportunities (source-checked feeds)</span>
         </div>
       </div>
 
@@ -458,7 +458,7 @@ export function OpportunityNavigatorView() {
                   {planSpawned ? (
                     <>
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Preparation Actions Added to Mission Control</span>
+                      <span>Preparation Actions Added to Today&apos;s Plan</span>
                     </>
                   ) : (
                     <>

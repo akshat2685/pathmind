@@ -135,7 +135,7 @@ export default function Home() {
                       Counseling
                     </h3>
                     <p className="font-body-md text-xs text-on-surface-variant">
-                      RIASEC &amp; SCCT psychometric assessments.
+                      RIASEC interest areas &amp; career confidence (SCCT) reflection.
                     </p>
                   </div>
                 </div>

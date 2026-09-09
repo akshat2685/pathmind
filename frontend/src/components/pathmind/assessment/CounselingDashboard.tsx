@@ -169,7 +169,7 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
           Personal Learning &amp; Career Synthesis
         </h1>
         <p className="font-note-handwritten text-2xl text-on-surface-variant">
-          Grounded in Holland RIASEC psychometrics, SCCT development factors, and observable tasks.
+          Grounded in Holland RIASEC interest areas, career self-efficacy (SCCT), and observable tasks.
         </p>
       </div>
 

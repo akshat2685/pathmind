@@ -163,7 +163,7 @@ export function ContextCommandCenter() {
     return (
       <div className="w-full p-8 flex items-center justify-center space-x-3 text-xs text-on-surface-variant">
         <RefreshCw className="w-5 h-5 text-primary animate-spin" />
-        <span>Synthesizing Personal Context Graph &amp; Decision Intelligence...</span>
+        <span>Preparing your personalized guidance &amp; recommendations...</span>
       </div>
     );
   }
@@ -290,12 +290,12 @@ export function ContextCommandCenter() {
           </div>
         </div>
 
-        {/* Structured Context Breakdown: Facts vs Interpretation vs Tradeoffs */}
+        {/* Structured Context Breakdown: Facts vs Guidance Reasoning vs Key Considerations */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs pt-1">
           {/* Verified Facts */}
           <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/50 space-y-1.5">
             <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider text-[10px] block">
-              Verified Facts
+              Verified Facts (Your Track Record)
             </span>
             <ul className="space-y-1 text-on-surface-variant text-[11px] leading-relaxed">
               {act.facts.slice(0, 3).map((f, i) => (
@@ -307,10 +307,10 @@ export function ContextCommandCenter() {
             </ul>
           </div>
 
-          {/* Cognitive Interpretation */}
+          {/* Guidance Reasoning */}
           <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/50 space-y-1.5">
             <span className="font-bold text-primary uppercase tracking-wider text-[10px] block">
-              Cognitive Interpretation
+              Guidance Reasoning &amp; Inferences
             </span>
             <ul className="space-y-1 text-on-surface-variant text-[11px] leading-relaxed">
               {act.interpretation.slice(0, 3).map((inf, i) => (
@@ -322,10 +322,10 @@ export function ContextCommandCenter() {
             </ul>
           </div>
 
-          {/* Tradeoffs & Cost */}
+          {/* Key Considerations & Time Commitment */}
           <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/50 space-y-1.5">
             <span className="font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider text-[10px] block">
-              Tradeoffs &amp; Cost
+              Key Considerations &amp; Time Commitment
             </span>
             <ul className="space-y-1 text-on-surface-variant text-[11px] leading-relaxed">
               {act.tradeoffs.slice(0, 3).map((t, i) => (

@@ -220,19 +220,19 @@ export function OrchestrationHubView() {
         <div>
           <div className="flex items-center space-x-2 text-stone-600 text-xs font-mono uppercase tracking-widest mb-1">
             <Cpu className="w-3.5 h-3.5 text-stone-700" />
-            <span>Unified Control Tower</span>
+            <span>Guidance Coordinator</span>
           </div>
           <h1 className="text-3xl font-serif tracking-tight text-stone-900">
-            Agent Orchestrator & Task Router
+            Guidance Coordinator: How PATHMIND Reasons &amp; Coordinates Plans
           </h1>
           <p className="text-stone-600 text-sm mt-1 max-w-2xl">
-            Coordinates 12 specialized intelligence agents with deterministic routing, strict server-side scoping, circular call prevention, and action proposal approval gates.
+            Transparently coordinates specialized guidance modules to evaluate opportunities, diagnose learning blockers, adapt your roadmap, and suggest verified next steps.
           </p>
         </div>
 
         <div className="flex items-center space-x-2 text-xs font-mono text-stone-700 bg-stone-100 border border-stone-200 px-3 py-1.5 rounded">
           <ShieldCheck className="w-4 h-4 text-emerald-700" />
-          <span>{agents.length} Specialized Agents • Server-Scoped</span>
+          <span>{agents.length > 0 ? `${agents.length} Guidance Modules Active` : "Guidance Modules Active"} • Private Profile</span>
         </div>
       </div>
 
@@ -247,17 +247,17 @@ export function OrchestrationHubView() {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 text-xs font-mono uppercase text-stone-700 font-semibold">
             <Play className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Dispatch Orchestrated Task</span>
+            <span>Ask Guidance Coordinator</span>
           </div>
           <span className="text-[11px] font-mono text-stone-500">
-            Deterministic Pipeline Execution
+            Multi-Perspective Guidance Analysis
           </span>
         </div>
 
         <form onSubmit={(e) => handleDispatch(e)} className="relative">
           <input
             type="text"
-            placeholder="Describe an intent or request (e.g. 'Should I apply for this ML fellowship?', 'Diagnose blocker in mission control')"
+            placeholder="Ask a question or describe a challenge (e.g., 'Should I apply for this ML fellowship?', 'Diagnose my current blocker in today\'s plan')"
             value={intentInput}
             onChange={(e) => setIntentInput(e.target.value)}
             className="w-full text-xs font-sans pl-4 pr-24 py-3 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400 bg-stone-50/60"
@@ -267,7 +267,7 @@ export function OrchestrationHubView() {
             disabled={isDispatching}
             className="absolute right-2 top-2 px-4 py-1.5 rounded text-xs font-mono bg-stone-900 text-white hover:bg-stone-800 transition-colors"
           >
-            {isDispatching ? "Routing..." : "Dispatch"}
+            {isDispatching ? "Analyzing..." : "Ask Coordinator"}
           </button>
         </form>
 
@@ -276,7 +276,7 @@ export function OrchestrationHubView() {
           <span className="text-[11px] font-mono text-stone-500">Quick Presets:</span>
           {[
             { label: "Evaluate Opportunities & Plan", intent: "Should I apply for verified ML internships?", type: "OPPORTUNITY_MATCH" },
-            { label: "Diagnose Execution Blocker", intent: "I am stuck on this task blocker in mission control", type: "NEXT_ACTION" },
+            { label: "Diagnose Learning Blocker", intent: "I am stuck on this task blocker in my current plan", type: "NEXT_ACTION" },
             { label: "Propose Roadmap Adaptation", intent: "Adapt my roadmap towards Autonomous Perception Systems", type: "ROADMAP_ADAPTATION" },
             { label: "Recall Past Breakthrough", intent: "What worked when I struggled with recursion?", type: "MEMORY_RECALL" }
           ].map((preset, i) => (
@@ -321,7 +321,7 @@ export function OrchestrationHubView() {
             {/* Answer */}
             <div className="space-y-1">
               <span className="text-[10px] font-mono uppercase text-stone-500 tracking-wider">
-                Orchestrated Synthesis
+                Personalized Guidance Summary
               </span>
               <p className="text-sm font-sans text-stone-800 leading-relaxed font-normal">
                 {latestResponse.final_answer}
@@ -331,7 +331,7 @@ export function OrchestrationHubView() {
             {/* Pipeline Step Breakdown */}
             <div className="space-y-2 pt-2 border-t border-stone-200/80">
               <span className="text-[10px] font-mono uppercase text-stone-500 tracking-wider block">
-                Invoked Agents Pipeline ({latestResponse.trace.steps.length})
+                Guidance Perspectives Consulted ({latestResponse.trace.steps.length})
               </span>
               <div className="space-y-1.5">
                 {latestResponse.trace.steps.map((step, i) => (
@@ -359,9 +359,9 @@ export function OrchestrationHubView() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 text-xs font-mono text-amber-900 font-semibold uppercase">
               <AlertTriangle className="w-4 h-4 text-amber-700" />
-              <span>Approval Queue — State Mutation Gates ({proposals.length})</span>
+              <span>Pending Recommendations Requiring Your Review ({proposals.length})</span>
             </div>
-            <span className="text-xs font-mono text-amber-700">Requires User Confirmation</span>
+            <span className="text-xs font-mono text-amber-700">Requires Your Confirmation</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -403,10 +403,10 @@ export function OrchestrationHubView() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-serif text-stone-900">Canonical Agent Registry</h2>
-            <p className="text-xs text-stone-500 font-mono">Specialized intelligence agents and explicit governance contracts.</p>
+            <h2 className="text-xl font-serif text-stone-900">Active Guidance Modules</h2>
+            <p className="text-xs text-stone-500 font-mono">Specialized analysis modules that safeguard your plan, verify evidence, and discover opportunities.</p>
           </div>
-          <span className="text-xs font-mono text-stone-500">{agents.length} Registered</span>
+          <span className="text-xs font-mono text-stone-500">{agents.length > 0 ? `${agents.length} Active Modules` : "Coordinated Modules"}</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -426,11 +426,11 @@ export function OrchestrationHubView() {
               <div className="pt-3 border-t border-stone-100 space-y-1.5 text-[11px] font-mono">
                 <div className="text-stone-500 flex items-start space-x-1.5">
                   <Wrench className="w-3 h-3 text-stone-400 shrink-0 mt-0.5" />
-                  <span className="truncate">Tools: {agent.allowed_tools.join(", ")}</span>
+                  <span className="truncate">Capabilities: {agent.allowed_tools.join(", ")}</span>
                 </div>
                 <div className="text-rose-800 flex items-start space-x-1.5 bg-rose-50/60 p-1.5 rounded border border-rose-100">
                   <Ban className="w-3 h-3 text-rose-500 shrink-0 mt-0.5" />
-                  <span className="truncate">Forbidden: {agent.forbidden_operations.join(", ")}</span>
+                  <span className="truncate">Safeguards: {agent.forbidden_operations.join(", ")}</span>
                 </div>
               </div>
             </div>
@@ -442,15 +442,15 @@ export function OrchestrationHubView() {
       <div className="border-t border-stone-200 pt-8 space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-serif text-stone-900">Recent Orchestration Traces</h2>
-            <p className="text-xs text-stone-500 font-mono">Audit log of multi-agent pipeline executions and latency.</p>
+            <h2 className="text-lg font-serif text-stone-900">Recent Guidance History &amp; Reasoning Steps</h2>
+            <p className="text-xs text-stone-500 font-mono">Transparent history of how your guidance and recommendations were formed.</p>
           </div>
-          <span className="text-xs font-mono text-stone-500">{traces.length} Recorded</span>
+          <span className="text-xs font-mono text-stone-500">{traces.length} Consultations</span>
         </div>
 
         {loading ? (
           <div className="p-8 text-center text-stone-500 font-serif italic text-sm">
-            Loading traces...
+            Loading guidance history...
           </div>
         ) : traces.length > 0 ? (
           <div className="space-y-2">
@@ -487,7 +487,7 @@ export function OrchestrationHubView() {
           </div>
         ) : (
           <div className="p-6 text-center border border-dashed border-stone-300 rounded-lg bg-stone-50/50 text-stone-500 text-xs font-mono">
-            No orchestration traces recorded yet. Dispatch a task above to execute a pipeline.
+            No guidance history recorded in this session yet. Ask a question above to consult your guidance coordinator.
           </div>
         )}
       </div>

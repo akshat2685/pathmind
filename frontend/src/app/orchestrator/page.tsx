@@ -4,8 +4,8 @@ import { TopBar } from "@/components/layout/TopBar";
 import { OrchestrationHubView } from "@/components/pathmind/orchestration/OrchestrationHubView";
 
 export const metadata: Metadata = {
-  title: "Control Tower & Agent Orchestration — PATHMIND",
-  description: "Deterministic workflow router, agent capability contracts, and state change approval gates.",
+  title: "Guidance Coordinator & Plan Logic — PATHMIND",
+  description: "How PATHMIND coordinates guidance modules, validates recommendations, and structures your learning path.",
 };
 
 export default function OrchestratorPage() {
