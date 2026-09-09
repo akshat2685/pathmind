@@ -450,9 +450,9 @@ export function AssessmentFlow() {
                 <button
                   type="button"
                   onClick={() => setShowEvidenceDrawer(!showEvidenceDrawer)}
-                  className="font-note-handwritten text-lg text-primary hover:underline cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg border border-outline/60 text-xs font-semibold hover:bg-surface-container text-on-surface transition-colors cursor-pointer"
                 >
-                  {showEvidenceDrawer ? "Hide Upload Panel" : "+ Attach Portfolio / Links"}
+                  {showEvidenceDrawer ? "Hide Upload Panel" : "+ Attach Portfolio / Links (Optional)"}
                 </button>
               </div>
 
@@ -470,7 +470,7 @@ export function AssessmentFlow() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="ink-wash-btn px-4 py-1.5 text-base flex items-center gap-1.5"
+                      className="px-3.5 py-1.5 rounded-lg border border-outline/70 text-xs font-semibold flex items-center gap-1.5 hover:bg-surface-container cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-sm">upload_file</span>
                       <span>Upload Files</span>
@@ -484,7 +484,7 @@ export function AssessmentFlow() {
                       placeholder="https://github.com/... or portfolio URL"
                       className="flex-1 hand-drawn-input px-2 py-1 text-sm"
                     />
-                    <button type="submit" className="ink-wash-btn-primary px-4 py-1 text-base">
+                    <button type="submit" className="px-3.5 py-1.5 rounded-lg bg-secondary text-white font-semibold text-xs cursor-pointer">
                       Add Link
                     </button>
                   </form>
@@ -513,11 +513,11 @@ export function AssessmentFlow() {
               )}
             </div>
             
-            {/* Start Actions */}
+            {/* Primary Action */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button 
                 onClick={handleStart} 
-                className="ink-wash-btn-primary px-8 py-3 text-xl flex items-center gap-3 cursor-pointer w-full sm:w-auto justify-center"
+                className="px-8 py-3.5 min-h-[48px] rounded-2xl bg-primary text-white font-bold text-base shadow-md hover:bg-primary/90 flex items-center gap-3 cursor-pointer w-full sm:w-auto justify-center transition-all hover:-translate-y-0.5"
               >
                 <span>Begin Assessment ({ASSESSMENT_BATTERY.length} Steps)</span>
                 <span className="material-symbols-outlined text-lg">east</span>
