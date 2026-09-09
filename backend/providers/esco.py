@@ -1,6 +1,6 @@
 import httpx
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.core.config import settings
 from backend.core.schemas import Occupation, ProviderContext
 from backend.providers.base import ProviderAdapter, ProviderError
@@ -31,7 +31,7 @@ class EscoProvider(ProviderAdapter):
     def _create_context(self, source_url: str = None, source_id: str = None) -> ProviderContext:
         return ProviderContext(
             provider=self.provider_name,
-            retrieved_at=datetime.utcnow().isoformat() + "Z",
+            retrieved_at=datetime.now(timezone.utc).isoformat(),
             version=self.version,
             source_url=source_url,
             source_id=source_id

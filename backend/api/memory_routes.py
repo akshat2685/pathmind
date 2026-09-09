@@ -5,29 +5,41 @@ from backend.core.memory_schemas import (
     SharedLearningPattern,
     MemoryRecallQuery,
     MemoryRecallResponse,
-    CrossStageBridgeResponse
+    CrossStageBridgeResponse,
+    SecondBrainQueryRequest,
+    SecondBrainQueryResponse,
+    ConsolidateMemoriesRequest,
+    ConsolidateMemoriesResponse,
+    SupersedeMemoryRequest
 )
 from backend.services.memory_engine import MemoryEngine
+from backend.services.second_brain_service import SecondBrainService
 from backend.services.store import FirestoreStore
 
-router = APIRouter(prefix="/api/memory", tags=["Longitudinal Memory & Shared Intelligence"])
-engine = MemoryEngine()
-store = FirestoreStore()
+from backend.core.security import get_authenticated_person
 
-def get_person_id(x_person_id: Optional[str] = Header(None)) -> str:
-    if not x_person_id:
-        return "guest-user"
-    return x_person_id
+router = APIRouter(prefix="/api/memory", tags=["Longitudinal Learning Memory"])
+store = FirestoreStore()
+engine = MemoryEngine(store=store)
+second_brain = SecondBrainService(store=store)
+get_person_id = get_authenticated_person
 
 @router.get("/personal", response_model=List[MemoryItem])
 async def get_personal_memories(
     memory_type: Optional[str] = Query(None),
     topic: Optional[str] = Query(None),
+    nature: Optional[str] = Query(None),
+    lifecycle_status: Optional[str] = Query(None),
     person_id: str = Depends(get_person_id)
 ):
     try:
         raw_mems = await store.get_personal_memories(person_id, memory_type=memory_type, topic=topic)
-        return [MemoryItem(**m) for m in raw_mems]
+        items = [MemoryItem(**m) for m in raw_mems]
+        if nature:
+            items = [m for m in items if m.nature == nature]
+        if lifecycle_status:
+            items = [m for m in items if m.lifecycle_status == lifecycle_status]
+        return items
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve personal memories: {str(e)}")
 
@@ -38,10 +50,19 @@ async def ingest_learning_event(
 ):
     try:
         active_person_id = event_payload.get("person_id") or person_id
-        mem = await engine.extract_and_store_memory_from_event(active_person_id, event_payload)
-        return mem
+        return await second_brain.ingest_memory(active_person_id, event_payload)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to ingest learning event: {str(e)}")
+
+@router.post("/query", response_model=SecondBrainQueryResponse)
+async def query_second_brain(
+    req: SecondBrainQueryRequest,
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        return await second_brain.query_second_brain(person_id, req)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Second brain search failed: {str(e)}")
 
 @router.post("/recall", response_model=MemoryRecallResponse)
 async def recall_natural_memory(
@@ -53,6 +74,55 @@ async def recall_natural_memory(
         return await engine.recall_natural_memory(query)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Memory recall query failed: {str(e)}")
+
+@router.post("/consolidate", response_model=ConsolidateMemoriesResponse)
+async def consolidate_memories(
+    req: ConsolidateMemoriesRequest,
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        return await second_brain.consolidate_memories(
+            person_id=person_id,
+            source_memory_ids=req.source_memory_ids,
+            consolidated_title=req.consolidated_title,
+            consolidated_summary=req.consolidated_summary,
+            topic=req.topic
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to consolidate memories: {str(e)}")
+
+@router.post("/{memory_id}/supersede", response_model=MemoryItem)
+async def supersede_memory(
+    memory_id: str,
+    req: SupersedeMemoryRequest,
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        return await second_brain.supersede_memory(
+            person_id=person_id,
+            old_memory_id=memory_id,
+            reason=req.reason,
+            new_memory_payload=req.new_memory_payload
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to supersede memory: {str(e)}")
+
+@router.put("/{memory_id}", response_model=MemoryItem)
+async def update_memory(
+    memory_id: str,
+    updates: Dict[str, Any],
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        return await second_brain.update_memory(person_id, memory_id, updates)
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update memory: {str(e)}")
 
 @router.get("/cross-stage", response_model=CrossStageBridgeResponse)
 async def get_cross_stage_bridge(

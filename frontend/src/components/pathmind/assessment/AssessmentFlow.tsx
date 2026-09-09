@@ -318,108 +318,6 @@ export function AssessmentFlow() {
 
   const handleStart = () => setCurrentIdx(0);
 
-  const handleLoadDemoScenario = async () => {
-    setIsSynthesizing(true);
-    setCurrentIdx(ASSESSMENT_BATTERY.length);
-
-    try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const res = await fetch(`${baseUrl}/api/counseling/demo`);
-      
-      if (!res.ok) {
-        throw new Error("Failed to fetch demo scenario");
-      }
-
-      const demoProfile = await res.json();
-      setProfile(demoProfile);
-    } catch (err) {
-      console.error(err);
-      // Fallback deterministic profile if offline
-      setProfile({
-        person_id: "demo-scholar-class12",
-        timestamp: new Date().toISOString(),
-        is_preliminary: true,
-        interest_vector: { R: 87.5, I: 100.0, A: 37.5, S: 50.0, E: 75.0, C: 50.0 },
-        strongest_interests: [
-          "Investigative (Analytical & Problem Solving)",
-          "Realistic (Hands-on Systems & Hardware)"
-        ],
-        weaker_interests: [
-          "Artistic (Creative UX & Visual Expression)"
-        ],
-        strengths: [
-          {
-            category: "ASSESSED",
-            claim: "High affinity for Investigative problem-solving and algorithmic research",
-            evidence: ["Holland RIASEC score: 100.0%"],
-            confidence: "HIGH"
-          },
-          {
-            category: "OBSERVED",
-            claim: "Demonstrated practical development activity: Autonomous Line-Following & Maze Robot",
-            evidence: ["Hardware build with Arduino/C++ utilizing sensor arrays"],
-            confidence: "HIGH"
-          }
-        ],
-        capability_signals: [
-          {
-            category: "OBSERVED",
-            claim: "Hands-on machine learning model development in Hackathon AI Data Classifier",
-            evidence: ["National Student Hackathon 2025"],
-            confidence: "HIGH"
-          },
-          {
-            category: "INFERRED",
-            claim: "High alignment with applied technical disciplines combining theory with concrete building.",
-            evidence: ["Investigative 100% + Realistic 87.5% + Hackathon & Robotics projects"],
-            confidence: "HIGH"
-          }
-        ],
-        learning_signals: [
-          {
-            category: "OBSERVED",
-            claim: "Demonstrated strong concrete problem decomposition and scenario application over abstract rote definitions.",
-            evidence: ["Completed Observable Tasks A-E (Recall, Explain, Apply, Error Detection, Reason)"],
-            confidence: "HIGH"
-          }
-        ],
-        contradictions: [],
-        unknowns: [
-          "Long-term career setting preference (Applied Industry Engineering vs Academic Research Lab)."
-        ],
-        evidence_gaps: [],
-        candidate_directions: [
-          "Artificial Intelligence & Machine Learning Engineering",
-          "Robotics & Autonomous Systems Engineering",
-          "Systems & Distributed Software Architecture"
-        ],
-        candidate_direction_details: [
-          {
-            title: "Artificial Intelligence & Machine Learning Engineering",
-            rationale: "Combines high Investigative problem-solving with concrete software implementation.",
-            alignment: "Investigative (100%) + Realistic (87.5%) + Hackathon ML Experience",
-            related_occupations: ["AI Engineer (ESCO: 2512.4)", "Data Scientist (ESCO: 2511.1)"],
-            confidence: "HIGH"
-          },
-          {
-            title: "Robotics & Autonomous Systems Engineering",
-            rationale: "Direct synergy between physical hardware mechanisms and algorithm design.",
-            alignment: "Realistic (87.5%) + Investigative (100%) + Arduino Robotics Project",
-            related_occupations: ["Robotics Engineer (ESCO: 2144.3)"],
-            confidence: "HIGH"
-          }
-        ],
-        next_questions: [
-          "What specific machine learning architecture or robotics system do you want to build next?",
-          "How do you plan to balance Class 12 board preparations with advanced engineering portfolio development?"
-        ],
-        overall_confidence: "HIGH"
-      });
-    } finally {
-      setIsSynthesizing(false);
-    }
-  };
-
   const handleAnswer = async (value: string | number) => {
     const q = ASSESSMENT_BATTERY[currentIdx];
     const newResponses = { ...responses, [q.id]: value };
@@ -623,15 +521,6 @@ export function AssessmentFlow() {
               >
                 <span>Begin Assessment ({ASSESSMENT_BATTERY.length} Steps)</span>
                 <span className="material-symbols-outlined text-lg">east</span>
-              </button>
-
-              <button
-                onClick={handleLoadDemoScenario}
-                className="ink-wash-btn px-6 py-3 text-lg flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center"
-                title="Load Class 12 STEM & Robotics Demo Person"
-              >
-                <span className="material-symbols-outlined text-secondary text-lg">play_circle</span>
-                <span>Load Demo Scenario</span>
               </button>
             </div>
           </div>

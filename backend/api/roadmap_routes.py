@@ -13,15 +13,13 @@ from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.personal_agent_engine import PersonalAgentEngine
 from backend.services.store import FirestoreStore
 
+from backend.core.security import get_authenticated_person
+
 router = APIRouter(prefix="/api/roadmap", tags=["Progressive Roadmap & Adaptive Learning"])
 engine = RoadmapEngine()
 personal_agent = PersonalAgentEngine()
 store = FirestoreStore()
-
-def get_person_id(x_person_id: Optional[str] = Header(None)) -> str:
-    if not x_person_id:
-        return "demo-user"
-    return x_person_id
+get_person_id = get_authenticated_person
 
 @router.post("/generate", response_model=DisclosedRoadmapView)
 async def generate_roadmap(
@@ -130,3 +128,37 @@ async def get_roadmap_history(person_id: str = Depends(get_person_id)):
         return await store.get_roadmap_history(person_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve roadmap history: {str(e)}")
+
+@router.get("/versions", response_model=List[Dict[str, Any]])
+async def get_all_versions(person_id: str = Depends(get_person_id)):
+    try:
+        versions = await store.get_all_roadmap_versions(person_id)
+        if not versions:
+            # If no version saved yet, initialize one
+            roadmap = await engine.get_or_create_roadmap(person_id)
+            return [roadmap.model_dump()]
+        return versions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve roadmap versions: {str(e)}")
+
+@router.get("/version/{version_num}", response_model=DisclosedRoadmapView)
+async def get_roadmap_version(
+    version_num: int,
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        raw = await store.get_roadmap_version_by_number(person_id, version_num)
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"Roadmap version {version_num} not found.")
+        
+        from backend.core.roadmap_schemas import Roadmap
+        target_roadmap = Roadmap(**raw)
+        return engine.build_disclosed_view(
+            roadmap=target_roadmap,
+            personal_agent_note=f"Viewing historical Roadmap Version {version_num} ({target_roadmap.revision_reason})"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve version {version_num}: {str(e)}")
+

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NotificationCenter } from "@/components/pathmind/proactive/NotificationCenter";
 
 export function TopBar() {
   return (
@@ -13,7 +14,8 @@ export function TopBar() {
           Pathmind
         </h1>
       </Link>
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3">
+        <NotificationCenter />
         <Link
           href="/onboarding"
           className="text-primary hover:text-tertiary transition-colors duration-200"

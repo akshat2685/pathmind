@@ -20,10 +20,8 @@ store = FirestoreStore()
 engine = TrajectoryEngine()
 corpus_service = TrajectoryCorpusService()
 
-def get_person_id(x_person_id: Optional[str] = Header(None)) -> str:
-    if not x_person_id:
-        return "demo-user"
-    return x_person_id
+from backend.core.security import get_authenticated_person
+get_person_id = get_authenticated_person
 
 @router.post("/discover", response_model=DiscoveryResponse)
 async def discover_candidate_paths(

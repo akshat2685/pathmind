@@ -7,7 +7,7 @@ CORPUS_TRAJECTORIES: List[TrajectoryCase] = [
         trajectory_id="traj_ai_stem_01",
         title="Class 12 STEM to Applied AI & Systems Specialist",
         archetype="High School Math/CS -> Project Specialization -> AI Systems Engineer",
-        source_type="DEMO_ATTRIBUTED",
+        source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
             "education": "Class 12 CBSE (Math, CS, Physics)",
             "starting_skills": ["Python Basics", "Algebra", "Arduino / Robotics Club"],
@@ -35,7 +35,7 @@ CORPUS_TRAJECTORIES: List[TrajectoryCase] = [
         trajectory_id="traj_robotics_embedded_02",
         title="Hardware Tinkerer to Autonomous Robotics Systems Engineer",
         archetype="Robotics Club Builder -> Embedded C++/ROS2 -> Robotics Perception Engineer",
-        source_type="DEMO_ATTRIBUTED",
+        source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
             "education": "High School / Early Undergrad",
             "starting_skills": ["C++ / Arduino", "Microcontrollers", "Basic Mechanics"],
@@ -63,7 +63,7 @@ CORPUS_TRAJECTORIES: List[TrajectoryCase] = [
         trajectory_id="traj_cloud_backend_03",
         title="Web Developer to Distributed Cloud Infrastructure Architect",
         archetype="Fullstack Developer -> Systems & Networking -> Distributed Backend Architect",
-        source_type="DEMO_ATTRIBUTED",
+        source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
             "education": "Undergraduate CS / Self-Directed",
             "starting_skills": ["JavaScript / Python", "SQL", "Web Applications"],
@@ -91,7 +91,7 @@ CORPUS_TRAJECTORIES: List[TrajectoryCase] = [
         trajectory_id="traj_mech_to_data_04",
         title="Mechanical Engineering to Data & Computational Engineer",
         archetype="Non-CS Engineering -> Transferable Math/Physics -> Data Systems Engineer",
-        source_type="DEMO_ATTRIBUTED",
+        source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
             "education": "B.Tech Mechanical Engineering",
             "starting_skills": ["MATLAB", "Linear Algebra", "Thermodynamics / CAD"],

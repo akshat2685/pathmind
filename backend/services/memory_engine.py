@@ -7,13 +7,16 @@ from backend.core.memory_schemas import (
     SharedLearningPattern,
     MemoryRecallQuery,
     MemoryRecallResponse,
-    CrossStageBridgeResponse
+    CrossStageBridgeResponse,
+    SecondBrainQueryRequest
 )
 from backend.services.store import FirestoreStore
+from backend.services.second_brain_service import SecondBrainService
 
 class MemoryEngine:
-    def __init__(self):
-        self.store = FirestoreStore()
+    def __init__(self, store: Optional[FirestoreStore] = None):
+        self.store = store or FirestoreStore()
+        self.second_brain = SecondBrainService(store=self.store)
         self.gemini_available = bool(settings.GEMINI_API_KEY)
         self.model = None
 
@@ -35,104 +38,32 @@ class MemoryEngine:
         MemoryAgent (ADK): Ingests a real learning event, classifies it into memory categories,
         assigns importance and confidence, and saves it to the personal vault.
         """
-        topic = event_payload.get("topic", "Learning Milestone")
-        observation = event_payload.get("observation", "")
-        intervention = event_payload.get("intervention", "")
-        event_type = event_payload.get("event_type", "MASTERY_DEMONSTRATED")
-
-        mem_type = "EPISODIC"
-        importance = "HIGH"
-        if "preference" in event_type.lower():
-            mem_type = "PREFERENCE"
-            importance = "MEDIUM"
-        elif "goal" in event_type.lower():
-            mem_type = "GOAL"
-            importance = "CRITICAL"
-        elif "strategy" in event_type.lower():
-            mem_type = "STRATEGY"
-            importance = "CRITICAL"
-
-        mem_item = MemoryItem(
-            memory_id=f"mem_{int(datetime.now(timezone.utc).timestamp()*1000)}",
-            person_id=person_id,
-            memory_type=mem_type,
-            title=f"{topic} — {event_type.replace('_', ' ').title()}",
-            summary=f"{observation}. Recommended approach: {intervention}" if intervention else observation,
-            topic=topic,
-            related_concepts=[topic],
-            confidence="HIGH",
-            importance=importance,
-            lifecycle_status="ACTIVE",
-            source=event_payload.get("stage_id", "Learning Journey"),
-            details=event_payload
-        )
-
-        await self.store.save_personal_memory(person_id, mem_item.model_dump(mode="json"))
-        return mem_item
+        return await self.second_brain.ingest_memory(person_id, event_payload)
 
     async def recall_natural_memory(
         self,
         query: MemoryRecallQuery
     ) -> MemoryRecallResponse:
         """
-        Natural Memory Recall Engine (PersonalizationAgent):
+        Natural Memory Recall Engine (PersonalizationAgent & Second Brain):
         Answers questions about past learning experiences, strategies, and goal evolution grounded
         in actual stored personal memories. Never fabricates memories.
         """
-        person_id = query.person_id
-        q_text = query.query.lower().strip()
-        raw_mems = await self.store.get_personal_memories(person_id)
-        memories = [MemoryItem(**m) for m in raw_mems]
-
-        if not memories:
-            return MemoryRecallResponse(
-                person_id=person_id,
+        res = await self.second_brain.query_second_brain(
+            person_id=query.person_id,
+            req=SecondBrainQueryRequest(
                 query=query.query,
-                recalled_memories=[],
-                answer="No personal memories recorded in your vault yet. Complete learning milestones or submit evidence along your roadmap to build your memory bank.",
-                grounded_concept_bridge=None,
-                confidence="LOW"
+                current_task_context=query.current_concept
             )
-
-        # Relevance ranking on actual stored memories
-        import re
-        clean_words = re.sub(r'[^\w\s]', ' ', q_text).split()
-        matched_memories = []
-        for m in memories:
-            m_text = (m.title + " " + m.summary + " " + m.topic + " " + " ".join(m.related_concepts)).lower()
-            
-            score = 0
-            for word in clean_words:
-                if len(word) > 2 and word in m_text:
-                    score += 2
-            
-            if score > 0:
-                matched_memories.append((m, score))
-
-        matched_memories.sort(key=lambda x: x[1], reverse=True)
-        top_recalled = [m for m, _ in matched_memories[:3]]
-
-        if not top_recalled:
-            return MemoryRecallResponse(
-                person_id=person_id,
-                query=query.query,
-                recalled_memories=[],
-                answer="I searched your personal memory vault, but I do not have a recorded memory matching this specific inquiry yet.",
-                grounded_concept_bridge=None,
-                confidence="LOW"
-            )
-
-        primary_mem = top_recalled[0]
-        answer = f"Based on your recorded memory ({primary_mem.title}): {primary_mem.summary}"
-        concept_bridge = f"{primary_mem.topic} → Scaffolding to Active Milestone" if primary_mem.related_concepts else None
+        )
 
         return MemoryRecallResponse(
-            person_id=person_id,
+            person_id=query.person_id,
             query=query.query,
-            recalled_memories=top_recalled,
-            answer=answer,
-            grounded_concept_bridge=concept_bridge,
-            confidence="HIGH"
+            recalled_memories=[r.memory for r in res.retrieved_memories],
+            answer=res.answer,
+            grounded_concept_bridge=res.concept_bridge,
+            confidence=res.confidence
         )
 
     async def get_cross_stage_bridge(

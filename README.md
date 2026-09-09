@@ -131,11 +131,31 @@ npm run build
 
 ## 🧪 Test Suite Summary
 
-- **Pytest Suite (`pytest -v`)**: **40 / 40 passed (100%)**
-  - Psychometrics & Observable Tasks: 11 tests
-  - Trajectory Brain & Career Explorer: 5 tests
-  - Progressive Roadmap & Server-Side Locks: 6 tests
-  - Longitudinal Memory & Natural Recall: 6 tests
-  - Career Readiness, Accountability & Resume: 8 tests
-  - Knowledge Providers & Health: 4 tests
-- **Next.js Production Build**: **8 / 8 routes compiled and statically optimized with 0 errors**.
+- **Pytest Suite (`python -m pytest backend/tests -v`)**: **156 / 156 passed (100%)** across 20 test modules:
+  - Psychometrics & Observable Tasks (`test_assessment.py`): 11 tests
+  - Trajectory Brain & Career Explorer (`test_trajectory_brain.py`): 5 tests
+  - Progressive Roadmap & Server-Side Locks (`test_roadmap_progressive.py`): 6 tests
+  - Longitudinal Memory & Second Brain (`test_second_brain.py`, `test_memory_intelligence.py`): 18 tests
+  - Career Readiness, Accountability & Resume (`test_career_readiness.py`, `test_career_agents.py`, `test_resume_fact_validation.py`): 18 tests
+  - Knowledge Providers & Health (`test_knowledge_service.py`, `test_providers.py`): 4 tests
+  - Production Security, IDOR & SSRF (`test_production_security.py`): 10 tests
+  - Personal Context Graph (`test_context_graph.py`): 11 tests
+  - Evidence & Mastery Engine (`test_evidence_mastery.py`): 14 tests
+  - Adaptive Replanning Engine (`test_adaptation_engine.py`): 11 tests
+  - Proactive Intelligence Engine (`test_proactive_engine.py`): 6 tests
+  - Trust & Provenance Layer (`test_trust_layer.py`): 6 tests
+  - Artifact Intelligence (`test_artifact_intelligence.py`): 13 tests
+  - Execution Engine (`test_execution_engine.py`): 7 tests
+  - Opportunity Intelligence (`test_opportunity_intelligence.py`): 10 tests
+  - Unified Agent Orchestrator (`test_orchestrator.py`): 11 tests
+  - Canonical Product Journey E2E (`test_e2e_canonical_journey.py`): 1 test (14-step integration)
+- **Next.js Production Build**: **18 / 18 routes compiled and statically exported with 0 errors**.
+
+---
+
+## 📚 Documentation & Demonstration
+
+- [Pitch Readiness Specification](docs/PITCH_READINESS.md) — Problem, Product, Technology, and Pitch Claim Validation.
+- [Judge-Facing Live Demo Script](docs/PITCH_DEMO_SCRIPT.md) — 10-step live deterministic demonstration sequence.
+- [Operational Runbook](docs/OPERATIONAL_RUNBOOK.md) — Deployment, health monitoring, and incident response procedures.
+
