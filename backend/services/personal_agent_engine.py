@@ -139,3 +139,8 @@ class PersonalAgentEngine:
                     "connection_statement": f"This builds upon the '{mem.concept}' foundations you developed in {mem.stage_learned}."
                 }
         return None
+
+    async def update_agent_model(self, person_id: str, model: PersonalAgentModel) -> None:
+        model.updated_at = datetime.now(timezone.utc).isoformat()
+        await self.store.save_personal_agent_model(person_id, model.model_dump(mode="json"))
+

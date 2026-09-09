@@ -1,5 +1,5 @@
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from backend.core.schemas import Occupation, ProviderContext
 from backend.providers.base import ProviderAdapter, ProviderError
 import os
@@ -26,7 +26,7 @@ class NcoProvider(ProviderAdapter):
     def _create_context(self, source_id: str = None) -> ProviderContext:
         return ProviderContext(
             provider=self.provider_name,
-            retrieved_at=datetime.utcnow().isoformat() + "Z",
+            retrieved_at=datetime.now(timezone.utc).isoformat(),
             version=self.version,
             source_id=source_id
         )

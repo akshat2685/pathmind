@@ -13,10 +13,8 @@ router = APIRouter(prefix="/api/assessments", tags=["Assessments"])
 engine = AssessmentEngine()
 store = FirestoreStore()
 
-def get_person_id(x_person_id: Optional[str] = Header(None)) -> str:
-    if not x_person_id:
-        return "demo-user"
-    return x_person_id
+from backend.core.security import get_authenticated_person
+get_person_id = get_authenticated_person
 
 @router.get("/", response_model=List[AssessmentDefinition])
 async def list_assessments():

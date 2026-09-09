@@ -28,7 +28,7 @@ def test_trajectory_corpus_and_similarity_matching(corpus):
     
     # Check source_type attribution
     for t in trajectories:
-        assert t.source_type in ["DEMO_ATTRIBUTED", "ATTRIBUTED_CASE_STUDY"]
+        assert t.source_type == "ATTRIBUTED_CASE_STUDY"
         assert len(t.learning_milestones) >= 3
         assert len(t.obstacles_and_failures) >= 1
 

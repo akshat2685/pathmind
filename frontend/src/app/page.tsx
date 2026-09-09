@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
+import { ContextCommandCenter } from "@/components/pathmind/home/ContextCommandCenter";
 
 export default function Home() {
   const router = useRouter();
@@ -31,8 +32,11 @@ export default function Home() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 md:ml-72">
         <TopBar />
-        <main className="flex-1 flex flex-col justify-center items-center px-6 md:px-12 pt-24 md:pt-16 pb-24 relative z-10">
-          <div className="w-full max-w-3xl mx-auto flex flex-col items-center">
+        <main className="flex-1 flex flex-col justify-start items-center px-6 md:px-12 pt-8 pb-24 relative z-10 space-y-12">
+          {/* Context-Aware Command Center */}
+          <ContextCommandCenter />
+
+          <div className="w-full max-w-4xl mx-auto flex flex-col items-center pt-6 border-t border-outline/40">
             
             {/* Hero Prompt */}
             <div className="text-center mb-10 transform md:-translate-y-4">

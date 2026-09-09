@@ -38,7 +38,7 @@ class TrajectoryCase(BaseModel):
     trajectory_id: str
     title: str
     archetype: str
-    source_type: str = "DEMO_ATTRIBUTED"  # DEMO_ATTRIBUTED, ATTRIBUTED_CASE_STUDY
+    source_type: str = "ATTRIBUTED_CASE_STUDY"  # ATTRIBUTED_CASE_STUDY, EMPIRICAL_STUDY
     starting_conditions: Dict[str, Any] = Field(default_factory=dict)
     learning_milestones: List[str] = Field(default_factory=list)
     major_transitions: List[str] = Field(default_factory=list)

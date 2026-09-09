@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NotificationCenter } from "@/components/pathmind/proactive/NotificationCenter";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -44,17 +45,53 @@ export function Sidebar() {
       sub: "Personal Intelligence",
     },
     {
+      href: "/evidence",
+      icon: "verified",
+      label: "Evidence & Mastery",
+      sub: "Proof & Progression",
+    },
+    {
       href: "/readiness",
       icon: "rocket_launch",
       label: "Career Launchpad",
       sub: "Readiness & Opportunities",
+    },
+    {
+      href: "/evolution",
+      icon: "timeline",
+      label: "Personal Evolution",
+      sub: "Longitudinal Model",
+    },
+    {
+      href: "/portfolio",
+      icon: "folder_special",
+      label: "Artifacts & Portfolio",
+      sub: "Real-World Evidence",
+    },
+    {
+      href: "/execution",
+      icon: "flag",
+      label: "Mission Control",
+      sub: "Daily Execution & Action",
+    },
+    {
+      href: "/opportunities",
+      icon: "explore",
+      label: "Opportunity Navigator",
+      sub: "Discovery & Matching",
+    },
+    {
+      href: "/orchestrator",
+      icon: "hub",
+      label: "Control Tower",
+      sub: "Unified Agent Orchestrator",
     },
   ];
 
   return (
     <nav className="hidden md:flex fixed left-0 top-0 h-full flex-col pt-10 pb-6 w-72 journal-spine z-40 bg-surface border-r-2 border-outline-variant/60">
       {/* Brand Header */}
-      <div className="px-6 mb-8">
+      <div className="px-6 mb-8 flex items-center justify-between">
         <Link href="/" className="group block">
           <div className="flex items-center gap-2.5">
             <span className="material-symbols-outlined text-secondary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
@@ -68,6 +105,7 @@ export function Sidebar() {
             Mindful Learning Companion
           </p>
         </Link>
+        <NotificationCenter />
       </div>
 
       {/* Navigation Links */}

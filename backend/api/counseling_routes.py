@@ -19,16 +19,14 @@ store = FirestoreStore()
 agent = CounselingAgent()
 
 class SynthesizeRequest(BaseModel):
-    person_id: Optional[str] = "demo-user"
+    person_id: Optional[str] = "scholar-user"
     goals: Optional[List[str]] = []
     constraints: Optional[List[str]] = []
     evidence: Optional[List[Dict[str, Any]]] = []
     assessment_results: Optional[List[Dict[str, Any]]] = []
 
-def get_person_id(x_person_id: Optional[str] = Header(None)) -> str:
-    if not x_person_id:
-        return "demo-user"
-    return x_person_id
+from backend.core.security import get_authenticated_person
+get_person_id = get_authenticated_person
 
 @router.get("/profile", response_model=Optional[CounselingProfile])
 async def get_counseling_profile(person_id: str = Depends(get_person_id)):
