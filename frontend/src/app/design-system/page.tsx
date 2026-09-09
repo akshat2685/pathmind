@@ -18,9 +18,9 @@ export default function DesignSystemPage() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 md:ml-72">
+      <div className="flex-1 flex flex-col min-w-0 md:ml-64 lg:ml-72">
         <TopBar />
-        <main className="flex-1 p-6 md:p-12 relative z-10 max-w-5xl">
+        <main className="flex-1 px-4 sm:px-6 md:px-10 lg:px-12 pt-16 md:pt-8 pb-20 relative z-10 max-w-5xl">
           
           <div className="mb-10">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 sketchy-chip text-tertiary mb-3">

@@ -89,19 +89,19 @@ export function Sidebar() {
   ];
 
   return (
-    <nav className="hidden md:flex fixed left-0 top-0 h-full flex-col pt-10 pb-6 w-72 journal-spine z-40 bg-surface border-r-2 border-outline-variant/60">
+    <nav className="hidden md:flex fixed left-0 top-0 h-full flex-col pt-8 pb-6 md:w-64 lg:w-72 journal-spine z-40 bg-surface border-r-2 border-outline-variant/60 overflow-y-auto">
       {/* Brand Header */}
-      <div className="px-6 mb-8 flex items-center justify-between">
+      <div className="px-5 mb-6 flex items-center justify-between">
         <Link href="/" className="group block">
-          <div className="flex items-center gap-2.5">
-            <span className="material-symbols-outlined text-secondary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-secondary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
               auto_stories
             </span>
-            <h1 className="font-headline-md text-secondary text-2xl tracking-tight group-hover:text-primary transition-colors">
+            <h1 className="font-headline-md text-secondary text-xl tracking-tight group-hover:text-primary transition-colors">
               PATHMIND
             </h1>
           </div>
-          <p className="font-note-handwritten text-on-surface-variant text-xl mt-1">
+          <p className="font-note-handwritten text-on-surface-variant text-lg mt-0.5">
             Mindful Learning Companion
           </p>
         </Link>
@@ -109,8 +109,8 @@ export function Sidebar() {
       </div>
 
       {/* Navigation Links */}
-      <div className="flex flex-col gap-3 px-4">
-        <div className="px-3 text-xs uppercase tracking-wider font-label-md text-on-surface-variant/70 mb-1">
+      <div className="flex flex-col gap-2 px-3">
+        <div className="px-3 text-[11px] uppercase tracking-wider font-label-md text-on-surface-variant/70 mb-1">
           Journal Chapters
         </div>
         {navItems.map((item) => {

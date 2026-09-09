@@ -185,82 +185,70 @@ export function ContextCommandCenter() {
   const act = data.what_should_i_do_now;
 
   return (
-    <div className="w-full max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-      {/* 6 Core Answers Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+    <div className="w-full max-w-5xl mx-auto space-y-6 animate-in fade-in duration-300">
+      {/* 1-3. Compact Context Summary Strip */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* 1. WHERE AM I? */}
-        <div className="p-6 rounded-3xl bg-surface-container border border-outline space-y-3 shadow-sm hover:border-primary/40 transition-all">
+        <div className="p-4 rounded-2xl bg-surface-container border border-outline/60 space-y-1.5 shadow-xs hover:border-primary/40 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-primary flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5" /> 1. Where Am I?
+            <span className="text-[10px] uppercase font-bold tracking-wider text-primary flex items-center gap-1">
+              <Compass className="w-3 h-3" /> 1. Where Am I?
             </span>
-            <span className="text-xs font-bold text-on-surface">
+            <span className="text-[11px] font-bold text-on-surface bg-surface px-2 py-0.5 rounded-md border border-outline/40">
               {data.where_am_i.progress_percent}% Roadmap
             </span>
           </div>
-          <h4 className="font-bold text-lg text-on-surface">{data.where_am_i.current_stage}</h4>
-          <p className="text-xs text-on-surface-variant">
-            Stage 0{data.where_am_i.stage_number} Active Focus • {data.where_am_i.completed_stages} of {data.where_am_i.total_stages} Stages Complete
+          <h4 className="font-bold text-sm text-on-surface truncate">{data.where_am_i.current_stage}</h4>
+          <p className="text-[11px] text-on-surface-variant leading-tight">
+            Stage 0{data.where_am_i.stage_number} Active • {data.where_am_i.verified_skills_count} Proven Skills
           </p>
-          <div className="pt-2 border-t border-outline/50 flex items-center justify-between text-[11px] text-on-surface-variant">
-            <span>Verified Skills:</span>
-            <span className="font-bold text-emerald-400">{data.where_am_i.verified_skills_count} Proven</span>
-          </div>
         </div>
 
         {/* 2. WHERE AM I GOING? */}
-        <div className="p-6 rounded-3xl bg-surface-container border border-outline space-y-3 shadow-sm hover:border-primary/40 transition-all">
+        <div className="p-4 rounded-2xl bg-surface-container border border-outline/60 space-y-1.5 shadow-xs hover:border-secondary/40 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-secondary flex items-center gap-1.5">
-              <Rocket className="w-3.5 h-3.5" /> 2. Where Am I Going?
+            <span className="text-[10px] uppercase font-bold tracking-wider text-secondary flex items-center gap-1">
+              <Rocket className="w-3 h-3" /> 2. Where Am I Going?
             </span>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-bold bg-secondary/15 text-secondary border border-secondary/30">
+            <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-secondary/15 text-secondary border border-secondary/30">
               {data.where_am_i_going.readiness_tier}
             </span>
           </div>
-          <h4 className="font-bold text-lg text-on-surface">{data.where_am_i_going.target_role}</h4>
-          <p className="text-xs text-on-surface-variant">
-            Target Horizon: {data.where_am_i_going.target_timeline} • Match Score: {data.where_am_i_going.match_score}%
+          <h4 className="font-bold text-sm text-on-surface truncate">{data.where_am_i_going.target_role}</h4>
+          <p className="text-[11px] text-on-surface-variant leading-tight">
+            Target Horizon: {data.where_am_i_going.target_timeline} • Match: {data.where_am_i_going.match_score}%
           </p>
-          <div className="pt-2 border-t border-outline/50 flex items-center justify-between text-[11px] text-on-surface-variant">
-            <span>Grounded Standard:</span>
-            <span className="font-semibold text-on-surface">ESCO / NCO Role Graph</span>
-          </div>
         </div>
 
         {/* 3. WHAT CHANGED? */}
-        <div className="p-6 rounded-3xl bg-surface-container border border-outline space-y-3 shadow-sm hover:border-primary/40 transition-all">
+        <div className="p-4 rounded-2xl bg-surface-container border border-outline/60 space-y-1.5 shadow-xs hover:border-tertiary/40 transition-colors">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-tertiary flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5" /> 3. What Changed?
+            <span className="text-[10px] uppercase font-bold tracking-wider text-tertiary flex items-center gap-1">
+              <Sparkles className="w-3 h-3" /> 3. What Changed?
             </span>
-            <span className="text-[11px] text-on-surface-variant">
+            <span className="text-[10px] text-on-surface-variant">
               {new Date(data.what_changed.timestamp).toLocaleDateString()}
             </span>
           </div>
-          <h4 className="font-bold text-base text-on-surface truncate">{data.what_changed.event_title}</h4>
-          <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2">
+          <h4 className="font-bold text-sm text-on-surface truncate">{data.what_changed.event_title}</h4>
+          <p className="text-[11px] text-on-surface-variant leading-tight truncate">
             {data.what_changed.observation}
           </p>
-          <div className="pt-2 border-t border-outline/50 flex items-center justify-between text-[11px] text-on-surface-variant">
-            <span>Continuity Source:</span>
-            <span className="font-semibold text-on-surface">Longitudinal Memory</span>
-          </div>
         </div>
       </div>
 
-      {/* 4. WHAT IS BLOCKING ME? (If any) */}
+      {/* 4. WHAT IS BLOCKING ME? (If active) */}
       {data.what_is_blocking_me && (
-        <div className="p-5 rounded-2xl bg-amber-950/40 border border-amber-600/60 text-xs text-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
+        <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-600/50 text-xs text-amber-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="space-y-0.5">
             <div className="flex items-center gap-2 font-bold text-amber-300">
-              <AlertCircle className="w-4 h-4" /> 4. What Is Blocking Me: {data.what_is_blocking_me.title}
+              <AlertCircle className="w-4 h-4 shrink-0" /> 4. What Is Blocking Me: {data.what_is_blocking_me.title}
             </div>
-            <p className="text-amber-200/90">{data.what_is_blocking_me.description}</p>
+            <p className="text-[11px] text-amber-200/90">{data.what_is_blocking_me.description}</p>
           </div>
-          <div className="flex flex-wrap gap-1.5 shrink-0">
+          <div className="flex flex-wrap gap-1 shrink-0">
             {data.what_is_blocking_me.missing_requirements.map((r, i) => (
-              <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-amber-900/60 border border-amber-600/50 text-amber-100 font-semibold">
+              <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-amber-900/50 border border-amber-600/40 text-amber-100 font-medium">
                 {r}
               </span>
             ))}
@@ -268,27 +256,33 @@ export function ContextCommandCenter() {
         </div>
       )}
 
-      {/* 5. WHAT SHOULD I DO NOW? (Primary Next Action Card) */}
-      <div className="p-8 rounded-3xl bg-gradient-to-br from-surface-container-high via-surface-container to-surface border border-primary/40 shadow-2xl space-y-6 relative overflow-hidden">
+      {/* 5. WHAT SHOULD I DO NOW? (Clear Focal Point) */}
+      <div className="p-6 md:p-7 rounded-3xl bg-surface border-2 border-primary/40 shadow-lg space-y-5 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40">
-              <ShieldCheck className="w-3.5 h-3.5" /> 5. What Should I Do Now? (Priority: {act.priority})
+          <div className="space-y-1.5 max-w-xl">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
+              <ShieldCheck className="w-3.5 h-3.5" /> 5. What Should I Do Now? • Priority {act.priority}
             </div>
-            <h3 className="text-2xl font-black text-on-surface">{act.action_title}</h3>
+            <h3 className="text-xl md:text-2xl font-bold font-headline-md text-on-surface tracking-tight leading-snug">
+              {act.action_title}
+            </h3>
+            <p className="text-xs text-on-surface-variant">
+              {act.recommendation_rationale}
+            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          {/* Action Hierarchy: 1 Filled Primary + 1 Outlined Secondary */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
             <button
               onClick={() => setExplainModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-surface border border-outline hover:bg-surface-container text-on-surface font-semibold text-xs shadow-sm transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 min-h-[44px] rounded-xl bg-surface border border-outline/70 hover:bg-surface-container text-on-surface font-medium text-xs transition-colors cursor-pointer"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+              <HelpCircle className="w-3.5 h-3.5 text-primary" />
               <span>Why This Recommendation?</span>
             </button>
             <Link
               href={act.action_type === "APPLY_OPPORTUNITY" ? "/readiness" : "/journey"}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-primary text-on-primary font-bold text-sm shadow-lg hover:opacity-95 transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 min-h-[48px] rounded-xl bg-primary text-white font-bold text-sm shadow-md hover:bg-primary/90 transition-all cursor-pointer"
             >
               <span>Take Action Now</span>
               <ArrowRight className="w-4 h-4" />
@@ -297,40 +291,46 @@ export function ContextCommandCenter() {
         </div>
 
         {/* Structured Context Breakdown: Facts vs Interpretation vs Tradeoffs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          {/* Facts */}
-          <div className="p-4 rounded-2xl bg-surface border border-outline/70 space-y-2">
-            <span className="font-bold text-emerald-400 uppercase tracking-wider text-[10px] block">Verified Facts</span>
-            <ul className="space-y-1 text-on-surface-variant">
-              {act.facts.map((f, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs pt-1">
+          {/* Verified Facts */}
+          <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/50 space-y-1.5">
+            <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider text-[10px] block">
+              Verified Facts
+            </span>
+            <ul className="space-y-1 text-on-surface-variant text-[11px] leading-relaxed">
+              {act.facts.slice(0, 3).map((f, i) => (
                 <li key={i} className="flex items-start gap-1.5">
-                  <span className="text-emerald-400">•</span>
+                  <span className="text-emerald-500 font-bold shrink-0">•</span>
                   <span>{f}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Interpretation */}
-          <div className="p-4 rounded-2xl bg-surface border border-outline/70 space-y-2">
-            <span className="font-bold text-primary uppercase tracking-wider text-[10px] block">Cognitive Interpretation</span>
-            <ul className="space-y-1 text-on-surface-variant">
-              {act.interpretation.map((inf, i) => (
+          {/* Cognitive Interpretation */}
+          <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/50 space-y-1.5">
+            <span className="font-bold text-primary uppercase tracking-wider text-[10px] block">
+              Cognitive Interpretation
+            </span>
+            <ul className="space-y-1 text-on-surface-variant text-[11px] leading-relaxed">
+              {act.interpretation.slice(0, 3).map((inf, i) => (
                 <li key={i} className="flex items-start gap-1.5">
-                  <span className="text-primary">•</span>
+                  <span className="text-primary font-bold shrink-0">•</span>
                   <span>{inf}</span>
                 </li>
               ))}
             </ul>
           </div>
 
-          {/* Tradeoffs */}
-          <div className="p-4 rounded-2xl bg-surface border border-outline/70 space-y-2">
-            <span className="font-bold text-amber-400 uppercase tracking-wider text-[10px] block">Tradeoffs &amp; Cost</span>
-            <ul className="space-y-1 text-on-surface-variant">
-              {act.tradeoffs.map((t, i) => (
+          {/* Tradeoffs & Cost */}
+          <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline/50 space-y-1.5">
+            <span className="font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider text-[10px] block">
+              Tradeoffs &amp; Cost
+            </span>
+            <ul className="space-y-1 text-on-surface-variant text-[11px] leading-relaxed">
+              {act.tradeoffs.slice(0, 3).map((t, i) => (
                 <li key={i} className="flex items-start gap-1.5">
-                  <span className="text-amber-400">•</span>
+                  <span className="text-amber-500 font-bold shrink-0">•</span>
                   <span>{t}</span>
                 </li>
               ))}
@@ -339,12 +339,12 @@ export function ContextCommandCenter() {
         </div>
 
         {/* 6. WHAT HAPPENS AFTER THAT? */}
-        <div className="p-4 rounded-2xl bg-surface/80 border border-outline flex items-center justify-between gap-4 text-xs">
-          <div className="flex items-center gap-2 text-on-surface-variant">
-            <span className="font-bold text-on-surface text-[11px] uppercase tracking-wider">6. What Happens After That:</span>
-            <span>{data.what_happens_after_that}</span>
+        <div className="p-3 rounded-xl bg-surface-container-low/70 border border-outline/40 flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-on-surface-variant text-[11px] leading-tight min-w-0">
+            <span className="font-bold text-on-surface text-[10px] uppercase tracking-wider shrink-0">6. Next Consequence:</span>
+            <span className="truncate">{data.what_happens_after_that}</span>
           </div>
-          <span className="text-[10px] text-primary font-bold uppercase tracking-wider shrink-0">Continuous Consequence</span>
+          <span className="text-[10px] text-primary font-bold uppercase tracking-wider shrink-0">Continuous Loop</span>
         </div>
       </div>
 

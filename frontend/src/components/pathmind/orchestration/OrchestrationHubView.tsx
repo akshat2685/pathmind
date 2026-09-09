@@ -89,19 +89,20 @@ export function OrchestrationHubView() {
     setLoading(true);
     setError(null);
     try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
         : "scholar-user";
 
       // 1. Fetch Agents Registry
-      const agentRes = await fetch("/api/orchestrate/agents");
+      const agentRes = await fetch(`${baseUrl}/api/orchestrate/agents`);
       if (agentRes.ok) {
         const agentData = await agentRes.json();
         setAgents(agentData);
       }
 
       // 2. Fetch Traces
-      const traceRes = await fetch("/api/orchestrate/traces", {
+      const traceRes = await fetch(`${baseUrl}/api/orchestrate/traces`, {
         headers: { "X-Person-ID": personId }
       });
       if (traceRes.ok) {
@@ -110,7 +111,7 @@ export function OrchestrationHubView() {
       }
 
       // 3. Fetch Pending Action Proposals
-      const propRes = await fetch("/api/orchestrate/proposals?status=PENDING", {
+      const propRes = await fetch(`${baseUrl}/api/orchestrate/proposals?status=PENDING`, {
         headers: { "X-Person-ID": personId }
       });
       if (propRes.ok) {
@@ -140,11 +141,12 @@ export function OrchestrationHubView() {
 
     setIsDispatching(true);
     try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
         : "scholar-user";
 
-      const res = await fetch("/api/orchestrate", {
+      const res = await fetch(`${baseUrl}/api/orchestrate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -171,11 +173,12 @@ export function OrchestrationHubView() {
 
   const handleApproveProposal = async (proposalId: string) => {
     try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
         : "scholar-user";
 
-      const res = await fetch(`/api/orchestrate/proposals/${proposalId}/approve`, {
+      const res = await fetch(`${baseUrl}/api/orchestrate/proposals/${proposalId}/approve`, {
         method: "POST",
         headers: { "X-Person-ID": personId }
       });
@@ -191,11 +194,12 @@ export function OrchestrationHubView() {
 
   const handleRejectProposal = async (proposalId: string) => {
     try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
         : "scholar-user";
 
-      const res = await fetch(`/api/orchestrate/proposals/${proposalId}/reject`, {
+      const res = await fetch(`${baseUrl}/api/orchestrate/proposals/${proposalId}/reject`, {
         method: "POST",
         headers: { "X-Person-ID": personId }
       });

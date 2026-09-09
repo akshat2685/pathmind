@@ -169,7 +169,10 @@ export function NotificationCenter() {
       {/* Bell Trigger Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="relative p-2.5 rounded-full bg-surface-container border border-outline hover:border-primary/50 text-on-surface transition-all cursor-pointer"
+        aria-label="Proactive notifications"
+        aria-expanded={isOpen}
+        aria-controls="proactive-notifications-panel"
+        className="relative p-2.5 rounded-full bg-surface-container border border-outline hover:border-primary/50 text-on-surface transition-all cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
         title="Proactive Notifications"
       >
         <Bell className="w-5 h-5" />
@@ -183,7 +186,12 @@ export function NotificationCenter() {
       {/* Slide-over Drawer Modal */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-surface border-l border-outline w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
+          <div
+            id="proactive-notifications-panel"
+            role="region"
+            aria-label="Proactive Intelligence Notifications"
+            className="bg-surface border-l border-outline w-full max-w-md h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-300"
+          >
             {/* Drawer Header */}
             <div className="p-6 border-b border-outline flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -192,7 +200,8 @@ export function NotificationCenter() {
               </div>
               <button
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-xl hover:bg-surface-container text-on-surface-variant cursor-pointer"
+                aria-label="Close proactive notifications panel"
+                className="p-1.5 rounded-xl hover:bg-surface-container text-on-surface-variant cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
               >
                 <X className="w-5 h-5" />
               </button>

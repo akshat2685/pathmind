@@ -30,9 +30,9 @@ export default function Home() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 md:ml-72">
+      <div className="flex-1 flex flex-col min-w-0 md:ml-64 lg:ml-72">
         <TopBar />
-        <main className="flex-1 flex flex-col justify-start items-center px-6 md:px-12 pt-8 pb-24 relative z-10 space-y-12">
+        <main className="flex-1 flex flex-col justify-start items-center px-4 sm:px-6 md:px-10 lg:px-12 pt-16 md:pt-8 pb-20 relative z-10 space-y-10">
           {/* Context-Aware Command Center */}
           <ContextCommandCenter />
 
@@ -76,9 +76,9 @@ export default function Home() {
                 <div className="flex justify-center mt-2">
                   <button
                     type="submit"
-                    className="ink-wash-btn-primary px-10 py-3 text-2xl flex items-center gap-3 cursor-pointer"
+                    className="ink-wash-btn-primary px-10 py-3.5 min-h-[48px] text-base flex items-center gap-2.5 cursor-pointer shadow-md hover:-translate-y-0.5 transition-all"
                   >
-                    <span>Embark</span>
+                    <span>Embark on Journey</span>
                     <span className="material-symbols-outlined text-lg">east</span>
                   </button>
                 </div>

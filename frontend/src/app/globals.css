@@ -195,6 +195,17 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: none;
 }
 
+/* Documented 8pt Spatial Scale & Rhythm (PM-UI-004):
+   4px  = space-1  (compact chip padding, status dot margins)
+   8px  = space-2  (micro gaps, icon-to-label spacing)
+   12px = space-3  (grouped form controls, sub-card gaps)
+   16px = space-4  (standard card interior padding, mobile gutters)
+   24px = space-6  (generous card padding, inter-component gap)
+   32px = space-8  (section rhythm and card stack gaps)
+   48px = space-12 (block separation, container offsets)
+   64px = space-16 (major chapter transitions)
+*/
+
 .ink-wash-btn {
   background-color: transparent;
   color: #1c1c11;
@@ -204,8 +215,10 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   overflow: hidden;
   box-shadow: 3px 4px 0 rgba(61, 52, 48, 0.1);
-  font-family: var(--font-caveat), cursive;
-  font-size: 1.35rem;
+  font-family: var(--font-be-vietnam), var(--font-bricolage), sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
 }
 
 .ink-wash-btn:hover {
@@ -226,8 +239,10 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 255px 15px 225px 15px/15px 225px 15px 255px;
   box-shadow: 3px 4px 0 rgba(61, 52, 48, 0.2);
   transition: all 0.2s ease;
-  font-family: var(--font-caveat), cursive;
-  font-size: 1.35rem;
+  font-family: var(--font-be-vietnam), var(--font-bricolage), sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
 }
 
 .ink-wash-btn-primary:hover {
