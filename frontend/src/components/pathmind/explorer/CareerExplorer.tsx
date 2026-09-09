@@ -316,7 +316,7 @@ export function CareerExplorer() {
             </span>
           </div>
           <h3 className="font-headline-sm text-2xl text-on-surface mb-1">Retrieving Trajectory Patterns &amp; Knowledge...</h3>
-          <p className="font-note-handwritten text-xl text-on-surface-variant">Connecting ESCO/NCO occupational data with your psychometric profile.</p>
+          <p className="font-note-handwritten text-xl text-on-surface-variant">Connecting standard occupational classifications (ESCO / NCO) with your interest profile.</p>
         </div>
       )}
 

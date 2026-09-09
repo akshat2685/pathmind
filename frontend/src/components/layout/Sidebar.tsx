@@ -71,20 +71,20 @@ export function Sidebar() {
     {
       href: "/execution",
       icon: "flag",
-      label: "Mission Control",
-      sub: "Daily Execution & Action",
+      label: "Today's Plan",
+      sub: "Daily Actions & Progress",
     },
     {
       href: "/opportunities",
       icon: "explore",
-      label: "Opportunity Navigator",
-      sub: "Discovery & Matching",
+      label: "Opportunity Hub",
+      sub: "Verified Matches & Deadlines",
     },
     {
       href: "/orchestrator",
       icon: "hub",
-      label: "Control Tower",
-      sub: "Unified Agent Orchestrator",
+      label: "Guidance Coordinator",
+      sub: "Plan Coordination & Logic",
     },
   ];
 
@@ -153,7 +153,7 @@ export function Sidebar() {
           <div className="flex flex-col min-w-0">
             <span className="font-headline-sm text-sm font-medium text-on-surface truncate">Student Scholar</span>
             <span className="font-note-handwritten text-sm text-primary font-medium">
-              Active Evaluation Mode
+              Learner Profile • Active Journey
             </span>
           </div>
         </div>

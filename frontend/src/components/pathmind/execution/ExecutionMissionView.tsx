@@ -321,7 +321,7 @@ export function ExecutionMissionView() {
       <div className="flex items-center justify-center min-h-[500px]">
         <div className="flex items-center space-x-3 text-stone-600">
           <div className="w-5 h-5 border-2 border-stone-400 border-t-transparent rounded-full animate-spin" />
-          <span className="font-serif italic text-sm">Aligning mission objectives & execution telemetry...</span>
+          <span className="font-serif italic text-sm">Preparing your daily plan &amp; learning actions...</span>
         </div>
       </div>
     );
@@ -336,13 +336,13 @@ export function ExecutionMissionView() {
         <div>
           <div className="flex items-center space-x-2 text-stone-700 text-xs font-mono uppercase tracking-widest mb-1">
             <Target className="w-3.5 h-3.5 text-stone-700" />
-            <span>Mission Control & Execution Engine</span>
+            <span>Today&apos;s Plan &amp; Actions</span>
           </div>
           <h1 className="text-3xl font-serif tracking-tight text-stone-900">
-            Daily Execution & Accountability
+            Today&apos;s Plan &amp; Progress
           </h1>
           <p className="text-stone-600 text-sm mt-1 max-w-xl">
-            Directly translating active roadmaps and career goals into meaningful daily progress with zero fake streaks or checkbox vanity.
+            Turn your learning roadmap and target career goals into clear, verified daily actions.
           </p>
         </div>
 

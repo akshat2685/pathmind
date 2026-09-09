@@ -862,7 +862,7 @@ export function CareerLaunchpad() {
                       <Briefcase className="w-5 h-5 text-primary" /> Verified Opportunity Matching
                     </h3>
                     <p className="text-xs text-on-surface-variant mt-1">
-                      Matched against your active skill evidence. Every result features verified official application portals (zero fabricated listings).
+                      Matched against your active skill evidence. Every result features verified official application portals (source-checked live feeds).
                     </p>
                   </div>
                   <span className="text-xs px-3 py-1 rounded-full font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-600/60">

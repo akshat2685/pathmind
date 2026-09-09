@@ -20,51 +20,43 @@ export function TopBar() {
     { href: "/readiness", icon: "rocket_launch", label: "Career Launchpad", sub: "Readiness & Opportunities" },
     { href: "/evolution", icon: "timeline", label: "Personal Evolution", sub: "Longitudinal Model" },
     { href: "/portfolio", icon: "folder_special", label: "Artifacts & Portfolio", sub: "Real-World Evidence" },
-    { href: "/execution", icon: "flag", label: "Mission Control", sub: "Daily Execution & Action" },
-    { href: "/opportunities", icon: "explore", label: "Opportunity Navigator", sub: "Discovery & Matching" },
-    { href: "/orchestrator", icon: "hub", label: "Control Tower", sub: "Unified Agent Orchestrator" },
+    { href: "/execution", icon: "flag", label: "Today's Plan", sub: "Daily Actions & Progress" },
+    { href: "/opportunities", icon: "explore", label: "Opportunity Hub", sub: "Verified Matches & Deadlines" },
+    { href: "/orchestrator", icon: "hub", label: "Guidance Coordinator", sub: "Plan Coordination & Logic" },
   ];
 
   return (
     <>
-      <header className="md:hidden flex justify-between items-center px-4 py-3 w-full fixed top-0 left-0 bg-surface-container-low/95 backdrop-blur-md border-b-2 border-outline-variant shadow-sm z-40">
-        <div className="flex items-center gap-2">
+      <header className="md:hidden flex justify-between items-center px-3 sm:px-4 py-2.5 w-full fixed top-0 left-0 bg-surface-container-low/95 backdrop-blur-md border-b-2 border-outline-variant shadow-sm z-40 box-border overflow-hidden">
+        <div className="flex items-center gap-1.5 min-w-0">
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={isMenuOpen}
-            className="p-2 -ml-1 text-on-surface hover:text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+            className="p-2 -ml-1 text-on-surface hover:text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none shrink-0"
           >
             <span className="material-symbols-outlined text-2xl">
               {isMenuOpen ? "close" : "menu"}
             </span>
           </button>
-          <Link href="/" className="flex items-center gap-2" aria-label="PATHMIND Homepage">
-            <span className="material-symbols-outlined text-secondary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <Link href="/" className="flex items-center gap-1.5 min-w-0" aria-label="PATHMIND Homepage">
+            <span className="material-symbols-outlined text-secondary text-2xl shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
               auto_stories
             </span>
-            <span className="font-headline-lg text-xl italic text-secondary tracking-tight">
+            <span className="font-headline-lg text-xl italic text-secondary tracking-tight truncate max-w-[120px]">
               Pathmind
             </span>
           </Link>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 min-w-0 shrink-0">
           <NotificationCenter />
           <Link
             href="/onboarding"
-            aria-label="Onboarding: Longitudinal Profile"
-            className="text-primary hover:text-tertiary transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
+            aria-label="Onboarding: Profile"
+            className="text-primary hover:text-tertiary transition-colors w-10 h-10 min-w-[40px] flex items-center justify-center shrink-0"
             title="Onboarding"
           >
             <span className="material-symbols-outlined text-2xl">menu_book</span>
-          </Link>
-          <Link
-            href="/assessment"
-            aria-label="Counseling Engine Assessment"
-            className="text-primary hover:text-tertiary transition-colors min-w-[40px] min-h-[40px] flex items-center justify-center"
-            title="Assessment"
-          >
-            <span className="material-symbols-outlined text-2xl">ink_pen</span>
           </Link>
         </div>
       </header>

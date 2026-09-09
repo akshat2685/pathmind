@@ -871,12 +871,12 @@ export function ArtifactPortfolioView() {
         <div className="flex items-center gap-2 mb-1">
           <Sparkles className="w-5 h-5 text-primary" />
           <h3 className="font-headline-md text-xl font-serif text-on-surface">
-            Zero-Assumption Claim Validation Engine
+            Evidence-Grounded Resume &amp; Claim Verification
           </h3>
         </div>
         <p className="font-body-sm text-on-surface-variant max-w-xl">
           Test any technical claim (e.g., &ldquo;I built a distributed caching service&rdquo;).
-          PATHMIND compares your claim against real ingested artifacts to determine if it is supported, partially supported, or unverified.
+          PATHMIND compares your claim against your uploaded code artifacts to verify whether your evidence supports the claim.
         </p>
 
         <form onSubmit={handleValidateClaim} className="flex gap-3 max-w-2xl">

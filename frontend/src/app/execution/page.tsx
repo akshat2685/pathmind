@@ -4,7 +4,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { ExecutionMissionView } from "@/components/pathmind/execution/ExecutionMissionView";
 
 export const metadata: Metadata = {
-  title: "Mission Control & Daily Execution — PATHMIND",
+  title: "Today's Plan & Progress — PATHMIND",
   description: "Daily execution missions, focused action tracking, and adaptive streak protection.",
 };
 

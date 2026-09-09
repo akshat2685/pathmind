@@ -232,25 +232,25 @@ export function MemoryVault() {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-10">
+    <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-10 min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="border-b border-stone-200 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
+      <div className="border-b border-stone-200 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 min-w-0">
+        <div className="min-w-0">
           <div className="flex items-center space-x-2 text-stone-600 text-xs font-mono uppercase tracking-widest mb-1">
-            <Brain className="w-3.5 h-3.5 text-stone-700" />
+            <Brain className="w-3.5 h-3.5 text-stone-700 shrink-0" />
             <span>Personal Second Brain</span>
           </div>
-          <h1 className="text-3xl font-serif tracking-tight text-stone-900">
-            Memory Vault & Knowledge Engine
+          <h1 className="text-2xl sm:text-3xl font-serif tracking-tight text-stone-900 break-words">
+            Memory Vault &amp; Knowledge Engine
           </h1>
           <p className="text-stone-600 text-sm mt-1 max-w-2xl">
-            Audit-traceable repository preserving your decisions, projects, breakthroughs, and learning strategies. Every memory is grounded in real evidence.
+            Your private learning notebook preserving decisions, projects, breakthroughs, and strategies — grounded in your actual work.
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 text-xs font-mono text-stone-700 bg-stone-100 border border-stone-200 px-3 py-1.5 rounded">
-          <ShieldCheck className="w-4 h-4 text-emerald-700" />
-          <span>Server-Scoped • Zero Hallucinated Memories</span>
+        <div className="flex items-center space-x-2 text-xs font-mono text-stone-700 bg-stone-100 border border-stone-200 px-3 py-1.5 rounded shrink-0 max-w-full">
+          <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span className="truncate">Private to your profile • Evidence-backed memories</span>
         </div>
       </div>
 
@@ -268,7 +268,7 @@ export function MemoryVault() {
             <span>Ask Your Second Brain</span>
           </div>
           <span className="text-[11px] font-mono text-stone-500">
-            Semantic & Concept Grounded Recall
+            Search your learning memories
           </span>
         </div>
 
@@ -449,7 +449,7 @@ export function MemoryVault() {
       <div className="space-y-4">
         {loading ? (
           <div className="p-12 text-center text-stone-500 font-serif italic text-sm">
-            Loading personal memory vault...
+            Loading your learning memories...
           </div>
         ) : filteredMemories.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -526,8 +526,8 @@ export function MemoryVault() {
         ) : (
           <div className="p-8 text-center border border-dashed border-stone-300 rounded-xl bg-stone-50/50 space-y-2">
             <Brain className="w-8 h-8 text-stone-400 mx-auto" />
-            <p className="font-serif text-stone-700">No memory moments match current filter criteria.</p>
-            <p className="text-xs text-stone-500 font-mono">Complete milestones or record learning experiences to build your memory vault.</p>
+            <p className="font-serif text-stone-700">No learning memories recorded yet.</p>
+            <p className="text-xs text-stone-500 font-sans">Your learning memories will appear here as you complete activities, upload evidence, and record milestones.</p>
           </div>
         )}
       </div>

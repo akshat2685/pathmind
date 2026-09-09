@@ -4,7 +4,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { OpportunityNavigatorView } from "@/components/pathmind/career/OpportunityNavigatorView";
 
 export const metadata: Metadata = {
-  title: "Opportunity Navigator — PATHMIND",
+  title: "Opportunity Hub — PATHMIND",
   description: "Verified internships, research fellowships, and entry roles matched with fit vs. readiness separation.",
 };
 
