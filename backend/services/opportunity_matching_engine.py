@@ -1,5 +1,8 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from datetime import datetime, timezone
+
+if TYPE_CHECKING:
+    from backend.services.career_readiness_engine import CareerReadinessEngine
 
 from backend.core.opportunity_schemas import (
     CanonicalOpportunity,
@@ -14,7 +17,6 @@ from backend.providers.opportunity_provider import (
     deduplicate_opportunities
 )
 from backend.services.opportunity_reasoning_agent import OpportunityReasoningAgent
-from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.store import FirestoreStore
 
 class OpportunityMatchingEngine:
@@ -27,13 +29,17 @@ class OpportunityMatchingEngine:
         self,
         provider: Optional[BaseOpportunityProvider] = None,
         agent: Optional[OpportunityReasoningAgent] = None,
-        career_engine: Optional[CareerReadinessEngine] = None,
+        career_engine: Optional["CareerReadinessEngine"] = None,
         store: Optional[FirestoreStore] = None
     ):
         self.store = store or FirestoreStore()
         self.provider = provider or RealAPIProviderAdapter()
         self.agent = agent or OpportunityReasoningAgent()
-        self.career_engine = career_engine or CareerReadinessEngine()
+        
+        if career_engine is None:
+            from backend.services.career_readiness_engine import CareerReadinessEngine
+            career_engine = CareerReadinessEngine(store=self.store)
+        self.career_engine = career_engine
 
     async def get_all_opportunities(
         self,

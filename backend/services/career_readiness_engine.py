@@ -41,7 +41,7 @@ class CareerReadinessEngine:
     def __init__(self, store: Optional[FirestoreStore] = None):
         self.store = store or FirestoreStore()
         self.knowledge_service = KnowledgeService()
-        self.opportunity_matching_engine = OpportunityMatchingEngine(self.store)
+        self.opportunity_matching_engine = OpportunityMatchingEngine(store=self.store, career_engine=self)
         self.requirement_graph_service = RequirementGraphService(self.knowledge_service)
         
         # 5 Focused ADK Agents
