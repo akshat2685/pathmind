@@ -292,7 +292,7 @@ class AdaptationService:
             if new_role:
                 await self.store.save_career_goal(person_id, {
                     "target_role": new_role,
-                    "target_industry": proposal.change_event.trigger_data.get("target_industry", "Applied AI"),
+                    "target_industry": proposal.change_event.trigger_data.get("target_industry") or "Professional Domain",
                     "geography": proposal.change_event.trigger_data.get("geography", "Global / India"),
                     "target_timeline": proposal.change_event.trigger_data.get("target_timeline", "6–9 Months"),
                     "priority": "PRIMARY",

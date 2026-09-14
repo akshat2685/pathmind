@@ -42,7 +42,7 @@ class RecommendationExplanationService:
         inferences: List[str]
     ) -> StructuredRecommendation:
         graph = await self.context_service.assemble_context_graph(person_id)
-        target_role = graph.goal_context.get("primary_target_role", "Applied AI Engineer")
+        target_role = graph.goal_context.get("primary_target_role") or graph.goal_context.get("target_role") or "Target Professional Role"
 
         # Ground claims
         claims: List[TraceableClaim] = []
@@ -92,30 +92,32 @@ class RecommendationExplanationService:
         if not rec_raw:
             # Fallback for dynamic next action queries
             graph = await self.context_service.assemble_context_graph(person_id)
-            target_role = graph.goal_context.get("primary_target_role", "Applied AI Engineer")
+            target_role = graph.goal_context.get("primary_target_role") or graph.goal_context.get("target_role") or "Target Professional Practice"
+            stage_title = graph.learning_context.get('current_stage_title') or "Active Milestone"
+            stage_num = graph.learning_context.get('current_stage_number') or 1
             rec = await self.generate_structured_recommendation(
                 person_id=person_id,
                 rec_type="NEXT_ACTION",
-                title=f"Progress to {graph.learning_context.get('current_stage_title')}",
-                summary="Build hands-on verified project repository.",
-                why_now=f"Active focus in Stage 0{graph.learning_context.get('current_stage_number')}.",
-                recommended_choice="Hands-on Project Repository with Unit Tests",
-                alternative_choices=["Theoretical Video Course", "Pay for Certification First"],
+                title=f"Progress to {stage_title}",
+                summary=f"Complete hands-on verified evidence artifact for {target_role}.",
+                why_now=f"Active focus in Stage 0{stage_num}.",
+                recommended_choice="Practical Portfolio Artifact with Verified Evidence",
+                alternative_choices=["Theoretical Lecture Review", "Unverified Reading"],
                 options=[
-                    {"name": "Project Repository", "pace": "Self-paced", "proof": "Verifiable Git Repo"},
-                    {"name": "Theoretical Course", "pace": "Fast", "proof": "Completion Certificate"}
+                    {"name": "Practical Portfolio Artifact", "pace": "Self-paced", "proof": "Verifiable Project Artifact"},
+                    {"name": "Theoretical Review", "pace": "Fast", "proof": "Completion Certificate"}
                 ],
                 tradeoffs=[
-                    "Project repositories provide verifiable code evidence required by hiring teams, whereas certificates demonstrate exposure only."
+                    f"Practical evidence artifacts demonstrate direct competency required by {target_role} evaluators."
                 ],
                 uncertainties=[
-                    "Proficiency in asynchronous concurrency has not yet been benchmarked."
+                    f"Proficiency in advanced competencies for {target_role} has not yet been benchmarked."
                 ],
                 facts=[
-                    f"{target_role} standard requires demonstrated unit testing and clean software design."
+                    f"{target_role} standards prioritize demonstrated practical execution."
                 ],
                 inferences=[
-                    "Project-based evidence will yield a higher career match score than theoretical quizzes."
+                    "Evidence-based portfolio artifacts yield higher readiness evaluation than theoretical quizzes."
                 ]
             )
             rec_raw = rec.model_dump()
