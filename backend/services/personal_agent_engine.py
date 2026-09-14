@@ -4,8 +4,12 @@ from backend.core.roadmap_schemas import (
     LearningEvent,
     PersonalAgentModel,
     LongitudinalMemory,
-    EvaluationResult
+    EvaluationResult,
+    MisconceptionRecord,
+    StrategyEffectiveness,
+    RejectedRecommendation
 )
+from backend.core.adaptation_schemas import LearningSignal
 from backend.services.store import FirestoreStore
 from backend.services.proactive_memory_service import ProactiveMemoryService
 
@@ -66,10 +70,13 @@ class PersonalAgentEngine:
             },
             strengths=strengths,
             weaknesses=weaknesses,
+            demonstrated_capabilities=[],
+            developing_capabilities=[],
             recurring_misconceptions=[],
-            successful_interventions=["Interactive Case Scenarios", "Step-by-step Milestones"],
-            unsuccessful_interventions=["Passive Video Lectures > 45 mins"],
-            pace="NORMAL",
+            regression_risks=[],
+            strategy_effectiveness={},
+            observed_pace="NORMAL",
+            rejected_recommendations=[],
             skill_evidence={},
             longitudinal_memories=[
                 LongitudinalMemory(
@@ -85,6 +92,110 @@ class PersonalAgentEngine:
         await self.store.save_personal_agent_model(person_id, new_model.model_dump(mode="json"))
         return new_model
 
+    async def process_learning_signal(
+        self,
+        person_id: str,
+        signal: LearningSignal,
+        evaluation_detail: Optional[Dict[str, Any]] = None
+    ) -> PersonalAgentModel:
+        """
+        The closed Personal Agent Learning Loop (Prompt 28):
+        Processes canonical learning signals to update personal model state with evidence.
+        """
+        model = await self.get_or_create_agent_model(person_id)
+        concept = signal.subject
+        evidence_id = signal.evidence_ids[0] if signal.evidence_ids else None
+
+        # Handle Misconceptions
+        if signal.type == "MISCONCEPTION_DETECTED" and evaluation_detail and evaluation_detail.get("observable_misconceptions"):
+            for misc in evaluation_detail.get("observable_misconceptions", []):
+                existing_misc = next((m for m in model.recurring_misconceptions if m.concept == concept and m.misconception == misc), None)
+                if existing_misc:
+                    existing_misc.occurrence_count += 1
+                    existing_misc.last_seen = datetime.now(timezone.utc).isoformat()
+                    existing_misc.resolved = False
+                    existing_misc.resolution_evidence_id = None
+                    if evidence_id and evidence_id not in existing_misc.evidence_ids:
+                        existing_misc.evidence_ids.append(evidence_id)
+                else:
+                    model.recurring_misconceptions.append(
+                        MisconceptionRecord(
+                            concept=concept,
+                            misconception=misc,
+                            evidence_ids=[evidence_id] if evidence_id else [],
+                            first_seen=datetime.now(timezone.utc).isoformat(),
+                            last_seen=datetime.now(timezone.utc).isoformat(),
+                            occurrence_count=1,
+                            resolved=False
+                        )
+                    )
+
+        # Handle Mastery Success
+        if signal.type in ["MASTERY_DEMONSTRATED", "TRANSFER_DEMONSTRATED"]:
+            if concept not in model.demonstrated_capabilities:
+                model.demonstrated_capabilities.append(concept)
+            if concept in model.developing_capabilities:
+                model.developing_capabilities.remove(concept)
+            
+            # Resolve past misconceptions for this concept
+            for m in model.recurring_misconceptions:
+                if m.concept == concept and not m.resolved:
+                    m.resolved = True
+                    m.resolution_evidence_id = evidence_id
+
+        # Handle Mastery Failure / Struggle
+        if signal.type in ["MASTERY_FAILED", "REPEATED_STRUGGLE", "MISCONCEPTION_DETECTED"]:
+            if concept not in model.developing_capabilities:
+                model.developing_capabilities.append(concept)
+            # Regression check
+            if concept in model.demonstrated_capabilities:
+                if concept not in model.regression_risks:
+                    model.regression_risks.append(concept)
+        
+        model.updated_at = datetime.now(timezone.utc).isoformat()
+        version = await self.store.save_personal_agent_model(person_id, model.model_dump(mode="json"))
+        model.version = version
+        return model
+
+    async def update_agent_model(self, person_id: str, model: PersonalAgentModel):
+        model.updated_at = datetime.now(timezone.utc).isoformat()
+        version = await self.store.save_personal_agent_model(person_id, model.model_dump(mode="json"))
+        model.version = version
+        return model
+
+    async def record_rejected_recommendation(
+        self,
+        person_id: str,
+        action: str,
+        scope: str,
+        reason: Optional[str] = None
+    ):
+        model = await self.get_or_create_agent_model(person_id)
+        model.rejected_recommendations.append(
+            RejectedRecommendation(
+                person_id=person_id,
+                action=action,
+                scope=scope,
+                reason=reason,
+                rejected_at=datetime.now(timezone.utc).isoformat()
+            )
+        )
+        await self.update_agent_model(person_id, model)
+
+    async def is_recommendation_suppressed(
+        self,
+        person_id: str,
+        action: str,
+        scope: str
+    ) -> bool:
+        model = await self.get_or_create_agent_model(person_id)
+        # Suppress if user previously rejected it and no new qualifying evidence arrived since then
+        for r in model.rejected_recommendations:
+            if r.action == action and r.scope == scope:
+                # Naive implementation: suppress immediately. In full production, we'd check evidence counts.
+                return True
+        return False
+
     async def process_learning_event_and_evolve(
         self,
         person_id: str,
@@ -93,10 +204,7 @@ class PersonalAgentEngine:
         concept: str
     ) -> PersonalAgentModel:
         """
-        The Personal Agent Learning Loop:
-        1. Emits a structured LearningEvent based on evaluation.
-        2. Updates PersonalAgentModel (strengths, recurring misconceptions, pacing, longitudinal memory).
-        3. Persists versioned state.
+        Legacy handler mapping old EvaluationResult to the new Learning Loop.
         """
         current_model = await self.get_or_create_agent_model(person_id)
         
@@ -121,13 +229,25 @@ class PersonalAgentEngine:
         )
         await self.store.save_learning_event(person_id, event.model_dump(mode="json"))
 
-        # 2. Update Model State
-        updated_model = current_model.model_copy(deep=True)
+        # Map to canonical LearningSignal
         if evaluation.status == "PASS":
+            sig_type = "TRANSFER_DEMONSTRATED" if evaluation.mastery_dimensions.transfer >= 75.0 else "MASTERY_DEMONSTRATED"
+            signal = LearningSignal(
+                person_id=person_id,
+                type=sig_type,
+                subject=concept,
+                source_event_id=evaluation.submission_id,
+                evidence_ids=[evaluation.submission_id],
+                confidence="HIGH",
+                impact_scope="STAGE"
+            )
+            await self.process_learning_signal(person_id, signal)
+            
+            # Still apply legacy updates to preserve existing progressive tests
+            updated_model = await self.get_or_create_agent_model(person_id)
             if concept not in updated_model.strengths:
                 updated_model.strengths.append(concept)
             updated_model.skill_evidence[concept] = f"Demonstrated in {stage_id} with score {evaluation.mastery_dimensions.accuracy}%"
-            # Add longitudinal memory
             updated_model.longitudinal_memories.append(
                 LongitudinalMemory(
                     person_id=person_id,
@@ -138,10 +258,20 @@ class PersonalAgentEngine:
                 )
             )
         else:
+            signal = LearningSignal(
+                person_id=person_id,
+                type="MASTERY_FAILED",
+                subject=concept,
+                source_event_id=evaluation.submission_id,
+                evidence_ids=[evaluation.submission_id],
+                confidence="HIGH",
+                impact_scope="MISSION_ONLY"
+            )
+            await self.process_learning_signal(person_id, signal, {"observable_misconceptions": [f"Struggled with {concept}"]})
+            
+            updated_model = await self.get_or_create_agent_model(person_id)
             if concept not in updated_model.weaknesses:
                 updated_model.weaknesses.append(concept)
-            if concept not in updated_model.recurring_misconceptions:
-                updated_model.recurring_misconceptions.append(concept)
             updated_model.pace = "REINFORCED"
 
         updated_model.updated_at = datetime.now(timezone.utc).isoformat()

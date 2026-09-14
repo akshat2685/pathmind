@@ -14,7 +14,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="r1",
         construct="Realistic",
-        text="I like to build, repair, or maintain physical hardware, mechanisms, or concrete systems.",
+        text="I like to work with my hands, operate machinery, or engage in practical, physical activities.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -26,7 +26,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="r2",
         construct="Realistic",
-        text="I enjoy working outdoors, with tools, robotics, or hands-on engineering equipment.",
+        text="I enjoy outdoors work, athletics, or physically maintaining and repairing objects and environments.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -39,7 +39,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="i1",
         construct="Investigative",
-        text="I like to analyze complex data, formulate scientific hypotheses, and solve challenging algorithmic problems.",
+        text="I like to analyze complex information, formulate hypotheses, and solve challenging problems.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -51,7 +51,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="i2",
         construct="Investigative",
-        text="I enjoy conducting in-depth research, reading technical literature, and discovering how systems work beneath the surface.",
+        text="I enjoy conducting in-depth research, reading academic literature, and discovering how complex systems work beneath the surface.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -64,7 +64,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="a1",
         construct="Artistic",
-        text="I enjoy designing intuitive visual interfaces, novel user experiences, and creative digital media.",
+        text="I enjoy designing visual compositions, exploring novel aesthetic experiences, and expressing myself creatively.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -76,7 +76,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="a2",
         construct="Artistic",
-        text="I like expressing open-ended creativity, writing expressive prose, or creating artistic concepts without rigid rules.",
+        text="I like expressing open-ended creativity, writing, acting, or creating artistic concepts without rigid rules.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -89,7 +89,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="s1",
         construct="Social",
-        text="I enjoy mentoring peers, teaching complex topics clearly, and helping others achieve their goals.",
+        text="I enjoy mentoring peers, teaching concepts clearly, and helping others achieve their goals.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -101,7 +101,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="s2",
         construct="Social",
-        text="I prefer collaborative group environments where interpersonal communication and team empathy are essential.",
+        text="I prefer collaborative environments where interpersonal communication, empathy, and active listening are essential.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -114,7 +114,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="e1",
         construct="Enterprising",
-        text="I like leading initiatives, pitching product visions, and persuading stakeholders to adopt new ideas.",
+        text="I like leading initiatives, pitching visions, and persuading stakeholders to adopt new ideas.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -139,7 +139,7 @@ RIASEC_ITEMS = [
     AssessmentItem(
         id="c1",
         construct="Conventional",
-        text="I prefer structured protocols, organized data schemas, and meticulous attention to detail and accuracy.",
+        text="I prefer structured protocols, organized environments, and meticulous attention to detail and accuracy.",
         scale=[
             {"value": 1, "label": "1 — Strongly Dislike"},
             {"value": 2, "label": "2 — Dislike"},
@@ -257,37 +257,37 @@ LEARNING_ITEMS = [
     AssessmentItem(
         id="lt_recall",
         construct="Recall",
-        text="Task A (Recall): In computer systems, what is the fundamental difference between a Stack and a Queue data structure?",
+        text="Task A (Recall): Describe a fundamental concept from your primary field of interest and define its main components.",
         response_type="open",
-        expected_capability="Retrieval of core technical definitions (LIFO vs FIFO)."
+        expected_capability="Retrieval of core domain definitions."
     ),
     AssessmentItem(
         id="lt_explain",
         construct="Explanation",
-        text="Task B (Explanation): In your own words, explain why indexing a database table can dramatically speed up search queries, and what trade-off it introduces.",
+        text="Task B (Explanation): In your own words, explain a common trade-off you must make in your field (e.g. speed vs accuracy, cost vs quality) and why it matters.",
         response_type="open",
-        expected_capability="Explaining mechanisms, trade-offs (faster reads vs slower writes / storage overhead)."
+        expected_capability="Explaining mechanisms and trade-offs."
     ),
     AssessmentItem(
         id="lt_apply",
         construct="Application",
-        text="Task C (Application): You need to process a 10GB log file on a machine with only 2GB of RAM. How would you design your code to count unique error messages without running out of memory?",
+        text="Task C (Application): You are given a scenario where resources are severely constrained, but the objective must still be met. How would you adjust your approach?",
         response_type="open",
-        expected_capability="Applying streaming, chunked reading, hashing, or external sorting principles."
+        expected_capability="Applying principles in a resource-constrained scenario."
     ),
     AssessmentItem(
         id="lt_error",
         construct="Error Detection",
-        text="Task D (Error Detection): A developer wrote: `for (let i = 0; i <= array.length; i++) { console.log(array[i]); }`. What bug exists here and why does it occur?",
+        text="Task D (Error Detection): Think of a common mistake beginners make in your desired profession. How do you identify it and what is the root cause?",
         response_type="open",
-        expected_capability="Identifying off-by-one boundary index error (`<=` instead of `<`)."
+        expected_capability="Identifying boundary errors or common conceptual flaws."
     ),
     AssessmentItem(
         id="lt_reason",
         construct="Reasoning",
-        text="Task E (Reasoning): When architecting a new software application, why might a team choose a simple monolithic design initially instead of starting immediately with microservices?",
+        text="Task E (Reasoning): When starting a major new project, why might a professional choose a simpler, traditional method initially instead of adopting the newest, most complex technique?",
         response_type="open",
-        expected_capability="Analyzing architectural trade-offs, operational complexity, network latency, and deployment overhead."
+        expected_capability="Analyzing foundational trade-offs, operational complexity, and overhead."
     )
 ]
 

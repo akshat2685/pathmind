@@ -59,6 +59,7 @@ class FirestoreStore:
                 "learning_events": [],
                 "personal_agent_models": [],
                 "active_personal_agent_model": None,
+                "micro_adaptations": [],
                 "career_profile": None,
                 "career_goal": None,
                 "readiness_reports": [],
@@ -637,6 +638,37 @@ class FirestoreStore:
             return self._in_memory_persons[person_id]["tailored_resumes"]
 
     # --- Adaptive Replanning & Audit Trail ---
+    async def resolve_proposed_adaptation(self, person_id: str, adaptation_id: str, action: str) -> bool:
+        return await self.update_adaptation_status(person_id, adaptation_id, action)
+
+    # --- Micro-Adaptations ---
+    async def save_micro_adaptation(self, person_id: str, micro_data: Dict[str, Any]) -> None:
+        self._ensure_person_bucket(person_id)
+        self._in_memory_persons[person_id]["micro_adaptations"].append(micro_data)
+
+        if not self._available:
+            return
+        try:
+            doc_ref = self.db.collection('persons').document(person_id).collection('micro_adaptations').document(micro_data.get("micro_adaptation_id", f"micro_{int(datetime.now(timezone.utc).timestamp()*1000)}"))
+            await asyncio.wait_for(doc_ref.set(micro_data), timeout=2.0)
+        except Exception:
+            pass
+
+    async def get_active_micro_adaptations(self, person_id: str) -> List[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        if not self._available:
+            return [m for m in self._in_memory_persons[person_id]["micro_adaptations"] if m.get("active", True)]
+        try:
+            docs = self.db.collection('persons').document(person_id).collection('micro_adaptations').where("active", "==", True).stream()
+            micros = []
+            async for doc in docs:
+                micros.append(doc.to_dict())
+            if micros:
+                return sorted(micros, key=lambda x: x.get("created_at", ""), reverse=True)
+            return [m for m in self._in_memory_persons[person_id]["micro_adaptations"] if m.get("active", True)]
+        except Exception:
+            return [m for m in self._in_memory_persons[person_id]["micro_adaptations"] if m.get("active", True)]
+
     async def save_proposed_adaptation(self, person_id: str, adaptation_data: Dict[str, Any]) -> None:
         self._ensure_person_bucket(person_id)
         self._in_memory_persons[person_id]["proposed_adaptations"].append(adaptation_data)

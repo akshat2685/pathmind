@@ -117,7 +117,7 @@ interface AccountabilityData {
   next_checkpoint: string;
 }
 
-interface VerifiedOpportunityData {
+interface CanonicalOpportunityData {
   opportunity_id: string;
   title: string;
   organization: string;
@@ -212,7 +212,7 @@ interface CareerReadinessReportData {
   experience_gaps: ExperienceGapData[];
   evidence_portfolio?: EvidencePortfolioData | null;
   accountability: AccountabilityData;
-  matched_opportunities: VerifiedOpportunityData[];
+  matched_opportunities: CanonicalOpportunityData[];
   tailored_resume_preview?: TailoredResumeData | null;
   error_state?: string | null;
 }

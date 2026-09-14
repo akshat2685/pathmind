@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 
 from backend.core.opportunity_schemas import (
     CanonicalOpportunity,
-    OpportunityMatchResult,
+    OpportunityMatch,
     ApplicationPreparationPlan,
     InterviewPrepPackage,
     CreatePreparationPlanRequest
@@ -26,7 +26,7 @@ async def list_opportunities(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch opportunities: {str(e)}")
 
-@router.get("/matched", response_model=List[OpportunityMatchResult])
+@router.get("/matched", response_model=List[OpportunityMatch])
 async def get_matched_opportunities(
     role_filter: Optional[str] = Query(None),
     geography: Optional[str] = Query(None),
@@ -55,10 +55,9 @@ async def create_preparation_plan(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        return await matching_engine.generate_preparation_plan(
+        return await matching_engine.get_application_preparation_plan(
             person_id=person_id,
-            opportunity_id=opportunity_id,
-            spawn_to_execution_engine=req.spawn_actions_to_execution_engine
+            opportunity_id=opportunity_id
         )
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))

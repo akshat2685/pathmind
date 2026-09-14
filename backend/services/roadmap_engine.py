@@ -1646,9 +1646,6 @@ class RoadmapEngine:
             current_stage_id = "stage_01_navier_stokes_continuum"
             current_mission_id = "mission_01_boundary_layer"
 
-        # 14. AI/ML SPECIFIC GOAL
-        elif any(k in lower for k in ["machine learning", "artificial intelligence", "applied ai"]):
-            return self.generate_ai_ml_roadmap(person_id, path_id or "path_applied_ai_ml_systems")
 
         # 7. DEFAULT GENERIC DOMAIN-AGNOSTIC SYNTHESIS
         else:
@@ -1789,11 +1786,6 @@ class RoadmapEngine:
             await self.store.save_roadmap(person_id, new_roadmap.model_dump(mode="json"))
             return new_roadmap
 
-        # 3. Backwards compatibility for legacy tests specifying AI/ML path or unseeded scholar test fixtures
-        if path_id == "path_applied_ai_ml_systems" or (path_id is None and (person_id.startswith("scholar-") or person_id.startswith("test-") or person_id.startswith("evaluator-") or person_id.startswith("person-"))):
-            new_roadmap = self.generate_ai_ml_roadmap(person_id, path_id or "path_applied_ai_ml_systems")
-            await self.store.save_roadmap(person_id, new_roadmap.model_dump(mode="json"))
-            return new_roadmap
 
         # 4. If neither goal nor valid path exists for production user, raise clear state
         raise ValueError("NEEDS_USER_INPUT: No career or learning goal has been resolved. Please set a goal first.")

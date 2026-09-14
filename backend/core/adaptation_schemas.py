@@ -3,10 +3,70 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 from backend.core.roadmap_schemas import Roadmap, Stage
 
+class MisconceptionRecord(BaseModel):
+    concept: str
+    misconception: str
+    evidence_ids: List[str] = Field(default_factory=list)
+    first_seen: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    last_seen: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    occurrence_count: int = 1
+    resolved: bool = False
+    resolution_evidence_id: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class StrategyEffectiveness(BaseModel):
+    strategy: str
+    attempts: int = 1
+    successful_outcomes: int = 0
+    confidence: str = "MEDIUM"  # HIGH, MEDIUM, LOW
+    last_applied_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class MicroAdaptationRecord(BaseModel):
+    micro_adaptation_id: str = Field(default_factory=lambda: f"micro_{int(datetime.now(timezone.utc).timestamp()*1000)}")
+    person_id: str
+    stage_id: str
+    mission_id: Optional[str] = None
+    adaptation_type: str  # INJECT_REINFORCEMENT, EXPLANATION_STYLE, PACING_ADJUSTMENT
+    what_changed: str
+    why: str
+    supporting_evidence_ids: List[str] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    active: bool = True
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class RejectedRecommendation(BaseModel):
+    recommendation_id: str = Field(default_factory=lambda: f"rej_{int(datetime.now(timezone.utc).timestamp()*1000)}")
+    person_id: str
+    action: str
+    scope: str
+    reason: Optional[str] = None
+    rejected_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    qualifying_evidence_count_at_rejection: int = 0
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class LearningSignal(BaseModel):
+    signal_id: str = Field(default_factory=lambda: f"sig_{int(datetime.now(timezone.utc).timestamp()*1000)}")
+    person_id: str
+    type: str  # MASTERY_DEMONSTRATED, MASTERY_PARTIAL, MASTERY_FAILED, MISCONCEPTION_DETECTED, TRANSFER_DEMONSTRATED, TRANSFER_FAILED, RECALL_DECAY, LEARNING_STRATEGY_SUCCESS, LEARNING_STRATEGY_FAILURE, PACED_AHEAD, PACED_BEHIND, REPEATED_STRUGGLE, REPEATED_SUCCESS, GOAL_CHANGE, CONSTRAINT_CHANGE, PREFERENCE_CHANGE, CAREER_EVIDENCE_CHANGE, REGRESSION_RISK, OTHER
+    subject: str
+    source_event_id: str
+    evidence_ids: List[str] = Field(default_factory=list)
+    confidence: str = "MEDIUM"  # HIGH, MEDIUM, LOW
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    provenance: str = "EVIDENCE_EVALUATION"
+    impact_scope: str = "MISSION_ONLY"  # MISSION_ONLY, STAGE, SEQUENCE, ROADMAP, CAREER_DIRECTION
+
+    model_config = ConfigDict(populate_by_name=True)
+
 class StateChangeEvent(BaseModel):
     event_id: str = Field(default_factory=lambda: f"evt_{int(datetime.now(timezone.utc).timestamp()*1000)}")
     person_id: str
-    change_type: str  # GOAL_CHANGE, EVIDENCE_CHANGE, MASTERY_RISK, CONSTRAINT_CHANGE, OPPORTUNITY_CHANGE, INTERRUPTION_RESUME, EVIDENCE_CONFLICT
+    change_type: str  # GOAL_CHANGE, EVIDENCE_CHANGE, MASTERY_RISK, CONSTRAINT_CHANGE, OPPORTUNITY_CHANGE, INTERRUPTION_RESUME, EVIDENCE_CONFLICT, LEARNING_SIGNAL
     title: str
     description: str
     trigger_data: Dict[str, Any] = Field(default_factory=dict)
@@ -102,6 +162,7 @@ class ContinuousIntelligenceState(BaseModel):
     recent_audits: List[AdaptationAuditRecord] = Field(default_factory=list)
     pause_status: PauseResumeAnalysis
     conflict_status: ConflictDetectionResult
+    active_micro_adaptations: List[MicroAdaptationRecord] = Field(default_factory=list)
     last_evaluated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     model_config = ConfigDict(populate_by_name=True)

@@ -54,181 +54,32 @@ class CareerReadinessEngine:
     async def get_or_create_canonical_profile(
         self,
         person_id: str,
-        current_state_type: str = "college_student"
+        current_state_type: str = "unassessed"
     ) -> UniversalCareerProfile:
         profile_dict = await self.store.get_career_profile(person_id)
         if profile_dict:
             return UniversalCareerProfile(**profile_dict)
 
-        # Initialize canonical career profile based on state type
-        state_lower = (current_state_type or "").lower()
-        if "mechanical" in state_lower or "switcher" in state_lower or "professional" in state_lower:
-            new_profile = UniversalCareerProfile(
-                person_id=person_id,
-                current_role="Senior Mechanical & Thermal Systems Engineer",
-                current_state_type=current_state_type,
-                education=[
-                    EducationItem(
-                        degree="B.Tech in Mechanical Engineering",
-                        field_of_study="Mechanical & Thermal Systems",
-                        institution="Engineering College / University",
-                        year="2022",
-                        grade_or_score="8.6 CGPA",
-                        is_verified=True
-                    )
-                ],
-                experience=[
-                    ExperienceItem(
-                        role="Mechanical Systems Design Lead",
-                        organization="Precision Engineering & Systems",
-                        duration="2022 – Present (3 Years)",
-                        description="Led finite element analysis, numerical thermal simulation, and multi-variable optimization pipelines.",
-                        skills_used=["Numerical Analysis", "MATLAB", "Engineering Physics", "CAD/FEM", "Mathematical Modeling"],
-                        is_verified=True
-                    )
-                ],
-                skills=["Calculus & Linear Algebra", "Engineering Physics", "Mathematical Modeling", "MATLAB", "Numerical Optimization", "Analytical Problem Decomposition", "Python Scripting"],
-                projects=[
-                    ProjectItem(
-                        title="Automated Thermal Sensor Stream & Simulation Pipeline",
-                        technologies=["Python", "NumPy", "MATLAB", "Pandas"],
-                        description="Engineered high-frequency temperature sensor logging pipeline with automated variance detection algorithms.",
-                        provenance="Verified in Professional Portfolio",
-                        is_verified=True
-                    )
-                ],
-                credentials=[
-                    CredentialItem(
-                        title="Certified SolidWorks Professional",
-                        issuer="Professional Standards Body",
-                        issue_date="2022",
-                        is_verified=True
-                    )
-                ],
-                portfolio_links=[],
-                achievements=["Published Technical Paper on Multiphysics Optimization"],
-                current_country="India",
-                current_city="Bengaluru",
-                target_country="India & Global",
-                remote_preference="HYBRID",
-                work_authorization="Citizen (India)",
-                goals=["Transition from Mechanical Engineering to Machine Learning / Data Engineering"],
-                constraints={"weekly_hours": 12, "format_preference": "project-based-practical"}
-            )
-        elif "frontend" in state_lower or "web" in state_lower:
-            new_profile = UniversalCareerProfile(
-                person_id=person_id,
-                current_role="Fullstack & Frontend Web Developer",
-                current_state_type=current_state_type,
-                education=[
-                    EducationItem(
-                        degree="B.S. in Information Technology",
-                        field_of_study="Software Engineering",
-                        institution="Technological University",
-                        year="2024",
-                        grade_or_score="3.7 GPA",
-                        is_verified=True
-                    )
-                ],
-                experience=[
-                    ExperienceItem(
-                        role="Associate Software Engineer",
-                        organization="Software Services Corp",
-                        duration="2024 – Present",
-                        description="Developed modular React/TypeScript frontend architectures and FastAPI asynchronous backend microservices.",
-                        skills_used=["TypeScript", "React", "FastAPI", "PostgreSQL", "Git", "REST APIs"],
-                        is_verified=True
-                    )
-                ],
-                skills=["JavaScript", "TypeScript", "React", "Next.js", "Python", "FastAPI", "Git Version Control", "REST APIs", "SQL"],
-                projects=[
-                    ProjectItem(
-                        title="Distributed Real-time Telemetry Dashboard",
-                        technologies=["TypeScript", "React", "FastAPI", "WebSockets"],
-                        description="Engineered low-latency dashboard with live state streams and responsive canvas charting.",
-                        provenance="Verified in Project Artifacts",
-                        is_verified=True
-                    )
-                ],
-                credentials=[],
-                portfolio_links=[],
-                achievements=["1st Place at State Level Web Hackathon 2024"],
-                current_country="India",
-                current_city="Bengaluru",
-                target_country="India & Global",
-                remote_preference="REMOTE",
-                work_authorization="Citizen (India)",
-                goals=["Transition from Web Development to Applied AI Systems Engineering"],
-                constraints={"weekly_hours": 15, "format_preference": "applied-code"}
-            )
-        elif "college_student" in state_lower or "stem" in state_lower or "secondary" in state_lower:
-            # Baseline STEM Student profile for backwards test compatibility
-            new_profile = UniversalCareerProfile(
-                person_id=person_id,
-                current_role="Senior Secondary Scholar & Student Candidate",
-                current_state_type=current_state_type,
-                education=[
-                    EducationItem(
-                        degree="Senior Secondary (STEM Foundations)",
-                        field_of_study="Mathematics, Physics, Computer Science",
-                        institution="Secondary Education Board",
-                        year="2026",
-                        grade_or_score="First Class Honors",
-                        is_verified=True
-                    )
-                ],
-                experience=[
-                    ExperienceItem(
-                        role="Student Scholar & Academic Contributor",
-                        organization="Longitudinal Academic Program",
-                        duration="2026 – Present",
-                        description="Progressive mastery of academic mathematics and computational problem solving.",
-                        skills_used=["Python", "Linear Algebra", "Calculus", "Pytest"],
-                        is_verified=True
-                    )
-                ],
-                skills=["Python 3.12", "Linear Algebra", "Calculus", "Pytest", "Data Structures", "Git", "Prototyping"],
-                projects=[
-                    ProjectItem(
-                        title="Data Parser & Stream Ingestion Pipeline",
-                        technologies=["Python", "Pytest", "Dataclasses", "Type Hints"],
-                        description="Engineered a memory-efficient generator-based ETL pipeline with unit test assertions.",
-                        provenance="Verified in Milestone Artifact",
-                        is_verified=True
-                    )
-                ],
-                credentials=[],
-                portfolio_links=[],
-                achievements=[],
-                current_country="India",
-                current_city="Bengaluru",
-                target_country="India & Global",
-                remote_preference="HYBRID",
-                work_authorization="Citizen (India)",
-                goals=["Applied Machine Learning Systems Engineer"],
-                constraints={"weekly_hours": 10, "format_preference": "project-based"}
-            )
-        else:
-            # Clean Unassessed Blank Profile: NO FAKE PEOPLE OR FABRICATED DATA
-            new_profile = UniversalCareerProfile(
-                person_id=person_id,
-                current_role="Scholar / Candidate",
-                current_state_type=current_state_type or "unassessed",
-                education=[],
-                experience=[],
-                skills=[],
-                projects=[],
-                credentials=[],
-                portfolio_links=[],
-                achievements=[],
-                current_country="",
-                current_city="",
-                target_country="",
-                remote_preference="UNKNOWN",
-                work_authorization="UNCONFIRMED",
-                goals=[],
-                constraints={"weekly_hours": 10, "format_preference": "project-based"}
-            )
+        # Clean Unassessed Blank Profile: NO FAKE PEOPLE OR FABRICATED DATA
+        new_profile = UniversalCareerProfile(
+            person_id=person_id,
+            current_role="Unknown",
+            current_state_type=current_state_type or "unassessed",
+            education=[],
+            experience=[],
+            skills=[],
+            projects=[],
+            credentials=[],
+            portfolio_links=[],
+            achievements=[],
+            current_country="Global",
+            current_city="Unknown",
+            target_country="Global",
+            remote_preference="UNKNOWN",
+            work_authorization="UNCONFIRMED",
+            goals=[],
+            constraints={}
+        )
 
         await self.store.save_career_profile(person_id, new_profile.model_dump(mode="json"))
         return new_profile
@@ -238,66 +89,23 @@ class CareerReadinessEngine:
         if goal_dict:
             return TargetOutcome(**goal_dict)
 
-        # Check canonical goal stored via goal resolution service or profile
-        stored_goal = await self.store.get_goal(person_id)
-        profile_dict = await self.store.get_career_profile(person_id)
-
-        if not target_role and stored_goal:
-            target_role = stored_goal.get("target_outcome") or stored_goal.get("title")
-            target_ind = stored_goal.get("domain") or "Professional Practice"
-        elif not target_role and profile_dict and profile_dict.get("goals"):
-            target_role = profile_dict["goals"][0]
-            target_ind = "Artificial Intelligence & Software Engineering" if any(w in target_role.lower() for w in ["ai", "machine", "software", "data", "engineer"]) else "Professional Practice"
-        elif target_role:
-            if any(w in target_role.lower() for w in ["ai", "machine learning", "software", "data"]):
-                target_ind = "Artificial Intelligence & Software Engineering"
-            elif any(w in target_role.lower() for w in ["law", "legal", "advocate"]):
-                target_ind = "Law & Jurisprudence"
-            elif any(w in target_role.lower() for w in ["design", "ux", "ui"]):
-                target_ind = "Design & Human-Computer Interaction"
-            elif any(w in target_role.lower() for w in ["restaurant", "culinary", "hospitality"]):
-                target_ind = "Hospitality & Culinary Arts"
-            elif any(w in target_role.lower() for w in ["psycholog", "therapy", "mental health", "counsel"]):
-                target_ind = "Mental Health & Clinical Psychology"
-            elif any(w in target_role.lower() for w in ["photo", "photographer"]):
-                target_ind = "Visual Arts & Commercial Photography"
-            elif any(w in target_role.lower() for w in ["teach", "educat", "pedagog", "school"]):
-                target_ind = "Education & Pedagogy"
-            elif any(w in target_role.lower() for w in ["upsc", "civil services", "public policy", "ias", "ips"]):
-                target_ind = "Public Administration & Governance"
-            elif any(w in target_role.lower() for w in ["biotech", "biology", "genetics"]):
-                target_ind = "Life Sciences & Biotechnology"
-            else:
-                target_ind = "Professional Practice"
-        else:
-            target_role = "Unspecified Career Objective"
-            target_ind = "General Professional"
-
-        new_goal = TargetOutcome(
-            goal_id=f"goal_{person_id}",
-            person_id=person_id,
-            goal_type="career",
-            target_role=target_role,
-            target_industry=target_ind,
-            geography="India & Global",
-            target_timeline="12–18 Months",
-            priority="HIGH",
-            version=1,
-            constraints={"weekly_hours": 10, "format_preference": "project-based"}
-        )
-        await self.store.save_career_goal(person_id, new_goal.model_dump(mode="json"))
-        return new_goal
+        # Generate via interpretation service if missing
+        from backend.services.goal_interpretation_service import GoalInterpretationService
+        interpreter = GoalInterpretationService(self.store)
+        
+        raw_statement = target_role if target_role else "Explore potential domains"
+        return await interpreter.interpret_goal(person_id, raw_statement)
 
     def build_requirement_graph(
         self,
-        target_role: str,
+        goal: TargetOutcome,
         skills_held: List[str]
     ) -> CareerRequirementGraph:
         """
         Builds a structured requirement graph originating from official standards (ESCO / NCO / BCI / etc.)
         via RequirementGraphService.
         """
-        graph = self.requirement_graph_service.build_requirement_graph_for_outcome(target_role)
+        graph = self.requirement_graph_service.build_requirement_graph_for_outcome(goal)
         skills_held_lower = {s.lower().strip() for s in skills_held}
 
         # Calibrate status_for_person based on skills held
@@ -847,7 +655,7 @@ class CareerReadinessEngine:
         goal = await self.get_or_create_career_goal(person_id)
 
         # 1. Build Requirement Graph
-        graph = self.build_requirement_graph(goal.target_role, profile.skills)
+        graph = self.build_requirement_graph(goal, profile.skills)
 
         # 2. Build Evidence Portfolio
         evidence_portfolio = self.build_evidence_portfolio(profile, graph)

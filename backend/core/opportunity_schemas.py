@@ -1,87 +1,88 @@
 import uuid
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
-from backend.core.career_schemas import VerifiedOpportunity
 
-class CanonicalOpportunity(VerifiedOpportunity):
+class CanonicalOpportunity(BaseModel):
     """
     Canonical single-source-of-truth opportunity object.
-    Subclasses VerifiedOpportunity for 100% interoperability with existing career readiness engines.
-    Preserves strict provider provenance, verification status, and expiration.
+    Fully decoupled from user readiness/fit.
     """
-    opportunity_id: str = Field(default_factory=lambda: f"opp_{int(datetime.now(timezone.utc).timestamp()*1000)}_{uuid.uuid4().hex[:6]}")
-    provider: str = "Verified Provider"
-    provider_record_id: str = Field(default_factory=lambda: f"rec_{uuid.uuid4().hex[:6]}")
-    type: str = "INTERNSHIP"  # INTERNSHIP, FULL_TIME, APPRENTICESHIP, RESEARCH, FELLOWSHIP, SCHOLARSHIP, COMPETITION, HACKATHON, OPEN_SOURCE, GRADUATE, CERTIFICATION, BOOTCAMP
+    id: str = Field(default_factory=lambda: f"opp_{int(datetime.now(timezone.utc).timestamp()*1000)}_{uuid.uuid4().hex[:6]}")
     title: str
     organization: str
+    opportunity_type: str = "UNKNOWN"
+    domain: str = "UNKNOWN"
+    field: str = "UNKNOWN"
+    target_roles: List[str] = Field(default_factory=list)
     description: str = ""
-    location: str
-    remote_status: str = "HYBRID"  # REMOTE, HYBRID, ONSITE
-    eligibility: str
+    location: str = "UNKNOWN"
+    geography: str = "UNKNOWN"
+    remote_status: str = "UNKNOWN"
+    eligibility: str = "UNKNOWN"
     requirements: List[str] = Field(default_factory=list)
-    preferred_requirements: List[str] = Field(default_factory=list)
-    skills: List[str] = Field(default_factory=list)
-    education_requirements: List[str] = Field(default_factory=list)
+    credentials: List[str] = Field(default_factory=list)
     experience_requirements: List[str] = Field(default_factory=list)
-    credential_requirements: List[str] = Field(default_factory=list)
-    compensation: Optional[str] = None
-    deadline: str = ""
-    start_date: Optional[str] = None
-    application_url: str = ""
-    source_url: str = ""
-    status: str = "ACTIVE"  # DISCOVERED, VERIFIED, ACTIVE, EXPIRING, EXPIRED, CLOSED, WITHDRAWN, UNVERIFIED, SOURCE_UNAVAILABLE
+    deadline: str = "UNKNOWN"
+    start_date: str = "UNKNOWN"
+    source: str = "UNKNOWN"
+    source_id: str = "UNKNOWN"
+    source_url: str = "UNKNOWN"
     retrieved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    expires_at: Optional[str] = None
-    source_version: Optional[str] = None
-    verification_status: str = "VERIFIED"  # VERIFIED, UNVERIFIED
-
-    # Backwards compatibility fields from VerifiedOpportunity
-    apply_url: str = ""
-    required_skills: List[str] = Field(default_factory=list)
-    preferred_skills: List[str] = Field(default_factory=list)
-    fit_level: str = "HIGH"
-    fit_reasons: List[str] = Field(default_factory=list)
-    missing_requirements: List[str] = Field(default_factory=list)
-    eligibility_blockers: List[str] = Field(default_factory=list)
-    pre_application_advice: str = ""
+    source_version: str = "1.0"
+    freshness_status: str = "FRESH" # FRESH, AGING, STALE, EXPIRED, VERIFICATION_REQUIRED
+    verification_status: str = "UNVERIFIED" # VERIFIED, UNVERIFIED
+    status: str = "ACTIVE"
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    @model_validator(mode="before")
-    @classmethod
-    def sync_urls_and_requirements(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "application_url" in data and not data.get("apply_url"):
-                data["apply_url"] = data["application_url"]
-            elif "apply_url" in data and not data.get("application_url"):
-                data["application_url"] = data["apply_url"]
-            if "requirements" in data and not data.get("required_skills"):
-                data["required_skills"] = data["requirements"]
-            elif "required_skills" in data and not data.get("requirements"):
-                data["requirements"] = data["required_skills"]
-            if "preferred_requirements" in data and not data.get("preferred_skills"):
-                data["preferred_skills"] = data["preferred_requirements"]
-            elif "preferred_skills" in data and not data.get("preferred_requirements"):
-                data["preferred_requirements"] = data["preferred_skills"]
-        return data
 
-class OpportunityMatchResult(BaseModel):
+class OpportunityMatch(BaseModel):
     """
     Explainable match result for an opportunity evaluated against real person state.
-    Distinguishes fit from readiness and guarantees missing profile fields are marked UNKNOWN, not failure.
+    Strictly separates eligibility from fit and readiness.
     """
-    opportunity: CanonicalOpportunity
-    fit_state: str = "GOOD_MATCH"  # STRONG_MATCH, GOOD_MATCH, PARTIAL_MATCH, LOW_MATCH, INELIGIBLE, INSUFFICIENT_INFORMATION
-    readiness_state: str = "NEAR_READY"  # READY_NOW, NEAR_READY, STRETCH, NOT_RECOMMENDED
-    matched_requirements: List[str] = Field(default_factory=list)
-    gaps: List[str] = Field(default_factory=list)
-    unknowns: List[str] = Field(default_factory=list)
-    why_it_matters: str
-    next_step: str
-    decision_recommendation: str = "RECOMMEND_PREPARING_FIRST"  # RECOMMEND_APPLYING, RECOMMEND_PREPARING_FIRST, LOW_PRIORITY, INSUFFICIENT_INFORMATION
-    tradeoffs: List[str] = Field(default_factory=list)
+    opportunity_id: str
+    goal_id: str
+    match_reasons: List[str] = Field(default_factory=list)
+    requirement_matches: List[str] = Field(default_factory=list)
+    requirement_gaps: List[str] = Field(default_factory=list)
+    eligibility_status: str = "UNKNOWN" # ELIGIBLE, INELIGIBLE, UNKNOWN
+    fit_status: str = "UNKNOWN" # HIGH, MEDIUM, LOW, NOT_RELEVANT
+    readiness_status: str = "UNKNOWN" # READY, PARTIALLY_READY, NOT_READY, UNKNOWN
+    feasibility_status: str = "UNKNOWN" # HIGH, MEDIUM, LOW, UNKNOWN
+    confidence: str = "LOW"
+    uncertainty: List[str] = Field(default_factory=list)
+    evidence: List[str] = Field(default_factory=list)
+    generated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    
+    opportunity: Optional[CanonicalOpportunity] = None # Added for convenience of passing the object
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SavedOpportunity(BaseModel):
+    id: str = Field(default_factory=lambda: f"svopp_{int(datetime.now(timezone.utc).timestamp()*1000)}_{uuid.uuid4().hex[:6]}")
+    user_id: str
+    opportunity_id: str
+    goal_id: str
+    saved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    notes: str = ""
+    status: str = "SAVED"
+    last_reviewed_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ApplicationRecord(BaseModel):
+    id: str = Field(default_factory=lambda: f"app_{int(datetime.now(timezone.utc).timestamp()*1000)}_{uuid.uuid4().hex[:6]}")
+    user_id: str
+    opportunity_id: str
+    status: str = "DISCOVERED" # DISCOVERED, SAVED, PLANNING, READY_TO_APPLY, APPLIED, ASSESSMENT, INTERVIEW, WAITING, OFFER, REJECTED, WITHDRAWN, COMPLETED
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     model_config = ConfigDict(populate_by_name=True)
 

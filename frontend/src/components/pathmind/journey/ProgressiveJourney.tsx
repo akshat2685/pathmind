@@ -857,24 +857,20 @@ export function ProgressiveJourney() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Select New Target Role</label>
-              <select
+              <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Enter New Target Role</label>
+              <input
+                type="text"
                 value={selectedGoal}
                 onChange={(e) => setSelectedGoal(e.target.value)}
-                className="w-full bg-surface-container border border-outline rounded-xl p-3 text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
-              >
-                <option value="Robotics & Autonomous Systems Engineer">🤖 Robotics &amp; Autonomous Systems Engineer</option>
-                <option value="Applied Machine Learning Systems Engineer">🧠 Applied Machine Learning Systems Engineer</option>
-                <option value="Data Platform & MLOps Infrastructure Engineer">⚙️ Data Platform &amp; MLOps Infrastructure Engineer</option>
-                <option value="Full-Stack AI Application Developer">💻 Full-Stack AI Application Developer</option>
-                <option value="Autonomous Vehicle Perception Specialist">🚗 Autonomous Vehicle Perception Specialist</option>
-              </select>
+                placeholder="e.g. Professional Cricketer, Doctor, Lawyer, Software Engineer"
+                className="w-full bg-surface-container border border-outline rounded-xl p-3 text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              />
             </div>
 
             <div className="p-3.5 rounded-2xl bg-primary/10 border border-primary/25 text-xs text-on-surface space-y-1">
               <span className="font-bold text-primary block">Plan Stability Guarantee</span>
               <p className="text-on-surface-variant">
-                Your completed Python foundations and mathematical competencies remain fully intact and will not be erased.
+                Your completed foundations and competencies remain fully intact and will not be erased.
               </p>
             </div>
 

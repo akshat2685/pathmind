@@ -7,7 +7,8 @@ from backend.core.adaptation_schemas import (
     UserAdaptationDecision,
     AdaptationAuditRecord,
     PauseResumeAnalysis,
-    ConflictDetectionResult
+    ConflictDetectionResult,
+    MicroAdaptationRecord
 )
 from backend.services.adaptation_service import AdaptationService
 
@@ -108,7 +109,15 @@ async def decide_adaptation(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to resolve adaptation decision: {str(e)}")
 
-@router.get("/history", response_model=List[AdaptationAuditRecord])
+@router.get("/micro-adaptations", response_model=List[MicroAdaptationRecord])
+async def get_active_micro_adaptations(person_id: str = Depends(get_person_id)):
+    try:
+        raw = await adaptation_service.store.get_active_micro_adaptations(person_id)
+        return [MicroAdaptationRecord(**m) for m in raw]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve micro-adaptations: {str(e)}")
+
+@router.get("/audits", response_model=List[AdaptationAuditRecord])
 async def get_adaptation_history(person_id: str = Depends(get_person_id)):
     try:
         raw = await adaptation_service.store.get_adaptation_audits(person_id)

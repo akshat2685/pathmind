@@ -908,7 +908,7 @@ export function ExecutionMissionView() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Applied Machine Learning Intern"
+                  placeholder="e.g. Entry Level Role"
                   value={appForm.opportunity_title}
                   onChange={(e) => setAppForm({ ...appForm, opportunity_title: e.target.value })}
                   className="w-full text-xs font-mono p-2 border border-stone-300 rounded"

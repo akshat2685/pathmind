@@ -7,8 +7,10 @@ from backend.core.evidence_schemas import (
     SkillMasteryProfile,
     LockedStageReason,
     MasteryDashboardState,
-    StructuredEvaluationDetail
+    StructuredEvaluationDetail,
+    MasteryStateTransition
 )
+from backend.core.adaptation_schemas import LearningSignal
 from backend.services.evidence_verification_service import EvidenceVerificationService
 from backend.services.evidence_evaluation_agent import EvidenceEvaluationAgent
 from backend.services.store import FirestoreStore
@@ -102,20 +104,69 @@ class MasteryEngine:
         )
         await self.store.save_evaluation_attempt(person_id, attempt.model_dump())
 
-        # 6. Update Skill Mastery Profiles
+        # 6. Generate Canonical Learning Signal (Prompt 28)
+        if is_pass:
+            signal_type = "TRANSFER_DEMONSTRATED" if eval_detail.transfer_validated else "MASTERY_DEMONSTRATED"
+            impact_scope = "STAGE"
+        else:
+            if eval_detail.observable_misconceptions:
+                signal_type = "MISCONCEPTION_DETECTED"
+            elif len(past_attempts) >= 2:
+                signal_type = "REPEATED_STRUGGLE"
+            else:
+                signal_type = "MASTERY_FAILED"
+            impact_scope = "MISSION_ONLY"
+
+        signal = LearningSignal(
+            person_id=person_id,
+            type=signal_type,
+            subject=target_stage.title,
+            source_event_id=evidence.evidence_id,
+            evidence_ids=[evidence.evidence_id],
+            confidence=confidence,
+            impact_scope=impact_scope
+        )
+        await self.personal_agent.process_learning_signal(person_id, signal, eval_detail.model_dump())
+
+        # Micro-adaptation check (Prompt 28)
+        from backend.services.adaptation_service import AdaptationService
+        adaptation_service = AdaptationService(store=self.store, personal_agent=self.personal_agent)
+        await adaptation_service.handle_learning_signal_adaptation(person_id, signal, target_stage.stage_id)
+
+        # 7. Update Skill Mastery Profiles with Transitions
         for skill in target_stage.skills:
-            mastery_state = eval_detail.mastery_state_achieved if is_pass else "NEEDS_REINFORCEMENT"
+            mastery_state = eval_detail.mastery_state_achieved if is_pass else "DEVELOPING"
+            
+            # Fetch existing profile
+            profiles_raw = await self.store.get_skill_mastery_profiles(person_id)
+            existing_profile_data = profiles_raw.get(skill, {})
+            existing_state = existing_profile_data.get("mastery_state", "NOT_ASSESSED")
+            existing_transitions = existing_profile_data.get("transition_history", [])
+
+            # Create Transition
+            new_transition = MasteryStateTransition(
+                from_state=existing_state,
+                to_state=mastery_state,
+                trigger_evidence_id=evidence.evidence_id,
+                rationale=f"Evaluated evidence {title} with quality {quality}"
+            )
+            
             profile = SkillMasteryProfile(
                 skill_name=skill,
                 category=target_stage.title,
                 mastery_state=mastery_state,
-                evidence_count=len(past_attempts) + 1,
-                primary_evidence_id=evidence.evidence_id,
-                is_regression_risk=False
+                evidence_count=existing_profile_data.get("evidence_count", 0) + 1,
+                primary_evidence_id=evidence.evidence_id if is_pass else existing_profile_data.get("primary_evidence_id"),
+                is_regression_risk=existing_profile_data.get("is_regression_risk", False),
+                transition_history=existing_transitions + [new_transition.model_dump()]
             )
             await self.store.save_skill_mastery_profile(person_id, skill, profile.model_dump())
 
-        # 7. If PASS: Unlock next stage & Ingest Memory
+            # Detect regression (if a previously demonstrated skill fails in a subsequent stage)
+            if not is_pass and existing_state in ["DEMONSTRATED", "TRANSFER", "APPLICATION"]:
+                await self.record_mastery_regression(person_id, skill, "Failed verification after prior mastery.")
+
+        # 8. If PASS: Unlock next stage & Ingest Memory
         if is_pass:
             target_stage.status = "COMPLETED"
             roadmap.completed_stages += 1
@@ -161,11 +212,12 @@ class MasteryEngine:
         updated = SkillMasteryProfile(
             skill_name=skill_name,
             category=current_data.get("category", "Technical Skill"),
-            mastery_state="MASTERY_AT_RISK",
+            mastery_state="REGRESSION_RISK",
             evidence_count=current_data.get("evidence_count", 1),
             primary_evidence_id=current_data.get("primary_evidence_id"),
             is_regression_risk=True,
-            regression_reason=reason
+            regression_reason=reason,
+            transition_history=current_data.get("transition_history", [])
         )
         await self.store.save_skill_mastery_profile(person_id, skill_name, updated.model_dump())
         return updated

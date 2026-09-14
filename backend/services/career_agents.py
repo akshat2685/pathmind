@@ -55,7 +55,7 @@ class CareerReadinessAgent:
                         importance="HIGH",
                         source="ESCO / Occupational Standard",
                         reason="Fundamental capability for role execution.",
-                        recommended_action=f"Complete targeted learning milestone and build verified code artifact for {node.name}."
+                        recommended_action=f"Complete targeted learning milestone and build verified evidence artifact for {node.name}."
                     )
                 )
 
@@ -69,7 +69,7 @@ class CareerReadinessAgent:
                     importance=node.importance,
                     source="Industry Benchmark",
                     reason="Proves practical application beyond classroom exercises.",
-                    recommended_action=f"Acquire hands-on exposure through structured milestones or open-source contributions."
+                    recommended_action=f"Acquire hands-on exposure through structured milestones, internships, or real-world practice."
                 )
             )
 
@@ -81,9 +81,9 @@ class CareerReadinessAgent:
                     title=f"Verifiable Artifact: {node.name}",
                     description=node.description,
                     importance="HIGH",
-                    source="Hiring Portfolio Requirement",
-                    reason="Public repositories provide 3x higher signal than unverified claims.",
-                    recommended_action="Publish modular codebase with automated tests and documentation on GitHub."
+                    source="Domain Portfolio Requirement",
+                    reason="Verified evidence artifacts provide significantly higher signal than unverified claims.",
+                    recommended_action=f"Create and publish verified evidence artifacts demonstrating mastery in {node.name}."
                 )
             )
 

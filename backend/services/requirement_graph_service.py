@@ -21,15 +21,26 @@ class RequirementGraphService:
 
     def build_requirement_graph_for_outcome(
         self,
-        target_outcome: str,
-        target_domain: Optional[str] = None,
-        geography: str = "India & Global"
+        goal: Any  # Accept CanonicalGoal or string (backwards compat)
     ) -> CareerRequirementGraph:
         """
         Builds a structured requirement graph containing only categories that apply
         to the target role and domain.
+        Accepts either a CanonicalGoal object or a raw string (backwards compat).
         """
-        lower = target_outcome.lower()
+        # Backwards compatibility: if a string is passed, wrap it in a minimal goal-like object
+        if isinstance(goal, str):
+            class _StrGoal:
+                def __init__(self, s):
+                    self.target_outcome = s
+                    self.domain = "Professional Practice"
+                    self.geography = "Global"
+            goal = _StrGoal(goal)
+
+        lower = goal.target_outcome.lower()
+        target_outcome = goal.target_outcome
+        target_domain = goal.domain
+        geography = goal.geography
         now_iso = datetime.now(timezone.utc).isoformat()
 
         # 1. LAWYER / LEGAL ADVOCATE
@@ -1507,7 +1518,9 @@ class RequirementGraphService:
                     category="CORE_SKILL",
                     importance="HIGH",
                     description=f"Hands-on execution and operational problem-solving in {target_outcome}.",
-                    source="Occupational Standard",
+                    source=f"Generated from {target_domain} Industry Standards",
+                    source_id=f"LLM-GEN-{uuid.uuid4().hex[:4]}",
+                    source_url="https://pathmind.ai/standards",
                     retrieved_at=now_iso,
                     evidence_requirement=f"Verifiable work artifact or practical portfolio project relevant to {target_outcome}."
                 ),
@@ -1517,7 +1530,9 @@ class RequirementGraphService:
                     category="CORE_SKILL",
                     importance="HIGH",
                     description=f"Compliance with industry best practices, ethics, and quality metrics in {target_outcome}.",
-                    source="Professional Standards Body",
+                    source=f"Generated from {target_domain} Governance Best Practices",
+                    source_id=f"LLM-GEN-{uuid.uuid4().hex[:4]}",
+                    source_url="https://pathmind.ai/standards",
                     retrieved_at=now_iso,
                     evidence_requirement=f"Quality review, case documentation, or audit milestone."
                 )
@@ -1529,7 +1544,9 @@ class RequirementGraphService:
                     category="SUPPORTING_SKILL",
                     importance="MEDIUM",
                     description="Clear documentation, stakeholder presentation, and cross-functional communication.",
-                    source="Professional Standards",
+                    source=f"Generated from {target_domain} Professional Standards",
+                    source_id=f"LLM-GEN-{uuid.uuid4().hex[:4]}",
+                    source_url="https://pathmind.ai/standards",
                     retrieved_at=now_iso,
                     evidence_requirement="Presentation slide deck or written summary memo."
                 )
@@ -1541,7 +1558,9 @@ class RequirementGraphService:
                     category="EXPERIENCE",
                     importance="HIGH",
                     description=f"Real-world application of skills in an organizational or project setting.",
-                    source="Industry Benchmark",
+                    source=f"Generated from {target_domain} Industry Benchmark",
+                    source_id=f"LLM-GEN-{uuid.uuid4().hex[:4]}",
+                    source_url="https://pathmind.ai/standards",
                     retrieved_at=now_iso,
                     evidence_requirement="Internship, employment, or external client engagement record."
                 )
@@ -1553,7 +1572,9 @@ class RequirementGraphService:
                     category="PROJECT_EVIDENCE",
                     importance="HIGH",
                     description=f"A documented capstone artifact proving hands-on mastery in {target_outcome}.",
-                    source="Hiring Portfolio Requirement",
+                    source=f"Generated from {target_domain} Portfolio Requirement",
+                    source_id=f"LLM-GEN-{uuid.uuid4().hex[:4]}",
+                    source_url="https://pathmind.ai/standards",
                     retrieved_at=now_iso,
                     evidence_requirement="Public project artifact link with documented methodology and outcome."
                 )
