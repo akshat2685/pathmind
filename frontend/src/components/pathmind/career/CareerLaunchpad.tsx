@@ -134,13 +134,6 @@ interface CanonicalOpportunityData {
   missing_requirements: string[];
   eligibility_blockers: string[];
   pre_application_advice: string;
-  market_context?: {
-    salary_range?: string;
-    employment_outlook: string;
-    geography: string;
-    data_period: string;
-    source: string;
-  } | null;
 }
 
 interface TailoredResumeData {
@@ -927,13 +920,6 @@ export function CareerLaunchpad() {
                           )}
                         </div>
                       </div>
-
-                      {opp.market_context && (
-                        <div className="p-3 rounded-xl bg-surface-container text-xs text-on-surface-variant flex flex-wrap items-center justify-between gap-2 border border-outline/40">
-                          <span>Compensation / Outlook: <strong className="text-on-surface">{opp.market_context.salary_range}</strong> ({opp.market_context.employment_outlook})</span>
-                          <span className="text-[11px] text-on-surface-variant/70">Source: {opp.market_context.source}</span>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
