@@ -346,12 +346,21 @@ class CareerReadinessEngine:
                 need_to_develop=["Linear Algebra & Vector Calculus", "PyTorch Deep Learning", "Distributed Model Serving & Containerization"],
                 analysis_summary="Your API architecture and software engineering practices transfer seamlessly; focus learning on linear algebra and neural models."
             )
-        elif "sales" in current_state and ("pm" in target_lower or "product" in target_lower):
+        elif any(k in target_lower for k in ["product manager", "product management", "associate product manager"]) or ("product" in target_lower and "designer" not in target_lower):
+            base_skills = profile.skills or ["Customer Discovery & Empathy", "Stakeholder Communication"]
             return TransferableSkillsAnalysis(
-                already_have=["Customer Discovery & Empathy", "Stakeholder Communication", "Revenue & Pipeline Tracking"],
-                can_transfer=["User Pain Point Identification", "Cross-Functional Negotiation", "Product Narrative & Pitching"],
-                need_to_develop=["Product Requirements Documentation (PRD)", "Agile Sprint Delivery & Scrum", "Data-Driven Metric Instrumentation"],
-                analysis_summary="Your customer empathy and commercial viability transfer directly into product discovery; focus learning on PRDs and agile metrics."
+                already_have=base_skills,
+                can_transfer=["Cross-Functional Collaboration", "Problem Decomposition", "Strategic Communication"],
+                need_to_develop=["Product Requirements Documentation (PRD)", "Product Discovery & User Research", "Opportunity-Solution Tree Roadmapping", "Product Analytics & Metrics"],
+                analysis_summary="Your existing background transfers directly into product discovery and cross-functional coordination; focus learning on PRDs, user discovery, and roadmapping."
+            )
+        elif any(k in target_lower for k in ["academic / scientific researcher", "scientific researcher", "academic researcher", "research scientist"]) or (target_lower.strip() == "researcher"):
+            base_skills = profile.skills or ["Quantitative Analysis", "Critical Reading"]
+            return TransferableSkillsAnalysis(
+                already_have=base_skills,
+                can_transfer=["Analytical Rigor", "Data Modeling", "Systematic Inquiry"],
+                need_to_develop=["Literature Review & Systematic Synthesis", "Formal Research Methodology", "Hypothesis Testing & Statistical Inference", "Peer-Reviewed Manuscript Preparation"],
+                analysis_summary="Focus on formal research methodology, systematic literature benchmarking, and peer-reviewed preprint publication."
             )
         elif "design" in target_lower or "ux" in target_lower:
             return TransferableSkillsAnalysis(

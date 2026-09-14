@@ -579,3 +579,113 @@ async def test_opportunity_matching_domain_neutrality_no_software_leakage(opp_en
         role_filter="Deep Sea Archaeologist"
     )
     assert len(matches_unlisted) == 0, f"Expected 0 matches for unlisted domain, got: {[m.opportunity.title for m in matches_unlisted]}"
+
+
+# ==============================================================================
+# STEP 23: SEQUENTIAL REALISTIC GOAL CHANGES TEST FIXTURE
+# Software Engineer -> Product Manager -> Entrepreneur -> Researcher
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_step_23_sequential_realistic_goal_changes(
+    career_engine,
+    clean_store,
+    trajectory_engine,
+    req_service,
+    roadmap_engine
+):
+    """
+    Step 23 Acceptance Test:
+    User sequence:
+    1. Software Engineer (initial verified state)
+    2. Changes to Product Manager
+    3. Changes to Entrepreneur
+    4. Changes to Researcher
+    
+    Verifications:
+    - Useful transferable assets are preserved across pivots.
+    - Gaps reflect target-specific new requirements.
+    - Irrelevant skills do NOT falsely satisfy the new target.
+    - Historical progress is preserved without resetting to zero.
+    """
+    person_id = "test_step_23_pivot_user"
+
+    # Step 1: Base state - Software Engineer
+    swe_profile = UniversalCareerProfile(
+        person_id=person_id,
+        current_role="Software Engineer",
+        skills=["Python", "System Architecture", "SQL", "Git", "Distributed Systems", "Unit Testing"],
+        experience=[],
+        education=[]
+    )
+    await clean_store.save_career_profile(person_id, swe_profile.model_dump(mode="json"))
+
+    # Pivot A: Software Engineer -> Product Manager
+    analysis_pm = career_engine.evaluate_transferable_skills(swe_profile, "Product Manager")
+    rm_pm = await roadmap_engine.synthesize_personalized_roadmap(
+        person_id=person_id,
+        target_outcome="Product Manager",
+        constraints={"weekly_hours": 15}
+    )
+    pm_stage_titles = [s.title.lower() for p in rm_pm.phases for s in p.stages]
+
+    # Preserved transferable technical baseline
+    assert any("system architecture" in s.lower() or "python" in s.lower() or "technical" in s.lower() for s in analysis_pm.already_have)
+    # Target-specific gaps identified
+    assert any("product discovery" in g.lower() or "prd" in g.lower() or "roadmap" in g.lower() or "user research" in g.lower() for g in analysis_pm.need_to_develop)
+    # Does NOT restart them at Python basics
+    assert not any("python foundations" in t or "learn python" in t for t in pm_stage_titles)
+
+    # Pivot B: Product Manager -> Entrepreneur (Hospitality / Venture Entrepreneurship)
+    # Accumulate PM skills into profile
+    pm_augmented_profile = UniversalCareerProfile(
+        person_id=person_id,
+        current_role="Associate Product Manager",
+        skills=["Python", "System Architecture", "Product Roadmapping", "User Interviewing", "Stakeholder Communication"],
+        experience=[],
+        education=[]
+    )
+    await clean_store.save_career_profile(person_id, pm_augmented_profile.model_dump(mode="json"))
+
+    analysis_entrepreneur = career_engine.evaluate_transferable_skills(pm_augmented_profile, "Restaurant Entrepreneur")
+    rm_entrepreneur = await roadmap_engine.synthesize_personalized_roadmap(
+        person_id=person_id,
+        target_outcome="Executive Chef / Restaurant Owner",
+        constraints={"weekly_hours": 15}
+    )
+    entrepreneur_stage_titles = [s.title.lower() for p in rm_entrepreneur.phases for s in p.stages]
+
+    # Preserves operational planning and stakeholder communication
+    assert any("stakeholder" in s.lower() or "communication" in s.lower() or "operational" in s.lower() or "planning" in s.lower() for s in analysis_entrepreneur.already_have)
+    # New domain requirements: prime costing, health permits, commercial kitchen
+    assert any("prime cost" in g.lower() or "fssai" in g.lower() or "safety" in g.lower() or "kitchen" in g.lower() for g in analysis_entrepreneur.need_to_develop)
+    # Python does NOT falsely satisfy kitchen food safety or menu costing
+    assert not any(s.lower() == "food safety" for s in analysis_entrepreneur.already_have)
+
+    # Pivot C: Entrepreneur -> Scientific Researcher
+    # Accumulate business/operations into profile
+    entrepreneur_augmented_profile = UniversalCareerProfile(
+        person_id=person_id,
+        current_role="Venture Lead",
+        skills=["Python", "System Architecture", "Stakeholder Communication", "Quantitative Analysis", "Menu Prime Costing"],
+        experience=[],
+        education=[]
+    )
+    await clean_store.save_career_profile(person_id, entrepreneur_augmented_profile.model_dump(mode="json"))
+
+    analysis_researcher = career_engine.evaluate_transferable_skills(entrepreneur_augmented_profile, "Academic Researcher")
+    rm_researcher = await roadmap_engine.synthesize_personalized_roadmap(
+        person_id=person_id,
+        target_outcome="Academic / Scientific Researcher",
+        constraints={"weekly_hours": 20}
+    )
+    researcher_stage_titles = [s.title.lower() for p in rm_researcher.phases for s in p.stages]
+
+    # Quantitative analysis and Python preserved as transferable
+    assert any("quantitative" in s.lower() or "analytical" in s.lower() or "python" in s.lower() for s in analysis_researcher.already_have)
+    # Literature synthesis, formal peer review methodology, and hypothesis testing are required gaps
+    assert any("methodology" in g.lower() or "literature" in g.lower() or "peer review" in g.lower() or "hypothesis" in g.lower() for g in analysis_researcher.need_to_develop)
+    # Menu prime costing does NOT satisfy academic peer review
+    assert not any("peer review" in s.lower() for s in analysis_researcher.already_have)
+    # Stages reflect research methodology
+    assert any("literature" in t or "methodology" in t or "research" in t for t in researcher_stage_titles)
