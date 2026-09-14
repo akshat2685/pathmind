@@ -17,28 +17,64 @@ class PersonalAgentEngine:
         if model_dict:
             return PersonalAgentModel(**model_dict)
         
-        # Initialize baseline PersonalAgentModel
+        # Check canonical goal to calibrate personalized starting profile
+        stored_goal = await self.store.get_goal(person_id)
+        target_domain = (stored_goal.get("domain") or "").lower() if stored_goal else ""
+        target_role = (stored_goal.get("target_outcome") or "").lower() if stored_goal else ""
+
+        if any(k in target_domain or k in target_role for k in ["law", "legal", "advocate"]):
+            strengths = ["Critical Analysis", "Written Argumentation"]
+            weaknesses = ["Statutory Citation Systems"]
+            concept = "Constitutional Principles & Jurisprudence"
+            context = "Grasped fundamental statutory interpretation principles."
+            stage_learned = "Stage 01: Legal Foundations & Jurisprudence"
+        elif any(k in target_domain or k in target_role for k in ["design", "ux", "ui"]):
+            strengths = ["Visual Sense", "User Empathy"]
+            weaknesses = ["Component Variable Architecture"]
+            concept = "Human-Centered Design Fundamentals"
+            context = "Mastered heuristic evaluation and user journey mapping."
+            stage_learned = "Stage 01: Design Principles & Figma Foundations"
+        elif any(k in target_domain or k in target_role for k in ["restaurant", "culinary", "hospitality"]):
+            strengths = ["Hospitality Operations", "Menu Ideation"]
+            weaknesses = ["HACCP Regulatory Filings"]
+            concept = "Commercial Kitchen Safety & Operations"
+            context = "Mastered food safety and kitchen workflow standards."
+            stage_learned = "Stage 01: Food Safety & Culinary Foundations"
+        elif any(k in target_domain or k in target_role for k in ["biotech", "biology", "genetics"]):
+            strengths = ["Scientific Curiosity", "Quantitative Analysis"]
+            weaknesses = ["Bioinformatics Tooling"]
+            concept = "Cellular Biology & Genetics Foundations"
+            context = "Grasped foundational molecular mechanisms."
+            stage_learned = "Stage 01: Molecular Biology Foundations"
+        else:
+            # Technical / Engineering / Baseline Profile (for backwards compatibility with progressive roadmap tests)
+            strengths = ["Logical Reasoning", "Python Scripting"]
+            weaknesses = ["Multivariate Calculus", "Memory Management"]
+            concept = "Recursion & Call Stack Frames"
+            context = "Mastered recursive base cases through visual frame tracing during foundational coding."
+            stage_learned = "Stage 1: Python Foundations"
+
         new_model = PersonalAgentModel(
             person_id=person_id,
             version=1,
             learning_preferences={
                 "preferred_format": "project-based",
                 "weekly_hours": 10,
-                "explanation_style": "practical-code-first"
+                "explanation_style": "practical-first"
             },
-            strengths=["Logical Reasoning", "Python Scripting"],
-            weaknesses=["Multivariate Calculus", "Memory Management"],
+            strengths=strengths,
+            weaknesses=weaknesses,
             recurring_misconceptions=[],
-            successful_interventions=["Interactive Call Stack Visualizations", "Step-by-step Unit Tests"],
+            successful_interventions=["Interactive Case Scenarios", "Step-by-step Milestones"],
             unsuccessful_interventions=["Passive Video Lectures > 45 mins"],
             pace="NORMAL",
-            skill_evidence={"Python Fundamentals": "Verified via Class 12 CS & Hackathon Classifier"},
+            skill_evidence={},
             longitudinal_memories=[
                 LongitudinalMemory(
                     person_id=person_id,
-                    concept="Recursion & Call Stack Frames",
-                    context="Mastered recursive base cases through visual frame tracing during foundational coding.",
-                    stage_learned="Stage 1: Python Foundations",
+                    concept=concept,
+                    context=context,
+                    stage_learned=stage_learned,
                     confidence="HIGH"
                 )
             ],
@@ -123,17 +159,22 @@ class PersonalAgentEngine:
         model = await self.get_or_create_agent_model(person_id)
         current_concept_lower = current_concept.lower()
 
-        # Check for related foundational concepts
+        # Check for related foundational concepts across domains
         for mem in model.longitudinal_memories:
             mem_concept_lower = mem.concept.lower()
             if (
                 ("tree" in current_concept_lower and "recursion" in mem_concept_lower) or
+                ("linear" in current_concept_lower and "algebra" in mem_concept_lower) or
+                ("contract" in current_concept_lower and "jurisprudence" in mem_concept_lower) or
+                ("design" in current_concept_lower and "journey" in mem_concept_lower) or
+                ("cost" in current_concept_lower and "safety" in mem_concept_lower) or
                 ("deep learning" in current_concept_lower and "linear algebra" in mem_concept_lower) or
                 ("mlops" in current_concept_lower and "docker" in mem_concept_lower) or
                 (current_concept_lower in mem_concept_lower)
             ):
                 return {
                     "related_concept": mem.concept,
+                    "concept": mem.concept,
                     "context": mem.context,
                     "stage_learned": mem.stage_learned,
                     "connection_statement": f"This builds upon the '{mem.concept}' foundations you developed in {mem.stage_learned}."

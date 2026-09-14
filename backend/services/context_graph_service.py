@@ -39,9 +39,9 @@ class ContextGraphService:
         profile_raw = await self.store.get_profile(person_id) or {}
         identity_context = {
             "person_id": person_id,
-            "education_level": profile_raw.get("education_level", "Undergraduate"),
-            "background": profile_raw.get("background", "Computer Science & Engineering"),
-            "location": profile_raw.get("location", "Global / Remote"),
+            "education_level": profile_raw.get("education_level") or "UNKNOWN",
+            "background": profile_raw.get("background") or "UNKNOWN",
+            "location": profile_raw.get("location") or "UNKNOWN",
             "status": "CURRENT"
         }
 
@@ -64,10 +64,10 @@ class ContextGraphService:
 
         # 3. Goal Context
         goal_context = {
-            "primary_target_role": roadmap.target_outcome,
+            "primary_target_role": roadmap.target_outcome or "UNKNOWN",
             "confidence": "HIGH",
             "status": "CURRENT",
-            "timeline": "6 Months",
+            "timeline": (roadmap.constraints or {}).get("timeline") or "NOT_SPECIFIED",
             "revision_reason": roadmap.revision_reason
         }
 
@@ -99,10 +99,10 @@ class ContextGraphService:
         }
 
         # 6. Constraints Context
-        constraints = roadmap.constraints or {"weekly_hours": 10, "format_preference": "project-based"}
+        constraints = roadmap.constraints or {}
         constraint_context = {
             "weekly_hours": constraints.get("weekly_hours", 10),
-            "format_preference": constraints.get("format_preference", "project-based"),
+            "format_preference": constraints.get("format_preference") or "NOT_SPECIFIED",
             "schedule_pacing": "Moderate",
             "status": "CURRENT"
         }

@@ -111,78 +111,84 @@ class CounselingAgent:
         Deterministic, transparent synthesis engine adhering strictly to psychometric constructs,
         evidence classification, contradiction detection, and KnowledgeService taxonomy.
         """
-        # 1. Parse RIASEC scores
+        # 1. Parse RIASEC scores (STRICT: NO SYNTHETIC FALLBACK)
         riasec_res = next((r for r in assessment_results if "riasec" in r.assessment_id.lower()), None)
         interest_vector = {}
         strongest_interests = []
         weaker_interests = []
+        is_riasec_assessed = False
 
         if riasec_res and riasec_res.dimension_scores:
             interest_vector = riasec_res.dimension_scores
-        elif riasec_res and "normalized_vector" in riasec_res.calculated_scores:
+            is_riasec_assessed = True
+        elif riasec_res and isinstance(riasec_res.calculated_scores, dict) and "normalized_vector" in riasec_res.calculated_scores:
             interest_vector = riasec_res.calculated_scores["normalized_vector"]
-        else:
-            interest_vector = {"R": 75.0, "I": 90.0, "A": 45.0, "S": 55.0, "E": 65.0, "C": 50.0}
+            is_riasec_assessed = True
 
-        sorted_interests = sorted(interest_vector.items(), key=lambda x: x[1], reverse=True)
         dimension_names = {
-            "R": "Realistic (Hands-on Systems & Hardware)",
-            "I": "Investigative (Analytical & Problem Solving)",
-            "A": "Artistic (Creative UX & Visual Expression)",
-            "S": "Social (Teaching & Mentorship)",
-            "E": "Enterprising (Leadership & Strategy)",
-            "C": "Conventional (Data Governance & Systems Structure)"
+            "R": "Realistic (Hands-on Systems & Practical Building)",
+            "I": "Investigative (Analytical Research & Problem Solving)",
+            "A": "Artistic (Creative Expression, Visual & UX Design)",
+            "S": "Social (Teaching, Counseling & Direct Helping)",
+            "E": "Enterprising (Leadership, Entrepreneurship & Strategy)",
+            "C": "Conventional (Organization, Data Governance & Structured Process)"
         }
-        strongest_interests = [dimension_names.get(dim, dim) for dim, _ in sorted_interests[:2]]
-        weaker_interests = [dimension_names.get(dim, dim) for dim, _ in sorted_interests[4:]]
 
-        # 2. Parse SCCT self-efficacy
-        scct_res = next((r for r in assessment_results if "scct" in r.assessment_id.lower()), None)
-        efficacy_level = "MEDIUM"
-        outcome_exp = "Stimulating intellectual challenges & practical autonomy"
-        context_supports_list = []
-        context_barriers_list = []
-
-        if scct_res and isinstance(scct_res.calculated_scores, dict):
-            efficacy_level = scct_res.calculated_scores.get("self_efficacy_level", "HIGH")
-            context_supports_list = scct_res.calculated_scores.get("contextual_supports", [])
-            context_barriers_list = scct_res.calculated_scores.get("contextual_barriers", [])
-
-        # 3. Categorize Facts
-        # ASSESSED Facts
-        assessed_strengths = [
-            CounselingFact(
-                category="ASSESSED",
-                claim=f"High affinity for {strongest_interests[0]}",
-                evidence=[f"Holland RIASEC score: {sorted_interests[0][1]}%"],
-                confidence="HIGH",
-                weight=EVIDENCE_WEIGHTS["ASSESSED_INSTRUMENT"],
-                source="Holland RIASEC Assessment"
-            )
-        ]
-        if len(sorted_interests) > 1 and sorted_interests[1][1] >= 50.0:
+        assessed_strengths = []
+        if is_riasec_assessed and interest_vector:
+            sorted_interests = sorted(interest_vector.items(), key=lambda x: x[1], reverse=True)
+            strongest_interests = [dimension_names.get(dim, dim) for dim, _ in sorted_interests[:2]]
+            weaker_interests = [dimension_names.get(dim, dim) for dim, _ in sorted_interests[4:]]
+            
             assessed_strengths.append(
                 CounselingFact(
                     category="ASSESSED",
-                    claim=f"Strong secondary interest in {strongest_interests[1]}",
-                    evidence=[f"Holland RIASEC score: {sorted_interests[1][1]}%"],
+                    claim=f"High affinity for {strongest_interests[0]}",
+                    evidence=[f"Holland RIASEC score: {sorted_interests[0][1]}%"],
                     confidence="HIGH",
                     weight=EVIDENCE_WEIGHTS["ASSESSED_INSTRUMENT"],
                     source="Holland RIASEC Assessment"
                 )
             )
+            if len(sorted_interests) > 1 and sorted_interests[1][1] >= 50.0:
+                assessed_strengths.append(
+                    CounselingFact(
+                        category="ASSESSED",
+                        claim=f"Strong secondary interest in {strongest_interests[1]}",
+                        evidence=[f"Holland RIASEC score: {sorted_interests[1][1]}%"],
+                        confidence="HIGH",
+                        weight=EVIDENCE_WEIGHTS["ASSESSED_INSTRUMENT"],
+                        source="Holland RIASEC Assessment"
+                    )
+                )
 
+        # 2. Parse SCCT self-efficacy
+        scct_res = next((r for r in assessment_results if "scct" in r.assessment_id.lower()), None)
+        efficacy_level = None
+        outcome_exp = None
+        context_supports_list = []
+        context_barriers_list = []
+
+        if scct_res and isinstance(scct_res.calculated_scores, dict):
+            efficacy_level = scct_res.calculated_scores.get("self_efficacy_level", "MEDIUM")
+            outcome_exp = scct_res.calculated_scores.get("outcome_expectation", "Meaningful professional mastery and practical autonomy")
+            context_supports_list = scct_res.calculated_scores.get("contextual_supports", [])
+            context_barriers_list = scct_res.calculated_scores.get("contextual_barriers", [])
+
+        # 3. Categorize Facts
         # OBSERVED Facts (from Evidence items)
         demonstrated_caps = []
         demonstrated_exp = []
+        academic_strengths = []
         for ev in evidence_items:
-            name = ev.get("name", "Project Artifact")
+            name = ev.get("name") or ev.get("title") or "Project Artifact"
             desc = ev.get("description", "")
+            ev_type = ev.get("type", "project")
             demonstrated_caps.append(
                 CounselingFact(
                     category="OBSERVED",
-                    claim=f"Demonstrated practical development activity: {name}",
-                    evidence=[f"Submitted artifact: {desc}"],
+                    claim=f"Demonstrated practical capability: {name}",
+                    evidence=[f"Artifact ({ev_type}): {desc}" if desc else f"Submitted artifact: {name}"],
                     confidence="HIGH",
                     weight=EVIDENCE_WEIGHTS["VERIFIED_PROJECT"],
                     source="Candidate Submission"
@@ -191,27 +197,83 @@ class CounselingAgent:
             demonstrated_exp.append(
                 CounselingFact(
                     category="OBSERVED",
-                    claim=f"Hands-on project engagement in {name}",
-                    evidence=[f"Context: {desc}"],
+                    claim=f"Practical engagement in {name}",
+                    evidence=[f"Context: {desc}" if desc else f"Artifact: {name}"],
                     confidence="HIGH",
                     weight=EVIDENCE_WEIGHTS["VERIFIED_PROJECT"],
                     source="Candidate Portfolio"
                 )
             )
-
-        # INFERRED Signals
-        inferred_signals = []
-        if interest_vector.get("I", 0) >= 70 and interest_vector.get("R", 0) >= 60:
-            inferred_signals.append(
-                CounselingFact(
-                    category="INFERRED",
-                    claim="High alignment with applied technical and engineering disciplines combining theory with concrete building.",
-                    evidence=["RIASEC Investigative >= 70%", "RIASEC Realistic >= 60%"],
-                    confidence="HIGH",
-                    weight=0.9,
-                    source="Psychometric Synthesis"
+            if "course" in str(name).lower() or "academic" in str(desc).lower() or "transcript" in str(desc).lower():
+                academic_strengths.append(
+                    CounselingFact(
+                        category="OBSERVED",
+                        claim=f"Demonstrated academic coursework in {name}",
+                        evidence=[f"Coursework record: {desc}"],
+                        confidence="HIGH",
+                        weight=EVIDENCE_WEIGHTS["ACADEMIC_EVIDENCE"],
+                        source="Candidate Academic Record"
+                    )
                 )
-            )
+
+        # INFERRED Signals (Derived strictly from genuine assessed signals or verified evidence)
+        inferred_signals = []
+        if is_riasec_assessed:
+            if interest_vector.get("I", 0) >= 70 and interest_vector.get("R", 0) >= 60:
+                inferred_signals.append(
+                    CounselingFact(
+                        category="INFERRED",
+                        claim="High alignment with applied technical disciplines combining theory with concrete building.",
+                        evidence=["RIASEC Investigative >= 70%", "RIASEC Realistic >= 60%"],
+                        confidence="HIGH",
+                        weight=0.9,
+                        source="Psychometric Synthesis"
+                    )
+                )
+            if interest_vector.get("A", 0) >= 70:
+                inferred_signals.append(
+                    CounselingFact(
+                        category="INFERRED",
+                        claim="Strong affinity for creative, visual, design, and user experience expression.",
+                        evidence=[f"RIASEC Artistic: {interest_vector.get('A', 0)}%"],
+                        confidence="HIGH",
+                        weight=0.9,
+                        source="Psychometric Synthesis"
+                    )
+                )
+            if interest_vector.get("S", 0) >= 70:
+                inferred_signals.append(
+                    CounselingFact(
+                        category="INFERRED",
+                        claim="Strong alignment with people-oriented vocations, advisory roles, teaching, and mentorship.",
+                        evidence=[f"RIASEC Social: {interest_vector.get('S', 0)}%"],
+                        confidence="HIGH",
+                        weight=0.9,
+                        source="Psychometric Synthesis"
+                    )
+                )
+            if interest_vector.get("E", 0) >= 70:
+                inferred_signals.append(
+                    CounselingFact(
+                        category="INFERRED",
+                        claim="High aptitude for venture leadership, product management, strategic operations, and initiative driving.",
+                        evidence=[f"RIASEC Enterprising: {interest_vector.get('E', 0)}%"],
+                        confidence="HIGH",
+                        weight=0.9,
+                        source="Psychometric Synthesis"
+                    )
+                )
+            if interest_vector.get("C", 0) >= 70:
+                inferred_signals.append(
+                    CounselingFact(
+                        category="INFERRED",
+                        claim="Strong orientation toward systems organization, regulatory governance, data integrity, and structured workflows.",
+                        evidence=[f"RIASEC Conventional: {interest_vector.get('C', 0)}%"],
+                        confidence="HIGH",
+                        weight=0.9,
+                        source="Psychometric Synthesis"
+                    )
+                )
 
         # Learning Signals from observable tasks
         learning_res = next((r for r in assessment_results if "learning" in r.assessment_id.lower()), None)
@@ -238,68 +300,285 @@ class CounselingAgent:
             contradiction_count=len(contradictions)
         )
 
-        # Evidence gaps / portfolio requests
+        # Domain-aware Evidence Gaps / Portfolio Requests
         evidence_gaps = []
+        goals_text = " ".join(goals).lower() if goals else ""
         if not evidence_items:
-            evidence_gaps = [
-                "Please consider uploading links to your GitHub repositories or project demos to substantiate hands-on programming experience.",
-                "Sharing course transcripts or syllabus outlines will allow us to accurately calibrate prerequisite stage bypasses."
-            ]
+            if any(k in goals_text for k in ["design", "ux", "ui", "product design", "figma"]):
+                evidence_gaps = [
+                    "Please consider sharing portfolio links (e.g. Behance, Figma case studies, design system documentation) demonstrating user research and wireframing.",
+                    "Sharing project case studies will allow us to accurately calibrate prerequisite stage bypasses."
+                ]
+            elif any(k in goals_text for k in ["law", "legal", "advocate", "bar exam", "litigation", "paralegal"]):
+                evidence_gaps = [
+                    "Please consider sharing legal writing samples, case briefs, moot court submissions, or statutory analysis notes.",
+                    "Sharing law degree transcripts or bar status will allow us to accurately calibrate prerequisite stage bypasses."
+                ]
+            elif any(k in goals_text for k in ["restaurant", "culinary", "chef", "hospitality", "bistro", "food"]):
+                evidence_gaps = [
+                    "Please consider sharing business plans, menu costing models, food safety certificates, or commercial kitchen operations documentation.",
+                    "Sharing prior hospitality management experience will allow us to accurately calibrate operational milestones."
+                ]
+            elif any(k in goals_text for k in ["biotech", "molecular", "genetics", "bioinformatics", "biology"]):
+                evidence_gaps = [
+                    "Please consider sharing lab reports, research preprints, wet-lab protocols, or bioinformatics notebooks.",
+                    "Sharing life sciences academic transcripts will allow us to accurately calibrate laboratory prerequisites."
+                ]
+            elif any(k in goals_text for k in ["upsc", "civil services", "public policy", "ias", "ips"]):
+                evidence_gaps = [
+                    "Please consider sharing diagnostic test scores, mock exam percentiles, or optional subject syllabus coverage.",
+                    "Sharing degree transcripts will allow us to accurately calibrate general studies foundation stages."
+                ]
+            elif any(k in goals_text for k in ["code", "software", "developer", "engineering", "ai", "machine learning", "robotics"]):
+                evidence_gaps = [
+                    "Please consider uploading links to your GitHub repositories or project demos to substantiate hands-on programming experience.",
+                    "Sharing course transcripts or syllabus outlines will allow us to accurately calibrate prerequisite stage bypasses."
+                ]
+            else:
+                evidence_gaps = [
+                    "Please consider sharing portfolio artifacts, project documentation, or case studies relevant to your target direction.",
+                    "Sharing official transcripts, certifications, or syllabus outlines will allow us to accurately calibrate prerequisite stage bypasses."
+                ]
 
-        # Candidate Directions (Preliminary)
+        # Candidate Directions (Goal-Conditioned, Assessment-Grounded, Domain-Agnostic)
         candidate_directions = []
         candidate_details = []
 
-        if interest_vector.get("I", 0) >= 65 and interest_vector.get("R", 0) >= 60:
-            candidate_directions.extend([
-                "Artificial Intelligence & Machine Learning Engineering",
-                "Robotics & Autonomous Systems Engineering",
-                "Systems & Distributed Software Architecture"
-            ])
-            candidate_details.extend([
-                CandidateDirection(
-                    title="Artificial Intelligence & Machine Learning Engineering",
-                    rationale="Combines high Investigative problem-solving with concrete software implementation.",
-                    alignment="Investigative (90%) + Realistic (75%) + Hands-on Problem Solving",
-                    related_occupations=["AI Engineer (ESCO: 2512.4)", "Data Scientist (ESCO: 2511.1)"],
-                    confidence="HIGH"
-                ),
-                CandidateDirection(
-                    title="Robotics & Autonomous Systems Engineering",
-                    rationale="Direct synergy between physical hardware mechanisms and algorithm design.",
-                    alignment="Realistic (75%) + Investigative (90%) + Systems Engineering",
-                    related_occupations=["Robotics Engineer (ESCO: 2144.3)"],
-                    confidence="HIGH"
-                ),
-                CandidateDirection(
-                    title="Systems & Distributed Software Architecture",
-                    rationale="Deep technical problem-solving with systematic architectural governance.",
-                    alignment="Investigative (90%) + Conventional (50%) + Practical Application",
-                    related_occupations=["Software Architect (ESCO: 2512.1)"],
-                    confidence="MEDIUM"
-                )
-            ])
+        if goals:
+            # Generate directions from stated goals
+            if any(k in goals_text for k in ["design", "ux", "ui", "product design"]):
+                candidate_directions = [
+                    "Product Design (UI/UX & Design Systems)",
+                    "User Experience Research & Strategy",
+                    "Interaction Design & Digital Prototyping"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Product Design (UI/UX & Design Systems)",
+                        rationale="Centers on human-centered design principles, Figma design systems, and usability heuristics.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Target Aspiration'}",
+                        related_occupations=["User Experience Designer (ESCO: 2513.1)", "Product Designer (ESCO: 2166.2)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="User Experience Research & Strategy",
+                        rationale="Combines qualitative discovery, user testing, and behavioral synthesis.",
+                        alignment="Analytical synthesis and user empathy",
+                        related_occupations=["UX Researcher (ESCO: 2513.2)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["law", "legal", "advocate", "bar exam", "litigation"]):
+                candidate_directions = [
+                    "Corporate Law & Regulatory Compliance",
+                    "Commercial Litigation & Dispute Resolution",
+                    "Contract Strategy & Legal Advisory"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Corporate Law & Regulatory Compliance",
+                        rationale="Focuses on corporate governance, statutory compliance, and commercial contract drafting.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Target Aspiration'}",
+                        related_occupations=["Lawyer (ESCO: 2611)", "Legal Consultant (ESCO: 2619)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Commercial Litigation & Dispute Resolution",
+                        rationale="Specialized in advocacy, statutory interpretation, and trial/arbitration procedure.",
+                        alignment="Advocacy, analysis, and formal jurisprudence",
+                        related_occupations=["Litigation Lawyer (ESCO: 2611.1)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["restaurant", "culinary", "chef", "hospitality", "bistro", "food"]):
+                candidate_directions = [
+                    "Food & Beverage Hospitality Entrepreneurship",
+                    "Restaurant Operations & Concept Management",
+                    "Culinary Business & Menu Strategy"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Food & Beverage Hospitality Entrepreneurship",
+                        rationale="Covers end-to-end concept launch, prime costing, regulatory licenses, and hospitality service delivery.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Target Aspiration'}",
+                        related_occupations=["Restaurant Manager (ESCO: 1412)", "Hospitality Entrepreneur"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Restaurant Operations & Concept Management",
+                        rationale="Optimizes front-of-house hospitality, inventory supply chain, and kitchen unit economics.",
+                        alignment="Operational rigor and guest experience management",
+                        related_occupations=["Food Service Manager (ESCO: 1412.1)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["biotech", "molecular", "genetics", "bioinformatics", "biology"]):
+                candidate_directions = [
+                    "Biotechnology & Molecular Biology Research",
+                    "Translational Bioinformatics & Genomic Analysis",
+                    "Life Sciences Laboratory R&D"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Biotechnology & Molecular Biology Research",
+                        rationale="Focuses on laboratory assays, molecular genetics, recombinant DNA protocols, and peer-reviewed methodology.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Target Aspiration'}",
+                        related_occupations=["Biotechnologist (ESCO: 2131.2)", "Molecular Biologist (ESCO: 2131.1)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Translational Bioinformatics & Genomic Analysis",
+                        rationale="Applies computational statistics and sequence alignment algorithms to genomic datasets.",
+                        alignment="Investigative analysis and biological data modeling",
+                        related_occupations=["Bioinformatics Scientist (ESCO: 2131.5)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["upsc", "civil services", "public policy", "ias", "ips"]):
+                candidate_directions = [
+                    "Civil Services & Public Administration",
+                    "Public Policy Analysis & Governance",
+                    "Administrative Strategic Leadership"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Civil Services & Public Administration",
+                        rationale="Structured preparation across Indian polity, governance, history, ethics, and optional subjects.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Target Aspiration'}",
+                        related_occupations=["Civil Servant", "Public Administration Official"],
+                        confidence="HIGH"
+                    )
+                ]
+            elif any(k in goals_text for k in ["product manager", "product management", "transition to pm", "switch to pm"]):
+                candidate_directions = [
+                    "Digital Product Management",
+                    "Technical Product Strategy & Roadmapping",
+                    "Growth & Customer Discovery Leadership"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Digital Product Management",
+                        rationale="Bridges cross-functional engineering, user empathy, PRD authorship, and business metrics.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Target Aspiration'}",
+                        related_occupations=["Product Manager (ESCO: 2431)"],
+                        confidence="HIGH"
+                    )
+                ]
+            elif any(k in goals_text for k in ["ai", "machine learning", "robotics", "software", "developer", "engineering"]):
+                candidate_directions = [
+                    "Artificial Intelligence & Machine Learning Engineering",
+                    "Robotics & Autonomous Systems Engineering",
+                    "Systems & Distributed Software Architecture"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Artificial Intelligence & Machine Learning Engineering",
+                        rationale="Combines technical problem-solving with model training and production deployment.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Technical Aspiration'}",
+                        related_occupations=["AI Engineer (ESCO: 2512.4)", "Data Scientist (ESCO: 2511.1)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Robotics & Autonomous Systems Engineering",
+                        rationale="Direct synergy between physical hardware mechanisms and algorithm design.",
+                        alignment="Hardware systems and algorithm design",
+                        related_occupations=["Robotics Engineer (ESCO: 2144.3)"],
+                        confidence="MEDIUM"
+                    ),
+                    CandidateDirection(
+                        title="Systems & Distributed Software Architecture",
+                        rationale="Deep technical problem-solving with systematic architectural governance.",
+                        alignment="Systematic software engineering",
+                        related_occupations=["Software Architect (ESCO: 2512.1)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            else:
+                # Generic stated goal formulation
+                primary_goal = goals[0]
+                candidate_directions = [f"{primary_goal.strip()} Professional Pathway"]
+                candidate_details = [
+                    CandidateDirection(
+                        title=f"{primary_goal.strip()} Professional Pathway",
+                        rationale=f"Directly derived from stated candidate goal: '{primary_goal}'.",
+                        alignment="Explicit user-declared objective",
+                        related_occupations=[],
+                        confidence="HIGH"
+                    )
+                ]
+        elif is_riasec_assessed:
+            # Stated goal absent, but genuine psychometric assessment exists: map from assessed interests
+            top_dim = sorted_interests[0][0]
+            if top_dim == "A":
+                candidate_directions = ["Creative & Visual Design", "Interactive Media & Digital Content"]
+                candidate_details = [CandidateDirection(title="Creative & Visual Design", rationale="Strongest measured Artistic interest.", alignment="Artistic Profile", related_occupations=["Graphic Designer (ESCO: 2166)"])]
+            elif top_dim == "S":
+                candidate_directions = ["Instructional Design & Educational Leadership", "Community & Counseling Advisory"]
+                candidate_details = [CandidateDirection(title="Instructional Design & Educational Leadership", rationale="Strongest measured Social interest.", alignment="Social Profile", related_occupations=["Educator (ESCO: 2351)"])]
+            elif top_dim == "E":
+                candidate_directions = ["Venture Operations & Product Leadership", "Strategic Business Development"]
+                candidate_details = [CandidateDirection(title="Venture Operations & Product Leadership", rationale="Strongest measured Enterprising interest.", alignment="Enterprising Profile", related_occupations=["Business Consultant (ESCO: 2421)"])]
+            elif top_dim == "C":
+                candidate_directions = ["Data Governance & Compliance Management", "Financial Analysis & Systems Operations"]
+                candidate_details = [CandidateDirection(title="Data Governance & Compliance Management", rationale="Strongest measured Conventional interest.", alignment="Conventional Profile", related_occupations=["Compliance Officer (ESCO: 2422)"])]
+            elif top_dim == "R":
+                candidate_directions = ["Applied Systems & Hardware Engineering", "Field Operations & Prototyping"]
+                candidate_details = [CandidateDirection(title="Applied Systems & Hardware Engineering", rationale="Strongest measured Realistic interest.", alignment="Realistic Profile", related_occupations=["Mechanical Engineer (ESCO: 2144)"])]
+            else:
+                candidate_directions = ["Scientific Research & Analytical Investigation", "Computational Problem Solving"]
+                candidate_details = [CandidateDirection(title="Scientific Research & Analytical Investigation", rationale="Strongest measured Investigative interest.", alignment="Investigative Profile", related_occupations=["Researcher (ESCO: 2131)"])]
         else:
-            candidate_directions.extend([
-                "Interactive Software & Product Development",
-                "Computational Systems Exploration"
-            ])
-            candidate_details.append(
-                CandidateDirection(
-                    title="Interactive Software & Product Development",
-                    rationale="Balanced creative design and structured technical implementation.",
-                    alignment=f"Top Interests: {', '.join(strongest_interests)}",
-                    related_occupations=["Software Developer (ESCO: 2512)"],
-                    confidence="MEDIUM"
+            # Stated goal absent AND psychometrics unassessed: DO NOT INVENT CAREERS
+            candidate_directions = []
+            candidate_details = []
+
+        # Goal-conditioned or exploratory Next Reflective Questions
+        if goals:
+            primary_goal = goals[0]
+            next_questions = [
+                f"What specific milestone or project in {primary_goal} are you most energized to tackle first?",
+                "When mastering new competencies, what learning format (practical hands-on casework, structured literature, or 1-on-1 mentorship) works best for you?",
+                "What schedule constraints (such as weekly available hours or strict target completion dates) should we prioritize in your plan?"
+            ]
+        else:
+            next_questions = [
+                "What professional domain, industry, or problem space do you feel most drawn toward exploring?",
+                "What types of activities (creative design, direct helping, strategic planning, analytical investigation, or practical building) bring you the most flow?",
+                "Do you currently have any prior coursework, certifications, or portfolio projects you'd like us to account for?"
+            ]
+
+        # Transparent Unknowns
+        unknowns = []
+        if not goals:
+            unknowns.append("Primary career or learning objective has not yet been specified.")
+        if not is_riasec_assessed:
+            unknowns.append("Holland RIASEC occupational interest profile is unassessed.")
+        if not evidence_items:
+            unknowns.append("No verified portfolio artifacts or demonstrated prior projects submitted.")
+        if not constraints:
+            unknowns.append("Weekly time commitment and geographic mobility constraints are unconfirmed.")
+
+        self_eff_facts = []
+        if efficacy_level:
+            self_eff_facts.append(
+                CounselingFact(
+                    category="ASSESSED",
+                    claim=f"Self-Efficacy Level: {efficacy_level}",
+                    evidence=["SCCT Confidence item responses"],
+                    confidence="HIGH"
                 )
             )
 
-        # Next Reflective Questions
-        next_questions = [
-            "What specific technical project or problem have you worked on recently that you felt most energized by?",
-            "When faced with a steep learning curve, what learning format (interactive building, academic papers, peer collaboration) works best for you?",
-            "How do you prefer to balance deep research and algorithm design versus building production user-facing products?"
-        ]
+        outcome_facts = []
+        if outcome_exp:
+            outcome_facts.append(
+                CounselingFact(
+                    category="ASSESSED",
+                    claim=f"Primary outcome expectation: {outcome_exp}",
+                    evidence=["SCCT Outcome Expectation indicators"],
+                    confidence="HIGH"
+                )
+            )
 
         return CounselingProfile(
             person_id=person_id,
@@ -308,33 +587,12 @@ class CounselingAgent:
             interest_vector=interest_vector,
             strongest_interests=strongest_interests,
             weaker_interests=weaker_interests,
-            academic_strengths=[
-                CounselingFact(
-                    category="OBSERVED" if evidence_items else "INFERRED",
-                    claim="Strong analytical and logical reasoning aptitude",
-                    evidence=["Curriculum focus in Mathematics & Computer Science"],
-                    confidence="HIGH" if evidence_items else "MEDIUM"
-                )
-            ],
+            academic_strengths=academic_strengths,
             academic_weaknesses=[],
             demonstrated_capabilities=demonstrated_caps,
             demonstrated_experience=demonstrated_exp,
-            self_efficacy_signals=[
-                CounselingFact(
-                    category="ASSESSED",
-                    claim=f"Self-Efficacy Level: {efficacy_level}",
-                    evidence=["SCCT Confidence item responses"],
-                    confidence="HIGH"
-                )
-            ],
-            outcome_expectations=[
-                CounselingFact(
-                    category="ASSESSED",
-                    claim=f"Primary outcome expectation: {outcome_exp}",
-                    evidence=["SCCT Outcome Expectation indicators"],
-                    confidence="HIGH"
-                )
-            ],
+            self_efficacy_signals=self_eff_facts,
+            outcome_expectations=outcome_facts,
             contextual_barriers=[
                 CounselingFact(
                     category="OBSERVED",
@@ -360,10 +618,7 @@ class CounselingAgent:
                 for c in constraints
             ],
             contradictions=contradictions,
-            unknowns=[
-                "Specific subfield preference within AI/ML (e.g. Computer Vision vs Large Language Models vs Systems Optimization).",
-                "Long-term career setting preference (Applied Industry Engineering vs Academic Research Lab)."
-            ] if not evidence_items else [],
+            unknowns=unknowns,
             evidence_gaps=evidence_gaps,
             candidate_directions=candidate_directions,
             candidate_direction_details=candidate_details,
@@ -451,12 +706,14 @@ Input Data:
         # Polite mentor dialogue generation
         if self.model:
             try:
+                top_interests_str = ", ".join(profile.strongest_interests) if profile.strongest_interests else "UNASSESSED"
+                candidate_dirs_str = ", ".join(profile.candidate_directions) if profile.candidate_directions else "NONE_SPECIFIED"
                 system_context = f"""You are the PATHMIND Empathetic Career Counselor.
 You are conversing with {person_id}.
 Active Profile Summary:
-- Top Interests: {', '.join(profile.strongest_interests)}
+- Top Interests: {top_interests_str}
 - Confidence: {profile.overall_confidence}
-- Candidate Directions: {', '.join(profile.candidate_directions)}
+- Candidate Directions: {candidate_dirs_str}
 - Contradictions: {json.dumps([c.model_dump() for c in profile.contradictions])}
 - Evidence Gaps: {json.dumps(profile.evidence_gaps)}
 
@@ -464,7 +721,7 @@ GUIDELINES:
 - Warm, polite, supportive, mentor-like tone.
 - Explain evidence backing recommendations.
 - Clarify contradictions gently.
-- Encourage sharing portfolio links to substantiate milestones.
+- Encourage sharing portfolio links or domain-specific artifacts to substantiate milestones.
 - Keep responses concise, clear, and actionable.
 """
                 chat_history_str = "\n".join([f"{m.role}: {m.content}" for m in history[-6:]])
@@ -481,12 +738,19 @@ GUIDELINES:
                 print(f"Chat model error: {e}")
 
         # Deterministic fallback response
-        reply_content = (
-            f"Thank you for sharing that. Based on your assessment, your strongest measured interests are in "
-            f"{', '.join(profile.strongest_interests)}. "
-            f"We've identified promising candidate pathways in {', '.join(profile.candidate_directions[:2])}. "
-            f"To help calibrate the exact roadmap milestones, feel free to share any specific projects or tools you enjoy working with."
-        )
+        parts = ["Thank you for sharing that."]
+        if profile.strongest_interests:
+            parts.append(f"Based on your assessment, your strongest measured interests are in {', '.join(profile.strongest_interests)}.")
+        else:
+            parts.append("Your psychometric interest profile is currently unassessed.")
+
+        if profile.candidate_directions:
+            parts.append(f"We've identified promising candidate pathways in {', '.join(profile.candidate_directions[:2])}.")
+        else:
+            parts.append("Once you declare a target outcome or complete a diagnostic assessment, we can map out tailored candidate pathways.")
+
+        parts.append("Feel free to share your primary goal or any specific projects, background, and constraints to help calibrate your plan.")
+        reply_content = " ".join(parts)
         return CounselingMessage(
             role="counselor",
             content=reply_content,

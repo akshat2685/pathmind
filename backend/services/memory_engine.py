@@ -69,7 +69,7 @@ class MemoryEngine:
     async def get_cross_stage_bridge(
         self,
         person_id: str,
-        current_concept: str = "Tree Traversal & Depth-First Search"
+        current_concept: Optional[str] = None
     ) -> CrossStageBridgeResponse:
         """
         Past → Present Concept Bridge:
@@ -77,25 +77,43 @@ class MemoryEngine:
         """
         raw_mems = await self.store.get_personal_memories(person_id)
         memories = [MemoryItem(**m) for m in raw_mems]
+
+        if not current_concept:
+            # Check active roadmap stage
+            active_roadmap = await self.store.get_active_roadmap(person_id)
+            if active_roadmap and active_roadmap.get("phases"):
+                flat_stages = [s for p in active_roadmap["phases"] for s in p.get("stages", []) if not s.get("locked")]
+                if flat_stages:
+                    current_concept = flat_stages[-1].get("title", "Active Milestone")
+            if not current_concept:
+                stored_goal = await self.store.get_goal(person_id)
+                current_concept = stored_goal.get("target_outcome", "Active Milestone") if stored_goal else "Active Milestone"
         
-        # Check if user has past foundational memories
-        recursion_mem = next((m for m in memories if "recursion" in m.topic.lower() or "recursion" in m.title.lower()), None)
+        # Check if user has past foundational memories matching the concept
+        matched_mem = None
+        if memories:
+            concept_words = [w.lower() for w in current_concept.split() if len(w) > 3]
+            matched_mem = next((m for m in memories if any(w in m.topic.lower() or w in m.title.lower() for w in concept_words)), None)
+            if not matched_mem:
+                # Default to the most foundational or latest verified memory
+                recursion_mem = next((m for m in memories if "recursion" in m.topic.lower() or "recursion" in m.title.lower()), None)
+                matched_mem = recursion_mem or memories[0]
         
-        if recursion_mem:
+        if matched_mem:
             return CrossStageBridgeResponse(
                 person_id=person_id,
                 current_concept=current_concept,
-                past_concept=recursion_mem.title,
-                past_stage=recursion_mem.source,
-                context=recursion_mem.summary,
-                connection_explanation=f"This milestone builds directly on your prior mastery of {recursion_mem.topic} in {recursion_mem.source}, applying those principles to {current_concept}.",
+                past_concept=matched_mem.title,
+                past_stage=matched_mem.source,
+                context=matched_mem.summary,
+                connection_explanation=f"This milestone builds directly on your prior mastery of {matched_mem.topic} in {matched_mem.source}, applying those principles to {current_concept}.",
                 confidence="HIGH"
             )
 
         return CrossStageBridgeResponse(
             person_id=person_id,
             current_concept=current_concept,
-            past_concept="Foundational Programming",
+            past_concept="Foundational Competencies",
             past_stage="Prerequisite Milestones",
             context="Foundational concept mastery will be connected here as you progress.",
             connection_explanation=f"{current_concept} requires structured problem-solving foundations. Complete prerequisite stages to unlock specific concept linkages.",

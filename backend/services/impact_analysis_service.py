@@ -72,7 +72,7 @@ class ImpactAnalysisService:
                 reconsidered_areas=[f"Foundational concepts in {stage_id}"],
                 requires_user_approval=False,
                 approval_type="AUTO_ADAPT",
-                next_action_recommendation="Complete the targeted reinforcement exercise with guided code examples to lock in mastery."
+                next_action_recommendation="Complete the targeted reinforcement exercise with guided examples to lock in mastery."
             )
 
         elif event.change_type == "OPPORTUNITY_CHANGE":
