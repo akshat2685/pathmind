@@ -5,7 +5,6 @@ from backend.core.execution_schemas import (
     CanonicalAction,
     DailyExecutionPlan,
     AccountabilityIntervention,
-    ApplicationRecord,
     CreateActionRequest,
     RescheduleActionRequest,
     BlockActionRequest,
@@ -13,6 +12,7 @@ from backend.core.execution_schemas import (
     PauseExecutionRequest,
     TrackApplicationRequest
 )
+from backend.core.opportunity_schemas import ApplicationRecord
 from backend.services.execution_engine import ExecutionEngine
 
 from backend.core.security import get_authenticated_person
