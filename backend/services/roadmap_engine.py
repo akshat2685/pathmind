@@ -1823,6 +1823,22 @@ class RoadmapEngine:
         for s in flat_stages:
             if not s.locked:
                 # Disclose full details
+                why_now = s.why_now or (
+                    f"Stage {s.stage_number} is currently active as the primary foundational prerequisite for your target outcome."
+                    if s.stage_number == 1 else
+                    f"Stage {s.stage_number} activates upon verified completion of prerequisite competencies: {', '.join(s.prerequisites) if s.prerequisites else 'prior stage'}."
+                )
+                prereq_rationale = s.prerequisite_rationale or (
+                    f"Demonstrated mastery of {', '.join(s.prerequisites)} ensures a rigorous baseline before advancing."
+                    if s.prerequisites else "Establishes foundational competencies required for advanced stages."
+                )
+                curr_mission = s.missions[0] if s.missions else None
+                unlock_text = (curr_mission.what_will_this_unlock if curr_mission and curr_mission.what_will_this_unlock else None) or (
+                    f"Unlocks next stage and verified practical competencies in {', '.join(s.skills[:2]) if s.skills else s.title}."
+                )
+                evidence_text = (curr_mission.what_evidence_will_count if curr_mission and curr_mission.what_evidence_will_count else None) or (
+                    s.evidence_requirements[0] if s.evidence_requirements else "Verified portfolio artifact or evaluation submission."
+                )
                 disclosed_stages.append(
                     DisclosedStageView(
                         stage_id=s.stage_id,
@@ -1834,13 +1850,23 @@ class RoadmapEngine:
                         estimated_effort=s.estimated_effort,
                         locked=False,
                         status=s.status,
-                        current_mission=s.missions[0] if s.missions else None,
+                        current_mission=curr_mission,
                         resources=s.resources,
-                        evidence_requirements=s.evidence_requirements
+                        evidence_requirements=s.evidence_requirements,
+                        why_now=why_now,
+                        prerequisite_rationale=prereq_rationale,
+                        what_will_this_unlock=unlock_text,
+                        what_evidence_will_count=evidence_text
                     )
                 )
             else:
                 # Progressive disclosure: Redact protected mission content & resources
+                why_now_locked = s.why_now or f"Stage {s.stage_number} unlocks sequentially once previous stages are verified."
+                prereq_locked = s.prerequisite_rationale or (
+                    f"Requires completion of prerequisite stage competencies: {', '.join(s.prerequisites) if s.prerequisites else 'prior stage'}."
+                )
+                unlock_locked = f"Unlocks advanced competencies in {', '.join(s.skills[:2]) if s.skills else s.title}."
+                evidence_locked = s.evidence_requirements[0] if s.evidence_requirements else "Submission of stage verification artifact."
                 disclosed_stages.append(
                     DisclosedStageView(
                         stage_id=s.stage_id,
@@ -1854,7 +1880,11 @@ class RoadmapEngine:
                         status="LOCKED",
                         current_mission=None,
                         resources=[],
-                        evidence_requirements=[]
+                        evidence_requirements=[],
+                        why_now=why_now_locked,
+                        prerequisite_rationale=prereq_locked,
+                        what_will_this_unlock=unlock_locked,
+                        what_evidence_will_count=evidence_locked
                     )
                 )
 

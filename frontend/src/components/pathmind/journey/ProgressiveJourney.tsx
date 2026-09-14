@@ -39,6 +39,8 @@ interface MissionItem {
   evidence_requirements: string[];
   completion_criteria: string;
   status: "ACTIVE" | "COMPLETED" | "PENDING" | "REINFORCING" | string;
+  what_will_this_unlock?: string;
+  what_evidence_will_count?: string;
 }
 
 interface DisclosedStageItem {
@@ -54,6 +56,10 @@ interface DisclosedStageItem {
   current_mission?: MissionItem | null;
   resources?: ResourceItem[];
   evidence_requirements?: string[];
+  why_now?: string;
+  prerequisite_rationale?: string;
+  what_will_this_unlock?: string;
+  what_evidence_will_count?: string;
 }
 
 interface MasteryDimensionsItem {
@@ -625,6 +631,36 @@ export function ProgressiveJourney() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-primary">Mission Objective</h4>
               <p className="text-sm font-semibold text-on-surface">{activeMission.objective}</p>
               <p className="text-xs text-on-surface-variant leading-relaxed">{activeMission.why}</p>
+            </div>
+
+            {/* Grounded Decision Transparency: Why Now, What Unlocks, Evidence Required */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3.5 rounded-2xl bg-surface border border-outline space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-primary block">
+                  Why this stage now?
+                </span>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  {activeStage.why_now || activeMission.why || `Stage ${activeStage.stage_number} is active as the primary foundational prerequisite.`}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-surface border border-outline space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-secondary block">
+                  What will this unlock?
+                </span>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  {activeStage.what_will_this_unlock || activeMission.what_will_this_unlock || `Unlocks subsequent milestones and practical competencies in ${activeStage.skills.slice(0, 2).join(", ")}.`}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-surface border border-outline space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">
+                  What evidence counts?
+                </span>
+                <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                  {activeStage.what_evidence_will_count || activeMission.what_evidence_will_count || activeMission.evidence_requirements?.[0] || "Verified portfolio repository or evaluation attempt submission."}
+                </p>
+              </div>
             </div>
 
             {/* Checklist Steps */}

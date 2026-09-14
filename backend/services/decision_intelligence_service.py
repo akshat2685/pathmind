@@ -146,7 +146,8 @@ class DecisionIntelligenceService:
         where_am_i_going = {
             "target_role": graph.goal_context.get("primary_target_role") or "Target Outcome",
             "readiness_tier": graph.career_context.get("readiness_tier", "DEVELOPING"),
-            "match_score": graph.career_context.get("overall_match_score", 65.0),
+            "match_score": graph.career_context.get("overall_match_score", 0.0),
+            "alignment_level": graph.career_context.get("alignment_level", "PROMISING"),
             "target_timeline": graph.goal_context.get("timeline") or "Self-Paced"
         }
 

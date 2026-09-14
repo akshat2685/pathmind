@@ -616,7 +616,7 @@ class ResumeAgent:
         if required_keywords:
             ats_score = int((len(matched_keywords) / len(required_keywords)) * 100)
         else:
-            ats_score = 100 if profile.skills else 50
+            ats_score = 0
 
         ats_recommendations = []
         if missing_keywords:

@@ -63,14 +63,15 @@ class CandidatePath(BaseModel):
     title: str
     domain: str
     description: str
-    fit_score: float
-    fit_level: str = "STRONG"  # HIGH, STRONG, MODERATE
-    confidence: str = "HIGH"  # HIGH, MEDIUM, LOW, INSUFFICIENT_EVIDENCE
+    fit_score: Optional[float] = None
+    fit_level: str = "PROMISING"  # HIGH_FIT, PROMISING, TRANSITIONAL, EXPLORATORY, INSUFFICIENT_EVIDENCE
+    confidence: str = "LOW"  # HIGH, MEDIUM, LOW, INSUFFICIENT_EVIDENCE
     
     # Explainability & Evidence
     why_it_matches: List[str] = Field(default_factory=list)
     supporting_evidence: List[str] = Field(default_factory=list)
     missing_evidence: List[str] = Field(default_factory=list)
+    transparency_summary: Dict[str, Any] = Field(default_factory=dict)
     
     # Skills Breakdown
     required_skills: List[str] = Field(default_factory=list)

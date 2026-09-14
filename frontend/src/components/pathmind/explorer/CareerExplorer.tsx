@@ -50,9 +50,15 @@ interface CandidatePathItem {
   title: string;
   domain: string;
   description: string;
-  fit_score: number;
+  fit_score?: number | null;
   fit_level: string;
   confidence: string;
+  transparency_summary?: {
+    what_we_know?: string[];
+    how_we_know_it?: string[];
+    what_remains_unknown?: string[];
+    what_could_change_this?: string[];
+  };
   why_it_matches: string[];
   supporting_evidence: string[];
   missing_evidence: string[];
@@ -397,12 +403,18 @@ export function CareerExplorer() {
                     <span className="font-note-handwritten text-xs uppercase tracking-wider text-secondary sketchy-chip px-2.5 py-0.5">
                       {path.domain}
                     </span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-headline-lg text-lg font-bold text-primary">
-                        {Math.round(path.fit_score)}%
-                      </span>
-                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary">
                         {path.fit_level} FIT
+                      </span>
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+                        path.confidence === "HIGH"
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : path.confidence === "MEDIUM"
+                          ? "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          : "border-slate-500/40 bg-slate-500/10 text-slate-600 dark:text-slate-400"
+                      }`}>
+                        {path.confidence} CONFIDENCE
                       </span>
                     </div>
                   </div>
@@ -429,17 +441,57 @@ export function CareerExplorer() {
                     </button>
 
                     {isWhyExpanded && (
-                      <div className="mt-2 p-3 rounded bg-surface-container/70 border border-outline-variant/30 text-xs space-y-1.5">
-                        <span className="font-bold text-[10px] uppercase text-outline block">Grounded Evidence:</span>
-                        {path.why_it_matches.map((w, i) => (
-                          <div key={i} className="flex items-start gap-1.5 text-on-surface">
-                            <span className="text-primary font-bold">&check;</span>
-                            <span>{w}</span>
+                      <div className="mt-2 p-3 rounded bg-surface-container/70 border border-outline-variant/30 text-xs space-y-2">
+                        <div>
+                          <span className="font-bold text-[10px] uppercase text-outline block mb-1">Grounded Evidence:</span>
+                          {path.why_it_matches.map((w, i) => (
+                            <div key={i} className="flex items-start gap-1.5 text-on-surface text-[11px]">
+                              <span className="text-primary font-bold">&check;</span>
+                              <span>{w}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {path.transparency_summary && (
+                          <div className="space-y-1.5 pt-2 border-t border-outline-variant/20">
+                            {path.transparency_summary.what_we_know && path.transparency_summary.what_we_know.length > 0 && (
+                              <div>
+                                <span className="font-bold text-[10px] uppercase text-primary block">What PATHMIND Knows:</span>
+                                <ul className="list-disc pl-3 text-[11px] text-on-surface-variant">
+                                  {path.transparency_summary.what_we_know.map((item, idx) => <li key={idx}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {path.transparency_summary.how_we_know_it && path.transparency_summary.how_we_know_it.length > 0 && (
+                              <div>
+                                <span className="font-bold text-[10px] uppercase text-secondary block">How We Know It:</span>
+                                <ul className="list-disc pl-3 text-[11px] text-on-surface-variant">
+                                  {path.transparency_summary.how_we_know_it.map((item, idx) => <li key={idx}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {path.transparency_summary.what_remains_unknown && path.transparency_summary.what_remains_unknown.length > 0 && (
+                              <div>
+                                <span className="font-bold text-[10px] uppercase text-amber-500 block">What Remains Unknown:</span>
+                                <ul className="list-disc pl-3 text-[11px] text-on-surface-variant">
+                                  {path.transparency_summary.what_remains_unknown.map((item, idx) => <li key={idx}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
+                            {path.transparency_summary.what_could_change_this && path.transparency_summary.what_could_change_this.length > 0 && (
+                              <div>
+                                <span className="font-bold text-[10px] uppercase text-tertiary block">What Could Change This:</span>
+                                <ul className="list-disc pl-3 text-[11px] text-on-surface-variant">
+                                  {path.transparency_summary.what_could_change_this.map((item, idx) => <li key={idx}>{item}</li>)}
+                                </ul>
+                              </div>
+                            )}
                           </div>
-                        ))}
+                        )}
+
                         {path.missing_evidence.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-outline-variant/20">
-                            <span className="font-bold text-[10px] uppercase text-amber-400 block">Missing Artifacts:</span>
+                          <div className="pt-2 border-t border-outline-variant/20">
+                            <span className="font-bold text-[10px] uppercase text-amber-400 block mb-1">Missing Evidence to Verify:</span>
                             {path.missing_evidence.map((m, i) => (
                               <div key={i} className="flex items-start gap-1.5 text-on-surface-variant text-[11px]">
                                 <span className="text-amber-400 font-bold">&bull;</span>

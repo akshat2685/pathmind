@@ -37,7 +37,13 @@ class ResumeFactValidator:
         for proj in sanitized.tailored_projects:
             title = proj.get("title", "").strip()
             provenance = proj.get("provenance", "").lower()
-            
+            claim_cat = str(proj.get("claim_category", "")).upper()
+
+            # Disallow inferred claims, speculative recommendations, or unverified facts
+            if claim_cat in ["INFERENCE", "UNKNOWN"] or "inferred" in provenance or "unverified recommendation" in provenance:
+                rejected_claims.append(f"Inferred or unverified recommendation claim '{title}' cannot become resume fact without verified artifact.")
+                continue
+
             title_matches = any(t in title.lower() or title.lower() in t for t in canonical_project_titles)
             provenance_verified = any(kw in provenance for kw in roadmap_milestone_keywords)
 
