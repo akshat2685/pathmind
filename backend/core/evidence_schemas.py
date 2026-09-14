@@ -41,7 +41,7 @@ class EvaluationAttempt(BaseModel):
     person_id: str
     attempt_number: int = 1
     status: str = "PASS"  # PASS, REINFORCE, INSUFFICIENT_EVIDENCE
-    score_accuracy: float = 85.0
+    score_accuracy: Optional[float] = None
     evaluation_detail: StructuredEvaluationDetail
     evaluated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

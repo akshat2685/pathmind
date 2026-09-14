@@ -22,6 +22,8 @@ class Mission(BaseModel):
     resources: List[Resource] = Field(default_factory=list)
     evidence_requirements: List[str] = Field(default_factory=list)
     completion_criteria: str
+    what_will_this_unlock: Optional[str] = None
+    what_evidence_will_count: Optional[str] = None
     status: str = "ACTIVE"  # ACTIVE, COMPLETED, PENDING, REINFORCING
 
     model_config = ConfigDict(populate_by_name=True)
@@ -32,6 +34,9 @@ class Stage(BaseModel):
     stage_number: int
     title: str
     objective: str
+    why_now: Optional[str] = None
+    prerequisite_rationale: Optional[str] = None
+    active_constraint_notes: Optional[str] = None
     skills: List[str] = Field(default_factory=list)
     prerequisites: List[str] = Field(default_factory=list)
     missions: List[Mission] = Field(default_factory=list)
@@ -168,6 +173,9 @@ class DisclosedStageView(BaseModel):
     objective: str
     skills: List[str] = Field(default_factory=list)
     estimated_effort: str
+    why_now: Optional[str] = None
+    what_will_this_unlock: Optional[str] = None
+    what_evidence_will_count: Optional[str] = None
     locked: bool
     status: str
     # Revealed only when NOT locked:

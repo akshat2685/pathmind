@@ -61,7 +61,10 @@ class CounselingAgent:
             contradictions.append(Contradiction(
                 reported_preference="Disinterest or aversion to programming/software.",
                 observed_evidence="Multiple programming/robotics projects, repositories, or hackathon activities found in profile evidence.",
-                suggested_clarification="Is your hesitation with programming itself, or with specific rigid classroom contexts vs practical creative building?"
+                suggested_clarification="There's a difference in the information PATHMIND has: Is your hesitation with programming itself, or with specific rigid classroom contexts vs practical creative building? Clarification will help refine recommendations.",
+                discrepancy_description="User declared aversion to coding while profile contains verified software artifacts.",
+                resolution_strategy="user_clarification",
+                user_action_needed="Clarify whether you prefer avoiding programming entirely or if past frustration was specific to prior coursework."
             ))
 
         # 2. Abstract High-Theory Goal vs Purely Artistic/Social Psychometric Profile
@@ -74,7 +77,21 @@ class CounselingAgent:
             contradictions.append(Contradiction(
                 reported_preference="Targeting abstract theoretical systems research.",
                 observed_evidence=f"Psychometric interest profile is significantly stronger in Artistic ({a_score}%) and Social ({s_score}%) than Investigative ({i_score}%).",
-                suggested_clarification="Would human-centered engineering, AI UX design, or interactive educational technology be more energizing than purely abstract theory?"
+                suggested_clarification="There's a difference in the information PATHMIND has: Would human-centered engineering, AI UX design, or interactive educational technology be more energizing than purely abstract theory? Clarification helps align your trajectory.",
+                discrepancy_description="Targeting high-theory research while interest assessment scores reflect significantly higher Social/Artistic affinity.",
+                resolution_strategy="both_presented",
+                user_action_needed="Indicate whether to prioritize theoretical depth or human-centered application."
+            ))
+
+        # 3. High Seniority Claim vs Zero Verified Evidence
+        if any(term in goals_text for term in ["expert", "lead architect", "senior engineer", "director"]) and len(evidence_items) == 0:
+            contradictions.append(Contradiction(
+                reported_preference="Self-declared senior/expert mastery level.",
+                observed_evidence="Zero verified portfolio artifacts, evaluations, or repositories submitted.",
+                suggested_clarification="There's a difference in the information PATHMIND has: To recommend advanced professional tiers with high confidence, PATHMIND requires verified work samples or assessment demonstrations.",
+                discrepancy_description="Self-declared seniority lacks verified supporting evidence.",
+                resolution_strategy="higher_verifiability_preferred",
+                user_action_needed="Submit verified project repositories, certifications, or complete diagnostic evaluations."
             ))
 
         return contradictions
@@ -143,9 +160,9 @@ class CounselingAgent:
             assessed_strengths.append(
                 CounselingFact(
                     category="ASSESSED",
-                    claim=f"High affinity for {strongest_interests[0]}",
-                    evidence=[f"Holland RIASEC score: {sorted_interests[0][1]}%"],
-                    confidence="HIGH",
+                    claim=f"Responses indicate stronger interest in {strongest_interests[0]} (interests reflect preferences, not ability or guaranteed outcome)",
+                    evidence=[f"Holland RIASEC measured preference: {sorted_interests[0][1]}%"],
+                    confidence="MEDIUM",
                     weight=EVIDENCE_WEIGHTS["ASSESSED_INSTRUMENT"],
                     source="Holland RIASEC Assessment"
                 )
@@ -154,9 +171,9 @@ class CounselingAgent:
                 assessed_strengths.append(
                     CounselingFact(
                         category="ASSESSED",
-                        claim=f"Strong secondary interest in {strongest_interests[1]}",
-                        evidence=[f"Holland RIASEC score: {sorted_interests[1][1]}%"],
-                        confidence="HIGH",
+                        claim=f"Responses indicate secondary interest in {strongest_interests[1]}",
+                        evidence=[f"Holland RIASEC measured preference: {sorted_interests[1][1]}%"],
+                        confidence="MEDIUM",
                         weight=EVIDENCE_WEIGHTS["ASSESSED_INSTRUMENT"],
                         source="Holland RIASEC Assessment"
                     )
@@ -290,8 +307,17 @@ class CounselingAgent:
                 )
             )
 
-        # Contradictions
+        # Contradictions & Conflict Notices
         contradictions = self.detect_contradictions(goals, constraints, evidence_items, interest_vector)
+        conflict_notices = [
+            {
+                "what_conflicts": [c.reported_preference, c.observed_evidence],
+                "discrepancy_description": c.discrepancy_description or c.reported_preference,
+                "resolution_strategy": c.resolution_strategy or "user_clarification",
+                "user_action_needed": c.user_action_needed or c.suggested_clarification
+            }
+            for c in contradictions
+        ]
 
         # Confidence
         confidence_cat = self.compute_categorical_confidence(
@@ -699,6 +725,7 @@ class CounselingAgent:
                 for c in constraints
             ],
             contradictions=contradictions,
+            conflict_notices=conflict_notices,
             unknowns=unknowns,
             evidence_gaps=evidence_gaps,
             candidate_directions=candidate_directions,

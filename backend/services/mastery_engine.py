@@ -97,7 +97,7 @@ class MasteryEngine:
             person_id=person_id,
             attempt_number=len(past_attempts) + 1,
             status=status,
-            score_accuracy=92.0 if is_pass else 65.0,
+            score_accuracy=float(target_stage.completion_rules.get("accuracy_threshold", 80.0)) if is_pass else 0.0,
             evaluation_detail=eval_detail
         )
         await self.store.save_evaluation_attempt(person_id, attempt.model_dump())

@@ -216,7 +216,7 @@ export function ContextCommandCenter() {
           </div>
           <h4 className="font-bold text-sm text-on-surface truncate">{data.where_am_i_going.target_role}</h4>
           <p className="text-[11px] text-on-surface-variant leading-tight">
-            Target Horizon: {data.where_am_i_going.target_timeline} • Match: {data.where_am_i_going.match_score}%
+            Target Horizon: {data.where_am_i_going.target_timeline} • Alignment: {data.where_am_i_going.readiness_tier}
           </p>
         </div>
 

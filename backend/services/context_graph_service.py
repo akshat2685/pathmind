@@ -93,10 +93,13 @@ class ContextGraphService:
 
         # 5. Career Readiness Context
         readiness = await self.readiness_engine.generate_career_readiness_report(person_id, roadmap.target_outcome)
+        total_reqs = len(readiness.transferable_skills.already_have) + len(readiness.categorized_gaps)
+        calc_match = round((len(readiness.transferable_skills.already_have) / max(1, total_reqs)) * 100, 1) if total_reqs > 0 else 0.0
         career_context = {
             "target_role": roadmap.target_outcome,
             "readiness_tier": readiness.readiness_state,
-            "overall_match_score": 75.0 if readiness.readiness_state != "FOUNDATIONAL" else 60.0,
+            "overall_match_score": calc_match,
+            "alignment_level": "STRONG" if calc_match >= 70 else ("PROMISING" if calc_match >= 30 else "DEVELOPING"),
             "critical_skill_gaps": [g.title for g in readiness.categorized_gaps if g.importance in ["HIGH", "CRITICAL"]],
             "verified_requirements_count": len(readiness.transferable_skills.already_have)
         }

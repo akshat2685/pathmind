@@ -60,6 +60,9 @@ class Contradiction(BaseModel):
     reported_preference: str
     observed_evidence: str
     suggested_clarification: str
+    discrepancy_description: Optional[str] = None
+    resolution_strategy: Optional[str] = "user_clarification"  # user_clarification, fresher_source_preferred, higher_verifiability_preferred, both_presented
+    user_action_needed: Optional[str] = None
 
 class CandidateDirection(BaseModel):
     title: str
@@ -93,6 +96,7 @@ class CounselingProfile(BaseModel):
     capability_signals: List[CounselingFact] = Field(default_factory=list)
     constraints: List[CounselingFact] = Field(default_factory=list)
     contradictions: List[Contradiction] = Field(default_factory=list)
+    conflict_notices: List[Dict[str, Any]] = Field(default_factory=list)
     unknowns: List[str] = Field(default_factory=list)
     evidence_gaps: List[str] = Field(
         default_factory=list,
