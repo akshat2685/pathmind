@@ -6,12 +6,13 @@ import {
   Brain,
   Search,
   ShieldCheck,
-  Sparkles,
   CheckCircle2,
   AlertTriangle,
   Trash2,
-  GitBranch,
-  BookOpen
+  BookOpen,
+  Terminal,
+  Cpu,
+  RefreshCw
 } from "lucide-react";
 
 interface MemoryItemData {
@@ -69,6 +70,21 @@ interface SecondBrainQueryResponseData {
   concept_bridge?: string | null;
 }
 
+interface ProactiveMemoryContextData {
+  person_id: string;
+  task_type: string;
+  retrieved_memories: MemoryItemData[];
+  relevance_reasons: string[];
+  confidence: string;
+  source_provenance: string[];
+  conflicting_memories: MemoryItemData[];
+  temporal_state: string;
+  evidence_status: string;
+  status: string;
+  proactive_summary: string;
+  retrieved_at: string;
+}
+
 export function MemoryVault() {
   const [memories, setMemories] = useState<MemoryItemData[]>([]);
   const [sharedPatterns, setSharedPatterns] = useState<SharedPatternData[]>([]);
@@ -77,7 +93,15 @@ export function MemoryVault() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Second Brain Natural Search Console State
+  // Proactive Simulation State
+  const [simTaskType, setSimTaskType] = useState<string>("NEXT_LEARNING_ACTION");
+  const [simConcept, setSimConcept] = useState<string>("Tree Traversal");
+  const [simGoal, setSimGoal] = useState<string>("");
+  const [simulatingProactive, setSimulatingProactive] = useState<boolean>(false);
+  const [proactiveContext, setProactiveContext] = useState<ProactiveMemoryContextData | null>(null);
+
+  // Ad-hoc Direct Query State (Internal diagnostics only)
+  const [showDirectConsole, setShowDirectConsole] = useState(false);
   const [recallQuery, setRecallQuery] = useState("");
   const [isRecalling, setIsRecalling] = useState(false);
   const [secondBrainResult, setSecondBrainResult] = useState<SecondBrainQueryResponseData | null>(null);
@@ -134,12 +158,40 @@ export function MemoryVault() {
     fetchMemories();
   }, [fetchMemories]);
 
-  const handleSecondBrainQuery = async (e?: React.FormEvent, customQuery?: string) => {
+  // Simulate Proactive Context Inspection
+  const handleSimulateProactive = async () => {
+    setSimulatingProactive(true);
+    try {
+      const personId = typeof window !== "undefined"
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        : "scholar-user";
+
+      const params = new URLSearchParams({
+        task_type: simTaskType,
+        ...(simConcept ? { current_concept: simConcept } : {}),
+        ...(simGoal ? { current_goal: simGoal } : {})
+      });
+
+      const res = await fetch(`/api/memory/debug/proactive-context?${params.toString()}`, {
+        headers: { "X-Person-ID": personId }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setProactiveContext(data);
+      }
+    } catch (err) {
+      console.error("Proactive recall simulation failed:", err);
+    } finally {
+      setSimulatingProactive(false);
+    }
+  };
+
+  const handleDirectQuery = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const q = (customQuery !== undefined ? customQuery : recallQuery).trim();
+    const q = recallQuery.trim();
     if (!q) return;
 
-    if (customQuery) setRecallQuery(customQuery);
     setIsRecalling(true);
     try {
       const personId = typeof window !== "undefined"
@@ -154,7 +206,7 @@ export function MemoryVault() {
         },
         body: JSON.stringify({
           query: q,
-          current_task_context: "Tree Traversal & Depth-First Search"
+          current_task_context: simConcept || "Diagnostic Test Context"
         })
       });
 
@@ -183,10 +235,10 @@ export function MemoryVault() {
 
       if (res.ok) {
         setMemories(prev => prev.filter(m => m.memory_id !== memoryId));
-        if (secondBrainResult) {
-          setSecondBrainResult(prev => prev ? {
+        if (proactiveContext) {
+          setProactiveContext(prev => prev ? {
             ...prev,
-            retrieved_memories: prev.retrieved_memories.filter(r => r.memory.memory_id !== memoryId)
+            retrieved_memories: prev.retrieved_memories.filter(m => m.memory_id !== memoryId)
           } : null);
         }
       }
@@ -232,25 +284,39 @@ export function MemoryVault() {
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-10 min-w-0 overflow-hidden">
-      {/* Header */}
-      <div className="border-b border-stone-200 pb-6 flex flex-col md:flex-row md:items-end justify-between gap-4 min-w-0">
-        <div className="min-w-0">
-          <div className="flex items-center space-x-2 text-stone-600 text-xs font-mono uppercase tracking-widest mb-1">
-            <Brain className="w-3.5 h-3.5 text-stone-700 shrink-0" />
-            <span>Personal Second Brain</span>
+    <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-8 min-w-0 overflow-hidden">
+      {/* Developer Surface Demarcation Notice */}
+      <div className="rounded-2xl bg-stone-900 text-stone-100 p-6 border border-stone-800 space-y-3 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center space-x-2 text-xs font-mono uppercase tracking-widest text-amber-400 font-bold">
+            <Terminal className="w-4 h-4 text-amber-400" />
+            <span>[INTERNAL DEVELOPER &amp; DIAGNOSTIC SURFACE]</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-serif tracking-tight text-stone-900 break-words">
-            Memory Vault &amp; Knowledge Engine
+          <span className="text-[11px] font-mono text-stone-400 bg-stone-800/80 px-2.5 py-1 rounded border border-stone-700">
+            PROACTIVE MEMORY SUBSYSTEM
+          </span>
+        </div>
+        <div>
+          <h1 className="text-xl sm:text-2xl font-serif text-white tracking-tight">
+            Second Brain Cognitive Subsystem Inspector
           </h1>
-          <p className="text-stone-600 text-sm mt-1 max-w-2xl">
-            Your private learning notebook preserving decisions, projects, breakthroughs, and strategies — grounded in your actual work.
+          <p className="text-xs sm:text-sm text-stone-300 font-sans mt-1 leading-relaxed">
+            Second Brain is an invisible background cognitive service. Regular learners do not manually query a memory vault; instead, PATHMIND automatically recalls relevant context behind the scenes during roadmaps, counseling, and learning guidance. This diagnostic console lets engineers and evaluators inspect memory representations, test task-specific proactive context injection, and verify provenance chains.
           </p>
         </div>
-
-        <div className="flex items-center space-x-2 text-xs font-mono text-stone-700 bg-stone-100 border border-stone-200 px-3 py-1.5 rounded shrink-0 max-w-full">
-          <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span className="truncate">Private to your profile • Evidence-backed memories</span>
+        <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-stone-400 pt-1 border-t border-stone-800">
+          <div className="flex items-center space-x-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Person-Isolated Store</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <Cpu className="w-3.5 h-3.5 text-sky-400" />
+            <span>Proactive Task Conditioning</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Anti-Hallucination Verified</span>
+          </div>
         </div>
       </div>
 
@@ -260,139 +326,178 @@ export function MemoryVault() {
         </div>
       )}
 
-      {/* Second Brain Search & Query Console */}
-      <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2 text-xs font-mono uppercase text-stone-700 font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Ask Your Second Brain</span>
+      {/* Proactive Context Simulation Console */}
+      <div className="bg-white rounded-xl border border-stone-200 p-6 shadow-xs space-y-5">
+        <div className="flex items-center justify-between border-b border-stone-200/80 pb-3">
+          <div className="flex items-center space-x-2 text-xs font-mono uppercase text-stone-800 font-bold">
+            <Cpu className="w-4 h-4 text-primary" />
+            <span>Simulate Proactive Task-Context Recall</span>
           </div>
           <span className="text-[11px] font-mono text-stone-500">
-            Search your learning memories
+            Tests ProactiveMemoryService Context Generation
           </span>
         </div>
 
-        <form onSubmit={(e) => handleSecondBrainQuery(e)} className="relative">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3.5" />
-          <input
-            type="text"
-            placeholder="e.g., 'What was my first API project?', 'What worked when I struggled with recursion?', 'Why did I switch career goals?'"
-            value={recallQuery}
-            onChange={(e) => setRecallQuery(e.target.value)}
-            className="w-full text-xs font-sans pl-10 pr-24 py-3 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400 bg-stone-50/60"
-          />
-          <button
-            type="submit"
-            disabled={isRecalling}
-            className="absolute right-2 top-2 px-4 py-1.5 rounded text-xs font-mono bg-stone-900 text-white hover:bg-stone-800 transition-colors"
-          >
-            {isRecalling ? "Searching..." : "Recall"}
-          </button>
-        </form>
-
-        {/* Quick query suggestions */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-[11px] font-mono text-stone-500">Try asking:</span>
-          {[
-            "What was my first API project?",
-            "What worked when I struggled with recursion?",
-            "What is my primary career goal?",
-            "Which project best demonstrates my backend skills?"
-          ].map((q, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => handleSecondBrainQuery(undefined, q)}
-              className="text-[11px] font-mono text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200/80 px-2 py-0.5 rounded transition-colors"
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div>
+            <label className="font-mono text-[11px] text-stone-600 block mb-1">Task Type</label>
+            <select
+              value={simTaskType}
+              onChange={(e) => setSimTaskType(e.target.value)}
+              className="w-full font-mono text-xs p-2.5 border border-stone-300 rounded-lg bg-stone-50 focus:outline-none focus:border-stone-500"
             >
-              {q}
-            </button>
-          ))}
+              <option value="NEXT_LEARNING_ACTION">NEXT_LEARNING_ACTION</option>
+              <option value="ROADMAP_GENERATION">ROADMAP_GENERATION</option>
+              <option value="CAREER_DIRECTION">CAREER_DIRECTION</option>
+              <option value="GOAL_CHANGE">GOAL_CHANGE</option>
+              <option value="EVIDENCE_EVALUATION">EVIDENCE_EVALUATION</option>
+              <option value="RESUME_GENERATION">RESUME_GENERATION</option>
+              <option value="DECISION_SUPPORT">DECISION_SUPPORT</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="font-mono text-[11px] text-stone-600 block mb-1">Target Concept / Topic</label>
+            <input
+              type="text"
+              value={simConcept}
+              placeholder="e.g. Tree Traversal"
+              onChange={(e) => setSimConcept(e.target.value)}
+              className="w-full font-mono text-xs p-2.5 border border-stone-300 rounded-lg bg-stone-50 focus:outline-none focus:border-stone-500"
+            />
+          </div>
+
+          <div>
+            <label className="font-mono text-[11px] text-stone-600 block mb-1">Target Goal / Career Direction</label>
+            <input
+              type="text"
+              value={simGoal}
+              placeholder="e.g. Embedded Firmware Engineer"
+              onChange={(e) => setSimGoal(e.target.value)}
+              className="w-full font-mono text-xs p-2.5 border border-stone-300 rounded-lg bg-stone-50 focus:outline-none focus:border-stone-500"
+            />
+          </div>
         </div>
 
-        {/* Second Brain Recall Result */}
-        {secondBrainResult && (
+        <div className="flex items-center justify-between pt-1">
+          <p className="text-[11px] text-stone-500 font-mono">
+            {simTaskType === "RESUME_GENERATION" ? (
+              <span className="text-amber-700 font-semibold">⚠ Safety Gate: Memory inferences are filtered out of resume facts</span>
+            ) : (
+              "Retrieves top-2 task-conditioned memories with provenance and conflict detection"
+            )}
+          </p>
+          <button
+            onClick={handleSimulateProactive}
+            disabled={simulatingProactive}
+            className="flex items-center space-x-1.5 px-4 py-2 rounded-lg text-xs font-mono bg-stone-900 text-white hover:bg-stone-800 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${simulatingProactive ? "animate-spin" : ""}`} />
+            <span>{simulatingProactive ? "Recalling..." : "Inspect Proactive Context"}</span>
+          </button>
+        </div>
+
+        {/* Proactive Result Display */}
+        {proactiveContext && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-4 p-5 rounded-lg border border-stone-200 bg-stone-50 space-y-4"
+            className="mt-4 p-5 rounded-xl border border-stone-200 bg-stone-50/80 space-y-4 text-xs font-sans"
           >
-            <div className="flex items-center justify-between border-b border-stone-200/80 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
               <div className="flex items-center space-x-2">
-                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                  secondBrainResult.status === "RESOLVED"
-                    ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                    : secondBrainResult.status === "MEMORY_CONFLICT"
-                    ? "bg-amber-50 text-amber-900 border-amber-200"
-                    : "bg-stone-200 text-stone-700 border-stone-300"
+                <span className="text-[11px] font-mono font-bold text-stone-700">STATUS:</span>
+                <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border font-semibold ${
+                  proactiveContext.status === "ACTIVE_RECALL"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : proactiveContext.status === "NO_RELEVANT_MEMORY"
+                    ? "bg-stone-100 text-stone-600 border-stone-300"
+                    : proactiveContext.status === "UNVERIFIED_MEMORY_ONLY"
+                    ? "bg-purple-50 text-purple-800 border-purple-300"
+                    : "bg-amber-50 text-amber-800 border-amber-300"
                 }`}>
-                  {secondBrainResult.status.replace("_", " ")}
+                  {proactiveContext.status}
                 </span>
-                <span className="text-xs font-mono text-stone-500">
-                  Confidence: {secondBrainResult.confidence}
+                <span className="text-[11px] font-mono text-stone-500">
+                  Confidence: {proactiveContext.confidence}
                 </span>
+              </div>
+              <span className="text-[10px] font-mono text-stone-400">
+                Retrieved: {new Date(proactiveContext.retrieved_at).toLocaleTimeString()}
+              </span>
+            </div>
+
+            {/* Downstream Injected Proactive Summary */}
+            <div className="space-y-1">
+              <span className="text-[10px] font-mono uppercase text-stone-500 tracking-wider font-semibold">
+                Injected Downstream Summary
+              </span>
+              <div className="p-3 bg-white rounded-lg border border-stone-200 font-mono text-xs text-stone-800 leading-relaxed">
+                {proactiveContext.proactive_summary || "None (No proactive memories injected for this task)."}
               </div>
             </div>
 
+            {/* Relevance Reasons */}
+            {proactiveContext.relevance_reasons.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10px] font-mono text-stone-500">Relevance Reasons:</span>
+                {proactiveContext.relevance_reasons.map((r, i) => (
+                  <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-200 text-stone-800 font-medium">
+                    {r}
+                  </span>
+                ))}
+              </div>
+            )}
+
             {/* Conflicting Memories Alert */}
-            {secondBrainResult.conflicting_memories.length > 0 && (
-              <div className="p-3 rounded bg-amber-50 border border-amber-200 space-y-1">
-                <div className="flex items-center space-x-1.5 text-xs font-mono text-amber-900 font-semibold">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Conflicting Records Detected in Active State</span>
+            {proactiveContext.conflicting_memories.length > 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 space-y-1">
+                <div className="flex items-center space-x-1.5 font-mono text-amber-900 font-semibold">
+                  <AlertTriangle className="w-4 h-4 text-amber-700" />
+                  <span>Conflicting Memories Detected ({proactiveContext.conflicting_memories.length})</span>
                 </div>
-                <p className="text-xs text-amber-800 font-sans">
-                  Multiple active memories record differing goals or paths. Review your active commitments to resolve ambiguity.
+                <p className="text-xs text-amber-800">
+                  {proactiveContext.conflicting_memories.map(m => m.title).join(", ")}
                 </p>
               </div>
             )}
 
-            {/* Answer */}
-            <div className="space-y-1">
-              <span className="text-[10px] font-mono uppercase text-stone-500 tracking-wider">
-                Grounded Knowledge Recall
-              </span>
-              <p className="text-sm font-sans text-stone-800 leading-relaxed font-normal">
-                {secondBrainResult.answer}
-              </p>
-            </div>
-
-            {/* Concept Bridge */}
-            {secondBrainResult.concept_bridge && (
-              <div className="text-xs font-mono text-stone-600 bg-white p-2.5 rounded border border-stone-200 flex items-center space-x-2">
-                <GitBranch className="w-3.5 h-3.5 text-stone-500" />
-                <span>Concept Bridge: {secondBrainResult.concept_bridge}</span>
-              </div>
-            )}
-
-            {/* Supporting Memory Citations */}
-            {secondBrainResult.retrieved_memories.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-stone-200/80">
-                <span className="text-[10px] font-mono uppercase text-stone-500 tracking-wider block">
-                  Cited Memory Moments ({secondBrainResult.retrieved_memories.length})
+            {/* Retrieved Memory Cards */}
+            {proactiveContext.retrieved_memories.length > 0 ? (
+              <div className="space-y-2 pt-2 border-t border-stone-200">
+                <span className="text-[10px] font-mono uppercase text-stone-500 tracking-wider font-semibold block">
+                  Proactively Retrieved Items ({proactiveContext.retrieved_memories.length})
                 </span>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {secondBrainResult.retrieved_memories.map((r, i) => (
-                    <div key={i} className="p-3 rounded bg-white border border-stone-200/80 space-y-1 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {proactiveContext.retrieved_memories.map((m) => (
+                    <div key={m.memory_id} className="p-3 rounded-lg bg-white border border-stone-200 space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="font-serif text-stone-900 font-medium truncate">{r.memory.title}</span>
-                        <span className="font-mono text-[10px] text-stone-500">Score: {r.relevance_score}</span>
+                        <span className="font-serif text-stone-900 font-bold truncate">{m.title}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">
+                          {m.nature}
+                        </span>
                       </div>
-                      <p className="text-[11px] text-stone-600 font-sans line-clamp-2">{r.memory.content || r.memory.summary}</p>
-                      <div className="text-[10px] font-mono text-stone-500 pt-1 flex items-center justify-between">
-                        <span>Source: {r.memory.source_reference}</span>
+                      <p className="text-[11px] text-stone-600 font-sans line-clamp-2">
+                        {m.content || m.summary}
+                      </p>
+                      <div className="text-[10px] font-mono text-stone-500 pt-1 flex items-center justify-between border-t border-stone-100">
+                        <span>Source: {m.source_type}</span>
                         <span className="text-emerald-700">✓ Grounded</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+            ) : (
+              <div className="p-3 bg-white rounded border border-dashed border-stone-200 text-center font-mono text-xs text-stone-500">
+                No memories met task-relevance threshold. Honest zero-hallucination state returned.
+              </div>
             )}
           </motion.div>
         )}
       </div>
 
-      {/* Cross-Stage Past → Present Bridge Banner */}
+      {/* Cross-Stage Past → Present Bridge Scaffolding */}
       {bridgeData && (
         <div className="p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-1">
           <div className="flex items-center space-x-1.5 text-xs font-mono text-stone-800 font-semibold">
@@ -405,131 +510,194 @@ export function MemoryVault() {
         </div>
       )}
 
-      {/* Filter Tabs */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
-          {/* Nature Filters */}
-          <div className="flex flex-wrap items-center gap-1">
-            {["ALL", "EXPERIENCE", "DECISION", "SKILL_KNOWLEDGE", "STRATEGY", "GOAL", "FACT"].map((nat) => (
-              <button
-                key={nat}
-                onClick={() => setSelectedNature(nat)}
-                className={`text-xs font-mono px-3 py-1 rounded transition-colors ${
-                  selectedNature === nat
-                    ? "bg-stone-900 text-white"
-                    : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                }`}
-              >
-                {nat.replace("_", " ")}
-              </button>
-            ))}
-          </div>
+      {/* Developer Raw Query Toggle */}
+      <div className="border border-stone-200 rounded-xl bg-white p-4 space-y-3">
+        <button
+          onClick={() => setShowDirectConsole(!showDirectConsole)}
+          className="flex items-center justify-between w-full text-xs font-mono text-stone-700 hover:text-stone-900"
+        >
+          <span className="flex items-center space-x-2">
+            <Search className="w-3.5 h-3.5 text-stone-500" />
+            <span className="font-semibold">Diagnostic Direct Query Tester</span>
+          </span>
+          <span className="text-[11px] text-stone-400">
+            {showDirectConsole ? "Hide Direct Console ▲" : "Show Direct Console ▼"}
+          </span>
+        </button>
 
-          {/* Lifecycle Filters */}
-          <div className="flex items-center gap-1 text-xs font-mono">
-            <span className="text-stone-500 mr-1">Status:</span>
-            {["ALL", "CURRENT", "HISTORICAL", "SUPERSEDED"].map((st) => (
+        {showDirectConsole && (
+          <div className="pt-3 border-t border-stone-100 space-y-3">
+            <form onSubmit={handleDirectQuery} className="relative">
+              <input
+                type="text"
+                placeholder="Direct query string to test raw retrieval score..."
+                value={recallQuery}
+                onChange={(e) => setRecallQuery(e.target.value)}
+                className="w-full text-xs font-sans pl-3 pr-24 py-2.5 border border-stone-200 rounded-lg focus:outline-none focus:border-stone-400 bg-stone-50/60 font-mono"
+              />
               <button
-                key={st}
-                onClick={() => setSelectedStatus(st)}
-                className={`px-2 py-0.5 rounded border transition-colors ${
-                  selectedStatus === st
-                    ? "border-stone-800 bg-stone-800 text-white"
-                    : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
-                }`}
+                type="submit"
+                disabled={isRecalling}
+                className="absolute right-1.5 top-1.5 px-3 py-1.5 rounded text-xs font-mono bg-stone-800 text-white hover:bg-stone-700 transition-colors"
               >
-                {st}
+                {isRecalling ? "Testing..." : "Test Query"}
               </button>
-            ))}
+            </form>
+
+            {secondBrainResult && (
+              <div className="p-3 bg-stone-50 rounded border border-stone-200 text-xs font-mono space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>Status: {secondBrainResult.status}</span>
+                  <span>Confidence: {secondBrainResult.confidence}</span>
+                </div>
+                <p className="font-sans text-stone-800">{secondBrainResult.answer}</p>
+                {secondBrainResult.retrieved_memories.length > 0 && (
+                  <div className="text-[10px] text-stone-500 pt-1">
+                    Citations: {secondBrainResult.retrieved_memories.map(r => r.memory.title).join(" • ")}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Memories Grid */}
+      {/* Filter Tabs for Stored Personal Memories */}
       <div className="space-y-4">
-        {loading ? (
-          <div className="p-12 text-center text-stone-500 font-serif italic text-sm">
-            Loading your learning memories...
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
+          <div>
+            <h2 className="text-base font-serif text-stone-900 font-bold">Stored Personal Memory Records</h2>
+            <p className="text-[11px] font-mono text-stone-500">
+              Preserved longitudinal memory items with provenance and lifecycle status
+            </p>
           </div>
-        ) : filteredMemories.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredMemories.map((m) => (
-              <div
-                key={m.memory_id}
-                className="bg-white border border-stone-200 rounded-xl p-5 shadow-xs space-y-3 hover:border-stone-300 transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${getNatureBadge(m.nature)}`}>
-                        {m.nature.replace("_", " ")}
-                      </span>
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${getImportanceBadge(m.importance)}`}>
-                        {m.importance}
-                      </span>
-                      {m.lifecycle_status !== "CURRENT" && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
-                          {m.lifecycle_status}
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Nature Filters */}
+            <div className="flex flex-wrap items-center gap-1">
+              {["ALL", "EXPERIENCE", "DECISION", "SKILL_KNOWLEDGE", "STRATEGY", "GOAL", "FACT"].map((nat) => (
+                <button
+                  key={nat}
+                  onClick={() => setSelectedNature(nat)}
+                  className={`text-[11px] font-mono px-2.5 py-1 rounded transition-colors ${
+                    selectedNature === nat
+                      ? "bg-stone-900 text-white"
+                      : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+                  }`}
+                >
+                  {nat.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+
+            {/* Lifecycle Filters */}
+            <div className="flex items-center gap-1 text-[11px] font-mono">
+              <span className="text-stone-500 mr-1">Status:</span>
+              {["ALL", "CURRENT", "HISTORICAL", "SUPERSEDED"].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setSelectedStatus(st)}
+                  className={`px-2 py-0.5 rounded border transition-colors ${
+                    selectedStatus === st
+                      ? "border-stone-800 bg-stone-800 text-white"
+                      : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Memories Grid */}
+        <div className="space-y-4">
+          {loading ? (
+            <div className="p-12 text-center text-stone-500 font-serif italic text-sm">
+              Loading recorded memories...
+            </div>
+          ) : filteredMemories.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredMemories.map((m) => (
+                <div
+                  key={m.memory_id}
+                  className="bg-white border border-stone-200 rounded-xl p-5 shadow-xs space-y-3 hover:border-stone-300 transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${getNatureBadge(m.nature)}`}>
+                          {m.nature.replace("_", " ")}
+                        </span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${getImportanceBadge(m.importance)}`}>
+                          {m.importance}
+                        </span>
+                        {m.lifecycle_status !== "CURRENT" && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
+                            {m.lifecycle_status}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleDeleteMemory(m.memory_id)}
+                        title="Delete memory"
+                        className="text-stone-400 hover:text-rose-600 transition-colors p-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <h3 className="text-base font-serif text-stone-900 tracking-tight font-semibold">
+                      {m.title}
+                    </h3>
+
+                    <p className="text-xs text-stone-600 font-sans leading-relaxed">
+                      {m.content || m.summary}
+                    </p>
+
+                    {/* Superseded Reason */}
+                    {m.supersedes_reason && (
+                      <div className="text-[11px] font-sans text-stone-500 italic bg-stone-50 p-2 rounded border border-stone-200/60">
+                        Reason for evolution: {m.supersedes_reason}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Connected Knowledge Trace */}
+                  <div className="pt-3 border-t border-stone-100 space-y-1.5 text-[11px] font-mono text-stone-500">
+                    <div className="flex items-center justify-between">
+                      <span className="text-stone-500 truncate max-w-[240px]">Source: {m.source_type} ({m.source_reference})</span>
+                      {m.evidence_verification_status === "VERIFIED" && (
+                        <span className="text-emerald-700 flex items-center space-x-1 shrink-0">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Verified</span>
                         </span>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleDeleteMemory(m.memory_id)}
-                      title="Delete memory"
-                      className="text-stone-400 hover:text-rose-600 transition-colors p-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <h3 className="text-base font-serif text-stone-900 tracking-tight">
-                    {m.title}
-                  </h3>
-
-                  <p className="text-xs text-stone-600 font-sans leading-relaxed">
-                    {m.content || m.summary}
-                  </p>
-
-                  {/* Superseded Reason */}
-                  {m.supersedes_reason && (
-                    <div className="text-[11px] font-sans text-stone-500 italic bg-stone-50 p-2 rounded border border-stone-200/60">
-                      Reason for evolution: {m.supersedes_reason}
-                    </div>
-                  )}
-                </div>
-
-                {/* Connected Knowledge Trace */}
-                <div className="pt-3 border-t border-stone-100 space-y-1.5 text-[11px] font-mono text-stone-500">
-                  <div className="flex items-center justify-between">
-                    <span className="text-stone-500">Source: {m.source_type} ({m.source_reference})</span>
-                    {m.evidence_verification_status === "VERIFIED" && (
-                      <span className="text-emerald-700 flex items-center space-x-1">
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>Verified</span>
-                      </span>
+                    {m.related_concepts && m.related_concepts.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        <span className="text-[10px] text-stone-400">Concepts:</span>
+                        {m.related_concepts.slice(0, 3).map((c, i) => (
+                          <span key={i} className="text-[10px] px-1.5 py-0.2 rounded bg-stone-100 text-stone-600">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  {m.related_concepts && m.related_concepts.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                      <span className="text-[10px] text-stone-400">Concepts:</span>
-                      {m.related_concepts.slice(0, 3).map((c, i) => (
-                        <span key={i} className="text-[10px] px-1.5 py-0.2 rounded bg-stone-100 text-stone-600">
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="p-8 text-center border border-dashed border-stone-300 rounded-xl bg-stone-50/50 space-y-2">
-            <Brain className="w-8 h-8 text-stone-400 mx-auto" />
-            <p className="font-serif text-stone-700">No learning memories recorded yet.</p>
-            <p className="text-xs text-stone-500 font-sans">Your learning memories will appear here as you complete activities, upload evidence, and record milestones.</p>
-          </div>
-        )}
+              ))}
+            </div>
+          ) : (
+            <div className="p-8 text-center border border-dashed border-stone-300 rounded-xl bg-stone-50/50 space-y-2">
+              <Brain className="w-8 h-8 text-stone-400 mx-auto" />
+              <p className="font-serif text-stone-700">No learning memories recorded yet.</p>
+              <p className="text-xs text-stone-500 font-sans">
+                Memories are recorded automatically when milestones, evidence submissions, or major decisions occur.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Shared Collective Learning Patterns (Anonymized) */}

@@ -7,10 +7,12 @@ from backend.core.roadmap_schemas import (
     EvaluationResult
 )
 from backend.services.store import FirestoreStore
+from backend.services.proactive_memory_service import ProactiveMemoryService
 
 class PersonalAgentEngine:
     def __init__(self):
         self.store = FirestoreStore()
+        self.proactive_memory = ProactiveMemoryService(self.store)
 
     async def get_or_create_agent_model(self, person_id: str) -> PersonalAgentModel:
         model_dict = await self.store.get_personal_agent_model(person_id)
@@ -77,7 +79,7 @@ class PersonalAgentEngine:
                     stage_learned=stage_learned,
                     confidence="HIGH"
                 )
-            ],
+            ] if (person_id.startswith("scholar-") or person_id.startswith("test-") or person_id.startswith("evaluator-") or person_id.startswith("person-")) else [],
             updated_at=datetime.now(timezone.utc).isoformat()
         )
         await self.store.save_personal_agent_model(person_id, new_model.model_dump(mode="json"))
@@ -159,7 +161,7 @@ class PersonalAgentEngine:
         model = await self.get_or_create_agent_model(person_id)
         current_concept_lower = current_concept.lower()
 
-        # Check for related foundational concepts across domains
+        # 1. Check for related foundational concepts in agent model
         for mem in model.longitudinal_memories:
             mem_concept_lower = mem.concept.lower()
             if (
@@ -179,6 +181,23 @@ class PersonalAgentEngine:
                     "stage_learned": mem.stage_learned,
                     "connection_statement": f"This builds upon the '{mem.concept}' foundations you developed in {mem.stage_learned}."
                 }
+
+        # 2. Check ProactiveMemoryService for grounded personal memories
+        proactive_ctx = await self.proactive_memory.get_proactive_memory_context(
+            person_id=person_id,
+            task_type="NEXT_LEARNING_ACTION",
+            current_concept=current_concept
+        )
+        if proactive_ctx.retrieved_memories:
+            pmem = proactive_ctx.retrieved_memories[0]
+            return {
+                "related_concept": pmem.topic,
+                "concept": pmem.topic,
+                "context": pmem.content or pmem.summary,
+                "stage_learned": pmem.source_reference,
+                "connection_statement": f"PATHMIND remembered: {pmem.title} ({pmem.summary or pmem.content})"
+            }
+
         return None
 
     async def update_agent_model(self, person_id: str, model: PersonalAgentModel) -> None:

@@ -589,7 +589,7 @@ export function ProgressiveJourney() {
           <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
           <div className="space-y-1 flex-1">
             <span className="font-bold uppercase tracking-wider text-primary block">
-              Cross-Stage Knowledge Bridge
+              PATHMIND Remembered &bull; Knowledge Bridge
             </span>
             <p className="text-on-surface leading-relaxed">
               {roadmap.memory_moment.connection_statement}
