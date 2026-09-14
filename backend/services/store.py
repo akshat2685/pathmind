@@ -541,6 +541,12 @@ class FirestoreStore:
         except Exception:
             return self._in_memory_persons[person_id].get("career_goal")
 
+    async def save_goal(self, person_id: str, goal_data: Dict[str, Any]) -> None:
+        await self.save_career_goal(person_id, goal_data)
+
+    async def get_goal(self, person_id: str) -> Optional[Dict[str, Any]]:
+        return await self.get_career_goal(person_id)
+
     # --- Readiness Reports & Transition Records ---
     async def save_readiness_report(self, person_id: str, report_data: Dict[str, Any]) -> None:
         self._ensure_person_bucket(person_id)

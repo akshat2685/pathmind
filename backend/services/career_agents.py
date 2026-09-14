@@ -278,98 +278,71 @@ class ResumeAgent:
         target_opportunity: Optional[VerifiedOpportunity] = None
     ) -> TailoredResume:
         # Build fact-grounded summary
-        degree_str = profile.education[0].field_of_study if profile.education else "Computer Science & Mathematics"
-        summary = (
-            f"Aspiring {target_role} with verified academic foundations in {degree_str}. "
-            f"Demonstrated hands-on experience developing modular Python data pipelines, automated unit test suites, "
-            f"and practical engineering solutions."
-        )
+        parts = [f"Candidate targeting {target_role}."]
+        if profile.education:
+            deg = profile.education[0]
+            parts.append(f"Academic background in {deg.field_of_study or deg.degree} from {deg.institution}.")
+        if profile.skills:
+            parts.append(f"Demonstrated competencies in: {', '.join(profile.skills[:5])}.")
+        summary = " ".join(parts)
 
-        # Grounded projects
+        # Grounded projects (Strictly from profile facts)
         projects_data = []
         provenance_map = {}
-        if profile.projects:
-            for p in profile.projects:
-                projects_data.append({
-                    "title": p.title,
-                    "technologies": p.technologies,
-                    "description": p.description,
-                    "provenance": p.provenance
-                })
-                provenance_map[p.title] = p.provenance
-        else:
-            projects_data = [
-                {
-                    "title": "Modular Data Parser & Stream Ingestion Pipeline",
-                    "technologies": ["Python", "Pytest", "Dataclasses", "Type Hints"],
-                    "description": "Engineered a memory-efficient generator-based ETL pipeline with 85%+ branch coverage unit test assertions.",
-                    "provenance": "Verified in Stage 01 Milestone"
-                },
-                {
-                    "title": "National Hackathon ML Classifier & Hardware Robot",
-                    "technologies": ["Python", "Arduino", "Scikit-Learn"],
-                    "description": "Developed an autonomous sensor-guided robot and image classification model.",
-                    "provenance": "Verified in Student Longitudinal Portfolio"
-                }
-            ]
-            provenance_map["Modular Data Parser & Stream Ingestion Pipeline"] = "Verified in Stage 01 Milestone"
-            provenance_map["National Hackathon ML Classifier & Hardware Robot"] = "Verified in Student Longitudinal Portfolio"
+        for p in profile.projects:
+            prov = p.provenance or "Verified Project Artifact"
+            projects_data.append({
+                "title": p.title,
+                "technologies": p.technologies,
+                "description": p.description,
+                "provenance": prov
+            })
+            provenance_map[p.title] = prov
 
-        # Grounded experience
+        # Grounded experience (Strictly from profile facts)
         experience_data = []
-        if profile.experience:
-            for exp in profile.experience:
-                experience_data.append({
-                    "role": exp.role,
-                    "organization": exp.organization,
-                    "duration": exp.duration,
-                    "description": exp.description
-                })
-        else:
-            experience_data = [
-                {
-                    "role": "Student Scholar & Technical Contributor",
-                    "organization": "PATHMIND Longitudinal Learning Program",
-                    "duration": "2026 – Present",
-                    "description": "Progressive mastery of applied software engineering and mathematical foundations for machine learning systems."
-                }
-            ]
+        for exp in profile.experience:
+            experience_data.append({
+                "role": exp.role,
+                "organization": exp.organization,
+                "duration": exp.duration,
+                "description": exp.description
+            })
 
-        # Grounded education
+        # Grounded education (Strictly from profile facts)
         education_data = []
-        if profile.education:
-            for edu in profile.education:
-                education_data.append({
-                    "degree": edu.degree,
-                    "field": edu.field_of_study,
-                    "institution": edu.institution,
-                    "year": edu.year or "2026"
-                })
-        else:
-            education_data = [
-                {
-                    "degree": "Senior Secondary (STEM Foundations)",
-                    "field": "Mathematics, Physics, Computer Science",
-                    "institution": "Central Board of Secondary Education",
-                    "year": "2026"
-                }
-            ]
+        for edu in profile.education:
+            education_data.append({
+                "degree": edu.degree,
+                "field": edu.field_of_study,
+                "institution": edu.institution,
+                "year": edu.year or ""
+            })
 
         # ATS Analysis
-        required_keywords = target_opportunity.required_skills if target_opportunity else ["Python", "Pytest", "Linear Algebra", "Git", "Data Structures"]
-        skills_held = {s.lower() for s in (profile.skills or ["Python", "Pytest", "Linear Algebra", "Git"])}
+        skills_held = {s.lower().strip() for s in profile.skills}
+        if target_opportunity and target_opportunity.required_skills:
+            required_keywords = target_opportunity.required_skills
+        elif profile.skills:
+            required_keywords = profile.skills[:5]
+        else:
+            required_keywords = []
 
-        matched_keywords = [kw for kw in required_keywords if kw.lower() in skills_held]
-        missing_keywords = [kw for kw in required_keywords if kw.lower() not in skills_held]
+        matched_keywords = [kw for kw in required_keywords if any(kw.lower() in s or s in kw.lower() for s in skills_held)]
+        missing_keywords = [kw for kw in required_keywords if not any(kw.lower() in s or s in kw.lower() for s in skills_held)]
 
-        ats_score = int((len(matched_keywords) / max(len(required_keywords), 1)) * 100) if required_keywords else 85
-        if ats_score == 0:
-            ats_score = 65
+        if required_keywords:
+            ats_score = int((len(matched_keywords) / len(required_keywords)) * 100)
+        else:
+            ats_score = 100 if profile.skills else 50
 
         ats_recommendations = []
         if missing_keywords:
-            ats_recommendations.append(f"Complete upcoming milestone projects to add verified evidence for: {', '.join(missing_keywords[:2])}.")
-        ats_recommendations.append("Include repository links and benchmark throughput metrics in project descriptions.")
+            ats_recommendations.append(f"Complete upcoming milestones to add verified evidence for: {', '.join(missing_keywords[:2])}.")
+        if profile.projects:
+            ats_recommendations.append("Include repository/portfolio links and measurable outcome metrics in project descriptions.")
+        else:
+            ats_recommendations.append("Add verified project or portfolio artifacts to strengthen ATS validation.")
 
         unvalidated_resume = TailoredResume(
             resume_id=f"res_{profile.person_id}_{int(datetime.now(timezone.utc).timestamp())}",
@@ -377,14 +350,14 @@ class ResumeAgent:
             target_role=target_role,
             target_opportunity_id=target_opportunity.opportunity_id if target_opportunity else None,
             summary=summary,
-            highlighted_skills=profile.skills or ["Python 3.12", "Pytest", "Linear Algebra", "Dataclasses", "Git"],
+            highlighted_skills=profile.skills,
             tailored_projects=projects_data,
             verified_experience=experience_data,
             education=education_data,
             certifications=[{"title": c.title, "issuer": c.issuer} for c in profile.credentials],
             provenance_map=provenance_map,
             ats_match_score=ats_score,
-            ats_matched_keywords=matched_keywords or ["Python", "Git"],
+            ats_matched_keywords=matched_keywords,
             ats_missing_keywords=missing_keywords,
             ats_recommendations=ats_recommendations,
             fact_validation_status="PASSED",

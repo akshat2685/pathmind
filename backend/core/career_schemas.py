@@ -77,10 +77,10 @@ class TargetOutcome(BaseModel):
     goal_id: str
     person_id: str
     goal_type: str = "career"  # career, internship, certification, promotion, graduate_program, career_transition, entrepreneurship, research
-    target_role: str = "Applied Machine Learning Systems Engineer"
-    target_industry: str = "Artificial Intelligence & Software Engineering"
+    target_role: Optional[str] = None
+    target_industry: Optional[str] = None
     geography: str = "India & Global"
-    target_timeline: Optional[str] = "12–18 Months"
+    target_timeline: Optional[str] = None
     priority: str = "HIGH"  # HIGH, MEDIUM, LOW
     version: int = 1
     constraints: Dict[str, Any] = Field(default_factory=dict)
@@ -93,12 +93,19 @@ class TargetOutcome(BaseModel):
 CareerGoal = TargetOutcome
 
 class RequirementNode(BaseModel):
+    requirement_id: Optional[str] = None
     name: str
-    category: str  # CORE_SKILL, SUPPORTING_SKILL, EDUCATION, CREDENTIAL, EXPERIENCE, PROJECT_EVIDENCE, PORTFOLIO_EVIDENCE, ELIGIBILITY, MARKET_CONTEXT
-    importance: str = "HIGH"  # HIGH, MEDIUM, LOW
+    category: str  # CORE_SKILL, SUPPORTING_SKILL, SKILL, KNOWLEDGE, EDUCATION, CREDENTIAL, EXPERIENCE, PROJECT_EVIDENCE, PORTFOLIO, SUPERVISED_PRACTICE, EXAM, LEGAL_OR_REGULATORY, NETWORKING, ELIGIBILITY, OTHER
+    importance: str = "HIGH"  # CRITICAL, HIGH, MEDIUM, LOW
     description: str
     source: str = "ESCO / NCO Official Occupational Standards"
-    status_for_person: str = "MISSING"  # AVAILABLE, TRANSFERABLE, MISSING, UNCERTAIN
+    source_id: Optional[str] = None
+    source_url: Optional[str] = None
+    retrieved_at: Optional[str] = None
+    geographic_scope: Optional[str] = None
+    evidence_requirement: Optional[str] = None
+    prerequisites: List[str] = Field(default_factory=list)
+    status_for_person: str = "UNKNOWN"  # ALREADY_HAVE, PARTIAL, MISSING, UNKNOWN, NOT_RELEVANT, AVAILABLE, TRANSFERABLE
 
     model_config = ConfigDict(populate_by_name=True)
 

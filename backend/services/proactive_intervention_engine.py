@@ -50,16 +50,22 @@ class ProactiveInterventionEngine:
                 metadata={"consecutive_failures": len(failed_attempts)}
             )
             if evt.processed_state != "DEDUPLICATED":
+                active_title = graph.learning_context.get('current_stage_title', 'this milestone')
+                if any(k in active_title.lower() for k in ["python", "code", "software", "test", "developer"]):
+                    action_advice = f"Review targeted feedback, run local pytest suites, and complete the reinforcement exercise for {active_title}."
+                else:
+                    action_advice = f"Review targeted feedback and complete the domain reinforcement exercise for {active_title}."
+
                 intv = Intervention(
                     person_id=person_id,
                     event_id=evt.event_id,
                     type="REVIEW_REINFORCEMENT",
                     priority="HIGH",
                     title="Targeted Skill Reinforcement Recommended",
-                    what_happened=f"Observed {len(failed_attempts)} consecutive preliminary submissions for {graph.learning_context.get('current_stage_title')}.",
+                    what_happened=f"Observed {len(failed_attempts)} consecutive preliminary submissions for {active_title}.",
                     why_it_matters="Boundary tests and error-handling assertions need strengthening before advancing downstream.",
-                    what_should_i_do="Review the targeted debugging guidance and write 2 unit tests with pytest.",
-                    what_happens_if_ignored="Cumulative test gaps could cause friction when working on PyTorch neural network modules later.",
+                    what_should_i_do=action_advice,
+                    what_happens_if_ignored="Cumulative foundation gaps will cause friction when attempting downstream advanced milestones.",
                     action_url="/journey",
                     related_entity_type="STAGE",
                     related_entity_id=active_stage_id

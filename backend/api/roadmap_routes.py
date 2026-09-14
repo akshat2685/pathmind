@@ -23,11 +23,12 @@ get_person_id = get_authenticated_person
 
 @router.post("/generate", response_model=DisclosedRoadmapView)
 async def generate_roadmap(
-    path_id: Optional[str] = "path_applied_ai_ml_systems",
+    path_id: Optional[str] = None,
+    target_outcome: Optional[str] = None,
     person_id: str = Depends(get_person_id)
 ):
     try:
-        roadmap = await engine.get_or_create_roadmap(person_id=person_id, path_id=path_id)
+        roadmap = await engine.get_or_create_roadmap(person_id=person_id, path_id=path_id, target_outcome=target_outcome)
         # Check for cross-stage memory
         active_stage = next((s for s in engine.get_all_stages_flat(roadmap) if s.stage_id == roadmap.current_stage_id), None)
         memory_moment = None
@@ -39,6 +40,8 @@ async def generate_roadmap(
             personal_agent_note="Roadmap synthesized with evidence-gated stage progression.",
             memory_moment=memory_moment
         )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate roadmap: {str(e)}")
 
@@ -56,6 +59,8 @@ async def get_current_roadmap_view(person_id: str = Depends(get_person_id)):
             personal_agent_note="Active stage is unlocked. Complete mission evidence to unlock subsequent stages.",
             memory_moment=memory_moment
         )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve current roadmap: {str(e)}")
 

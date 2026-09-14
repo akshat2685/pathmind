@@ -57,12 +57,187 @@ class TrajectoryEngine:
         Synthesizes 2–3 structured candidate career pathways based on counseling facts,
         observable project evidence, Holland RIASEC interest vector, and trajectory patterns.
         """
-        goals = goals or ["Explore AI/ML and Engineering"]
+        goals = goals or []
         constraints = constraints or []
-        interests = counseling_profile.interest_vector if counseling_profile else {"R": 75.0, "I": 90.0, "A": 45.0, "S": 50.0, "E": 65.0, "C": 50.0}
-        
-        # 1. Candidate Path 1: Applied AI & Machine Learning Systems
+        interests = counseling_profile.interest_vector if counseling_profile and counseling_profile.interest_vector else {}
+        goals_text = " ".join(goals).lower() if goals else ""
+        if counseling_profile and counseling_profile.candidate_directions:
+            goals_text += " " + " ".join(counseling_profile.candidate_directions).lower()
+
+        # Check for non-technical domains first
+        if any(k in goals_text for k in ["law", "legal", "advocate", "bar exam", "litigation"]):
+            path_corp_law = CandidatePath(
+                path_id="path_corporate_law_compliance",
+                title="Corporate Law & Regulatory Compliance",
+                domain="Legal & Regulatory Practice",
+                description="Focuses on corporate governance, commercial contract drafting, statutory compliance, and enterprise risk management.",
+                fit_score=92.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=[
+                    "Aligns directly with stated target objective in legal practice and corporate jurisprudence.",
+                    "Builds upon structured analytical reasoning and written communication aptitude."
+                ],
+                supporting_evidence=["Stated objective in legal jurisprudence."],
+                missing_evidence=["LL.B Degree transcripts and Bar enrollment status."],
+                required_skills=[
+                    "Constitutional Law & Jurisprudence",
+                    "Statutory Research & Case Law Citation (SCC/Manupatra)",
+                    "Commercial Contract Drafting",
+                    "Corporate Governance Regulations (Companies Act / SEC)",
+                    "Legal Risk Assessment"
+                ],
+                current_skills_held=["Analytical Reasoning", "Written Communication"],
+                transferable_skills=["Critical Reading", "Structured Logic"],
+                skill_gaps=[
+                    SkillGap(
+                        skill_name="Statutory Research & Citation",
+                        category="CORE",
+                        current_status="MISSING",
+                        description="Proficiency in case law precedent synthesis and legal database research.",
+                        recommended_action="Draft statutory briefs using Manupatra / SCC Online."
+                    )
+                ],
+                education_routes=[
+                    EducationRoute(
+                        route_type="TRADITIONAL_DEGREE",
+                        title="LL.B (3-Year) or B.A. LL.B (5-Year Integrated)",
+                        description="Accredited degree recognized by the Bar Council of India or relevant jurisdiction.",
+                        estimated_duration="3–5 Years",
+                        institutions_or_paths=["National Law Universities (NLUs)", "Faculty of Law / Accredited Law Schools"],
+                        geographic_relevance="India & Global"
+                    )
+                ],
+                credential_options=[
+                    CredentialOption(
+                        title="All India Bar Examination (AIBE)",
+                        issuer="Bar Council of India",
+                        classification="MANDATORY",
+                        purpose="Mandatory qualifying examination to obtain Certificate of Practice for courtroom advocacy."
+                    )
+                ],
+                india_context={"nco_code": "2611.10", "regulatory_body": "Bar Council of India"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2611", "esco_title": "Lawyer"}
+            )
+            path_litigation = CandidatePath(
+                path_id="path_commercial_litigation",
+                title="Commercial Litigation & Dispute Resolution",
+                domain="Judicial Advocacy",
+                description="Focuses on trial advocacy, appellate procedure, statutory pleadings, and arbitration mechanisms.",
+                fit_score=88.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Specialized advocacy pathway emphasizing dispute resolution and evidence law."],
+                supporting_evidence=["Stated interest in advocacy."],
+                missing_evidence=["Moot court briefs and courtroom internship records."],
+                required_skills=["Civil & Criminal Procedure", "Evidence Law & Cross-Examination", "Appellate Drafting", "Alternative Dispute Resolution (ADR)"],
+                current_skills_held=["Logical Argumentation"],
+                transferable_skills=["Oral Advocacy"],
+                skill_gaps=[SkillGap(skill_name="Procedural Pleading Drafting", category="CORE", current_status="MISSING", description="Drafting plaints, written statements, and writ petitions.", recommended_action="Complete chamber internship drafting assignments.")],
+                education_routes=[EducationRoute(route_type="TRADITIONAL_DEGREE", title="LL.B Degree", description="Recognized law degree.", estimated_duration="3 Years", institutions_or_paths=["Accredited Law Faculty"], geographic_relevance="India")],
+                credential_options=[CredentialOption(title="State Bar Council Enrollment", issuer="State Bar Council", classification="MANDATORY", purpose="Mandatory license for advocate practice.")],
+                india_context={"nco_code": "2611.20", "regulatory_body": "State Bar Council"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2611.1", "esco_title": "Litigation Lawyer"}
+            )
+            return [path_corp_law, path_litigation]
+
+        elif any(k in goals_text for k in ["design", "ux", "ui", "product design", "figma"]):
+            path_design = CandidatePath(
+                path_id="path_product_design_systems",
+                title="Product Design & Design Systems",
+                domain="Human-Computer Interaction",
+                description="Focuses on end-to-end product design, Figma design token architectures, usability testing, and user journeys.",
+                fit_score=93.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Directly aligns with stated product design and human-computer interaction goals."],
+                supporting_evidence=["Stated design objective."],
+                missing_evidence=["Public Figma portfolio and documented case studies."],
+                required_skills=["Figma Design Systems & Auto-Layout", "User Journey Mapping & Wireframing", "Usability Testing & Heuristics", "Design Tokens & Accessibility (WCAG)"],
+                current_skills_held=["Visual Aesthetic Sense"],
+                transferable_skills=["User Empathy", "Problem Framing"],
+                skill_gaps=[SkillGap(skill_name="Design Token Architecture", category="CORE", current_status="MISSING", description="Mastery of Figma variables, modes, and design token handoff to engineering.", recommended_action="Publish a comprehensive design system case study.")],
+                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title="Applied Design Portfolio & Case Studies", description="Self-directed capstone projects solving real consumer friction points.", estimated_duration="6–12 Months", institutions_or_paths=["Interaction Design Foundation", "Figma Academy"], geographic_relevance="Global")],
+                credential_options=[CredentialOption(title="NN/g UX Master Certification", issuer="Nielsen Norman Group", classification="OPTIONAL", purpose="Industry recognized UX credential.")],
+                india_context={"nco_code": "2166.10"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2166", "esco_title": "Product Designer"}
+            )
+            path_uxr = CandidatePath(
+                path_id="path_ux_research_strategy",
+                title="User Experience Research & Design Strategy",
+                domain="User Experience Research",
+                description="Focuses on behavioral discovery, qualitative user interviews, usability metrics, and product roadmap synthesis.",
+                fit_score=89.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Emphasizes qualitative research rigor and strategic customer empathy."],
+                supporting_evidence=["Stated user empathy focus."],
+                missing_evidence=["Usability test reports and customer interview synthesis."],
+                required_skills=["Qualitative User Interviewing", "Usability Test Protocols (SUS)", "Persona & Journey Modeling", "Product Opportunity Trees"],
+                current_skills_held=["Qualitative Analysis"],
+                transferable_skills=["Empathetic Inquiry"],
+                skill_gaps=[SkillGap(skill_name="Quantitative Usability Testing", category="CORE", current_status="MISSING", description="System Usability Scale (SUS) benchmarking.", recommended_action="Run 5 user test sessions on a live web app.")],
+                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title="UX Research Portfolio", description="User research case studies.", estimated_duration="6 Months", institutions_or_paths=["UX Research Guild"], geographic_relevance="Global")],
+                credential_options=[],
+                india_context={"nco_code": "2513.20"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2513.2", "esco_title": "UX Researcher"}
+            )
+            return [path_design, path_uxr]
+
+        elif any(k in goals_text for k in ["restaurant", "culinary", "hospitality", "chef", "food"]):
+            path_resto = CandidatePath(
+                path_id="path_hospitality_entrepreneurship",
+                title="Food & Beverage Hospitality Entrepreneurship",
+                domain="Hospitality & Culinary Management",
+                description="Focuses on culinary concept launch, prime costing, food safety licenses, kitchen operations, and guest experience delivery.",
+                fit_score=91.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Aligns directly with restaurant launch and hospitality venture aspirations."],
+                supporting_evidence=["Declared hospitality goal."],
+                missing_evidence=["Business plan and commercial kitchen stage records."],
+                required_skills=["Menu Engineering & Prime Costing", "Food Safety (FSSAI/HACCP)", "Commercial Kitchen Workflow", "Hospitality Service Standards", "Inventory Supply Chain"],
+                current_skills_held=["Customer Service"],
+                transferable_skills=["Operational Planning"],
+                skill_gaps=[SkillGap(skill_name="Menu Prime Costing", category="CORE", current_status="MISSING", description="Dish ingredient unit economics and target margin controls.", recommended_action="Build a complete menu prime cost model.")],
+                education_routes=[EducationRoute(route_type="VOCATIONAL_DIRECT", title="Culinary Arts & Hospitality Management", description="Hands-on commercial culinary and operations training.", estimated_duration="1–2 Years", institutions_or_paths=["Institute of Hotel Management (IHM)", "Culinary Academy"], geographic_relevance="India & Global")],
+                credential_options=[CredentialOption(title="FSSAI Food Safety Supervisor Certification", issuer="Food Safety and Standards Authority of India", classification="MANDATORY", purpose="Mandatory statutory certificate for food business operations.")],
+                india_context={"nco_code": "1412.10", "regulatory_body": "FSSAI"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/1412", "esco_title": "Restaurant Manager"}
+            )
+            return [path_resto]
+
+        elif any(k in goals_text for k in ["biotech", "molecular", "genetics", "bioinformatics", "biology"]):
+            path_biotech = CandidatePath(
+                path_id="path_biotech_molecular_research",
+                title="Biotechnology & Molecular Biology Research",
+                domain="Life Sciences & Molecular Genetics",
+                description="Focuses on wet-lab molecular assays, recombinant DNA protocols, gene expression analysis, and peer-reviewed scientific methodology.",
+                fit_score=92.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Aligns with biotechnology research and laboratory science objectives."],
+                supporting_evidence=["Declared life sciences objective."],
+                missing_evidence=["Wet-lab experimental records and peer-reviewed literature review."],
+                required_skills=["Recombinant DNA Technology", "PCR & Gel Electrophoresis", "Cell Culture & Aseptic Protocol", "Statistical Experimental Design", "Scientific Manuscript Writing"],
+                current_skills_held=["Quantitative Reasoning"],
+                transferable_skills=["Analytical Problem Solving"],
+                skill_gaps=[SkillGap(skill_name="Molecular Assay Protocols", category="CORE", current_status="MISSING", description="Hands-on execution of quantitative PCR and Western blotting.", recommended_action="Complete structured laboratory practicum.")],
+                education_routes=[EducationRoute(route_type="TRADITIONAL_DEGREE", title="B.S. / M.S. in Biotechnology or Molecular Biology", description="University degree in biological sciences.", estimated_duration="3–4 Years", institutions_or_paths=["University Life Sciences Faculty"], geographic_relevance="India & Global")],
+                credential_options=[],
+                india_context={"nco_code": "2131.20"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2131.2", "esco_title": "Biotechnologist"}
+            )
+            return [path_biotech]
+
+        # 1. Candidate Path 1: Applied AI & Machine Learning Systems (Default / Technical)
         traj_ai = self.corpus_service.match_similar_trajectories(["ai", "machine learning"], interests, limit=1)
+        why_ai = ["Directly leverages mathematical and algorithmic strengths demonstrated in academic profile."]
+        if interests.get("I"):
+            why_ai.insert(0, f"Matches high Investigative Holland psychometric score ({interests.get('I')}%+ analytical affinity).")
+        else:
+            why_ai.insert(0, "Aligns with analytical and computational problem-solving objectives.")
+
         path_ai = CandidatePath(
             path_id="path_applied_ai_ml_systems",
             title="Applied AI & Machine Learning Systems",
@@ -71,15 +246,11 @@ class TrajectoryEngine:
             fit_score=92.0,
             fit_level="HIGH",
             confidence="HIGH",
-            why_it_matches=[
-                "Matches high Investigative Holland psychometric score (90%+ analytical affinity).",
-                "Directly leverages mathematical and algorithmic strengths demonstrated in Class 12 / academic profile.",
-                "Builds upon practical hackathon data classifier and Python coding activity."
-            ],
+            why_it_matches=why_ai,
             supporting_evidence=[
                 "Demonstrated Python coding experience in national hackathon project.",
                 "Strong performance in Class 12 Mathematics and Computer Science.",
-                "RIASEC Investigative score (90%) and Realistic score (75%)."
+                f"RIASEC Investigative score ({interests.get('I', 90)}%) and Realistic score ({interests.get('R', 75)}%)." if interests else "Analytical problem-solving background."
             ],
             missing_evidence=[
                 "Formal demonstration of deep learning framework proficiency (PyTorch/TensorFlow).",

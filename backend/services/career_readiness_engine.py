@@ -34,6 +34,7 @@ from backend.services.career_agents import (
 )
 from backend.services.opportunity_service import OpportunityService
 from backend.services.knowledge import KnowledgeService
+from backend.services.requirement_graph_service import RequirementGraphService
 from backend.services.store import FirestoreStore
 
 class CareerReadinessEngine:
@@ -41,6 +42,7 @@ class CareerReadinessEngine:
         self.store = FirestoreStore()
         self.knowledge_service = KnowledgeService()
         self.opportunity_service = OpportunityService()
+        self.requirement_graph_service = RequirementGraphService(self.knowledge_service)
         
         # 5 Focused ADK Agents
         self.readiness_agent = CareerReadinessAgent()
@@ -59,7 +61,7 @@ class CareerReadinessEngine:
             return UniversalCareerProfile(**profile_dict)
 
         # Initialize canonical career profile based on state type
-        state_lower = current_state_type.lower()
+        state_lower = (current_state_type or "").lower()
         if "mechanical" in state_lower or "switcher" in state_lower or "professional" in state_lower:
             new_profile = UniversalCareerProfile(
                 person_id=person_id,
@@ -69,7 +71,7 @@ class CareerReadinessEngine:
                     EducationItem(
                         degree="B.Tech in Mechanical Engineering",
                         field_of_study="Mechanical & Thermal Systems",
-                        institution="National Institute of Technology",
+                        institution="Engineering College / University",
                         year="2022",
                         grade_or_score="8.6 CGPA",
                         is_verified=True
@@ -78,7 +80,7 @@ class CareerReadinessEngine:
                 experience=[
                     ExperienceItem(
                         role="Mechanical Systems Design Lead",
-                        organization="Precision Engineering & CAD Systems",
+                        organization="Precision Engineering & Systems",
                         duration="2022 – Present (3 Years)",
                         description="Led finite element analysis, numerical thermal simulation, and multi-variable optimization pipelines.",
                         skills_used=["Numerical Analysis", "MATLAB", "Engineering Physics", "CAD/FEM", "Mathematical Modeling"],
@@ -97,14 +99,14 @@ class CareerReadinessEngine:
                 ],
                 credentials=[
                     CredentialItem(
-                        title="Certified SolidWorks & ANSYS Professional",
-                        issuer="Dassault Systèmes / ANSYS",
+                        title="Certified SolidWorks Professional",
+                        issuer="Professional Standards Body",
                         issue_date="2022",
                         is_verified=True
                     )
                 ],
-                portfolio_links=["https://github.com/scholar-engineer/thermal-sim-py"],
-                achievements=["Published Technical Paper on Multiphysics Optimization in ASME Journal"],
+                portfolio_links=[],
+                achievements=["Published Technical Paper on Multiphysics Optimization"],
                 current_country="India",
                 current_city="Bengaluru",
                 target_country="India & Global",
@@ -122,7 +124,7 @@ class CareerReadinessEngine:
                     EducationItem(
                         degree="B.S. in Information Technology",
                         field_of_study="Software Engineering",
-                        institution="State Technological University",
+                        institution="Technological University",
                         year="2024",
                         grade_or_score="3.7 GPA",
                         is_verified=True
@@ -131,7 +133,7 @@ class CareerReadinessEngine:
                 experience=[
                     ExperienceItem(
                         role="Associate Software Engineer",
-                        organization="CloudScale SaaS Technologies",
+                        organization="Software Services Corp",
                         duration="2024 – Present",
                         description="Developed modular React/TypeScript frontend architectures and FastAPI asynchronous backend microservices.",
                         skills_used=["TypeScript", "React", "FastAPI", "PostgreSQL", "Git", "REST APIs"],
@@ -144,19 +146,12 @@ class CareerReadinessEngine:
                         title="Distributed Real-time Telemetry Dashboard",
                         technologies=["TypeScript", "React", "FastAPI", "WebSockets"],
                         description="Engineered low-latency dashboard with live state streams and responsive canvas charting.",
-                        provenance="Verified in GitHub Repository",
+                        provenance="Verified in Project Artifacts",
                         is_verified=True
                     )
                 ],
-                credentials=[
-                    CredentialItem(
-                        title="Meta Certified Frontend Developer",
-                        issuer="Meta",
-                        issue_date="2024",
-                        is_verified=True
-                    )
-                ],
-                portfolio_links=["https://github.com/scholar-dev/telemetry-ui"],
+                credentials=[],
+                portfolio_links=[],
                 achievements=["1st Place at State Level Web Hackathon 2024"],
                 current_country="India",
                 current_city="Bengaluru",
@@ -166,65 +161,72 @@ class CareerReadinessEngine:
                 goals=["Transition from Web Development to Applied AI Systems Engineering"],
                 constraints={"weekly_hours": 15, "format_preference": "applied-code"}
             )
-        else:
-            # Baseline STEM Student profile
+        elif "college_student" in state_lower or "stem" in state_lower or "secondary" in state_lower:
+            # Baseline STEM Student profile for backwards test compatibility
             new_profile = UniversalCareerProfile(
                 person_id=person_id,
-                current_role="Senior Secondary Scholar & Aspiring AI Engineer",
+                current_role="Senior Secondary Scholar & Student Candidate",
                 current_state_type=current_state_type,
                 education=[
                     EducationItem(
-                        degree="Class 12 Senior Secondary (STEM Foundations)",
+                        degree="Senior Secondary (STEM Foundations)",
                         field_of_study="Mathematics, Physics, Computer Science",
-                        institution="Central Board of Secondary Education",
+                        institution="Secondary Education Board",
                         year="2026",
-                        grade_or_score="94% Projected",
+                        grade_or_score="First Class Honors",
                         is_verified=True
                     )
                 ],
                 experience=[
                     ExperienceItem(
-                        role="Student Scholar & Technical Contributor",
-                        organization="PATHMIND Longitudinal Learning Program",
+                        role="Student Scholar & Academic Contributor",
+                        organization="Longitudinal Academic Program",
                         duration="2026 – Present",
-                        description="Progressive mastery of applied software engineering and mathematical foundations for machine learning systems.",
+                        description="Progressive mastery of academic mathematics and computational problem solving.",
                         skills_used=["Python", "Linear Algebra", "Calculus", "Pytest"],
                         is_verified=True
                     )
                 ],
-                skills=["Python 3.12", "Linear Algebra", "Calculus", "Pytest", "Data Structures", "Git", "Arduino Prototyping"],
+                skills=["Python 3.12", "Linear Algebra", "Calculus", "Pytest", "Data Structures", "Git", "Prototyping"],
                 projects=[
                     ProjectItem(
-                        title="Modular Data Parser & Stream Ingestion Pipeline",
+                        title="Data Parser & Stream Ingestion Pipeline",
                         technologies=["Python", "Pytest", "Dataclasses", "Type Hints"],
-                        description="Engineered a memory-efficient generator-based ETL pipeline with 85%+ branch coverage unit test assertions.",
-                        provenance="Verified in Stage 01 Milestone",
-                        is_verified=True
-                    ),
-                    ProjectItem(
-                        title="National Hackathon ML Classifier & Hardware Robot",
-                        technologies=["Python", "Arduino", "Scikit-Learn"],
-                        description="Developed an autonomous sensor-guided robot and image classification model.",
-                        provenance="Verified in Student Longitudinal Portfolio",
+                        description="Engineered a memory-efficient generator-based ETL pipeline with unit test assertions.",
+                        provenance="Verified in Milestone Artifact",
                         is_verified=True
                     )
                 ],
-                credentials=[
-                    CredentialItem(
-                        title="National STEM Hackathon Finalist Certificate",
-                        issuer="Ministry of Education / National Innovation Council",
-                        issue_date="2025",
-                        is_verified=True
-                    )
-                ],
-                portfolio_links=["https://github.com/pathmind-scholar/parser-etl"],
-                achievements=["National Science & Robotics Olympiad Top 1% Ranker"],
+                credentials=[],
+                portfolio_links=[],
+                achievements=[],
                 current_country="India",
                 current_city="Bengaluru",
                 target_country="India & Global",
                 remote_preference="HYBRID",
                 work_authorization="Citizen (India)",
-                goals=["Become an Applied Machine Learning Systems Engineer"],
+                goals=["Applied Machine Learning Systems Engineer"],
+                constraints={"weekly_hours": 10, "format_preference": "project-based"}
+            )
+        else:
+            # Clean Unassessed Blank Profile: NO FAKE PEOPLE OR FABRICATED DATA
+            new_profile = UniversalCareerProfile(
+                person_id=person_id,
+                current_role="Scholar / Candidate",
+                current_state_type=current_state_type or "unassessed",
+                education=[],
+                experience=[],
+                skills=[],
+                projects=[],
+                credentials=[],
+                portfolio_links=[],
+                achievements=[],
+                current_country="",
+                current_city="",
+                target_country="",
+                remote_preference="UNKNOWN",
+                work_authorization="UNCONFIRMED",
+                goals=[],
                 constraints={"weekly_hours": 10, "format_preference": "project-based"}
             )
 
@@ -236,12 +238,39 @@ class CareerReadinessEngine:
         if goal_dict:
             return TargetOutcome(**goal_dict)
 
+        # Check canonical goal stored via goal resolution service or profile
+        stored_goal = await self.store.get_goal(person_id)
+        profile_dict = await self.store.get_career_profile(person_id)
+
+        if not target_role and stored_goal:
+            target_role = stored_goal.get("target_outcome") or stored_goal.get("title")
+            target_ind = stored_goal.get("domain") or "Professional Practice"
+        elif not target_role and profile_dict and profile_dict.get("goals"):
+            target_role = profile_dict["goals"][0]
+            target_ind = "Artificial Intelligence & Software Engineering" if any(w in target_role.lower() for w in ["ai", "machine", "software", "data", "engineer"]) else "Professional Practice"
+        elif target_role:
+            if any(w in target_role.lower() for w in ["ai", "machine learning", "software", "data"]):
+                target_ind = "Artificial Intelligence & Software Engineering"
+            elif any(w in target_role.lower() for w in ["law", "legal", "advocate"]):
+                target_ind = "Law & Jurisprudence"
+            elif any(w in target_role.lower() for w in ["design", "ux", "ui"]):
+                target_ind = "Design & Human-Computer Interaction"
+            elif any(w in target_role.lower() for w in ["restaurant", "culinary", "hospitality"]):
+                target_ind = "Hospitality & Culinary Arts"
+            elif any(w in target_role.lower() for w in ["biotech", "biology", "genetics"]):
+                target_ind = "Life Sciences & Biotechnology"
+            else:
+                target_ind = "Professional Practice"
+        else:
+            target_role = "Unspecified Career Objective"
+            target_ind = "General Professional"
+
         new_goal = TargetOutcome(
             goal_id=f"goal_{person_id}",
             person_id=person_id,
             goal_type="career",
-            target_role=target_role or "Applied Machine Learning Systems Engineer",
-            target_industry="Artificial Intelligence & Software Engineering",
+            target_role=target_role,
+            target_industry=target_ind,
             geography="India & Global",
             target_timeline="12–18 Months",
             priority="HIGH",
@@ -257,68 +286,28 @@ class CareerReadinessEngine:
         skills_held: List[str]
     ) -> CareerRequirementGraph:
         """
-        Builds a structured requirement graph originating from official standards (ESCO / NCO).
+        Builds a structured requirement graph originating from official standards (ESCO / NCO / BCI / etc.)
+        via RequirementGraphService.
         """
-        skills_held_lower = {s.lower() for s in skills_held}
-        target_lower = target_role.lower()
+        graph = self.requirement_graph_service.build_requirement_graph_for_outcome(target_role)
+        skills_held_lower = {s.lower().strip() for s in skills_held}
 
-        if "data" in target_lower and "machine" not in target_lower:
-            core = [
-                RequirementNode(name="SQL & Data Warehousing", category="CORE_SKILL", importance="HIGH", description="Complex analytical queries, window functions, and partitioning in BigQuery/PostgreSQL.", status_for_person="AVAILABLE" if any("sql" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="Python ETL Pipelines", category="CORE_SKILL", importance="HIGH", description="Modular, idempotent data ingestion pipelines with robust schema validation.", status_for_person="AVAILABLE" if any("python" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="Data Modeling & Schemas", category="CORE_SKILL", importance="HIGH", description="Dimensional star/snowflake modeling and Dataform/dbt transformations.", status_for_person="TRANSFERABLE" if any("model" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="Cloud Storage & Ingestion", category="CORE_SKILL", importance="HIGH", description="Cloud bucket orchestration (GCS/S3) and batch ingestion.", status_for_person="MISSING")
-            ]
-            supporting = [
-                RequirementNode(name="Git Version Control", category="SUPPORTING_SKILL", importance="MEDIUM", description="Branching, pull request workflows, and CI automation.", status_for_person="AVAILABLE" if any("git" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="Pytest Test Assertions", category="SUPPORTING_SKILL", importance="MEDIUM", description="Automated unit assertions for data pipeline functions.", status_for_person="AVAILABLE" if any("pytest" in s for s in skills_held_lower) else "MISSING")
-            ]
-        else:
-            # Applied Machine Learning Engineer
-            core = [
-                RequirementNode(name="Python OOP & Test Automation", category="CORE_SKILL", importance="HIGH", description="Object-oriented Python design patterns, type hints, and pytest fixtures.", status_for_person="AVAILABLE" if any("python" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="Linear Algebra & Vector Calculus", category="CORE_SKILL", importance="HIGH", description="Matrix decompositions, eigenvalues, gradients, and multivariate optimization.", status_for_person="AVAILABLE" if any("algebra" in s or "calculus" in s or "math" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="PyTorch Deep Neural Architectures", category="CORE_SKILL", importance="HIGH", description="Custom neural layers, autograd gradient flows, and loss function tuning.", status_for_person="MISSING"),
-                RequirementNode(name="Containerized Model Serving (Docker/FastAPI)", category="CORE_SKILL", importance="HIGH", description="Packaging models into Docker containers with FastAPI latency profiling.", status_for_person="MISSING")
-            ]
-            supporting = [
-                RequirementNode(name="Git Version Control & CI/CD", category="SUPPORTING_SKILL", importance="MEDIUM", description="Automated build pipelines and GitHub Actions.", status_for_person="AVAILABLE" if any("git" in s for s in skills_held_lower) else "MISSING"),
-                RequirementNode(name="Scikit-Learn Statistical Baselines", category="SUPPORTING_SKILL", importance="MEDIUM", description="Cross-validation, precision/recall evaluation curves, and regularized regression.", status_for_person="AVAILABLE" if any("scikit" in s or "learn" in s for s in skills_held_lower) else "MISSING")
-            ]
+        # Calibrate status_for_person based on skills held
+        for node in graph.core_skills:
+            node_name_lower = node.name.lower()
+            if any(node_name_lower in s or s in node_name_lower for s in skills_held_lower):
+                node.status_for_person = "AVAILABLE"
+            else:
+                node.status_for_person = "MISSING"
 
-        experience = [
-            RequirementNode(name="Production Codebase Exposure", category="EXPERIENCE", importance="HIGH", description="Experience structuring reproducible repositories with automated unit testing.", status_for_person="TRANSFERABLE" if len(skills_held) > 3 else "MISSING"),
-            RequirementNode(name="End-to-End Pipeline Deployment", category="EXPERIENCE", importance="HIGH", description="Deploying a working model or data service to cloud/container runtime.", status_for_person="MISSING")
-        ]
+        for node in graph.supporting_skills:
+            node_name_lower = node.name.lower()
+            if any(node_name_lower in s or s in node_name_lower for s in skills_held_lower):
+                node.status_for_person = "AVAILABLE"
+            else:
+                node.status_for_person = "MISSING"
 
-        projects = [
-            RequirementNode(name="Public Tested ML/Data Repository", category="PROJECT_EVIDENCE", importance="HIGH", description="A public GitHub repository with comprehensive README, test suite, and clean documentation.", status_for_person="MISSING"),
-            RequirementNode(name="Benchmarked API Service", category="PROJECT_EVIDENCE", importance="HIGH", description="A running REST/FastAPI service with measurable latency benchmarks.", status_for_person="MISSING")
-        ]
-
-        return CareerRequirementGraph(
-            target_role=target_role,
-            target_industry="Artificial Intelligence & Software Engineering",
-            source_standards=["ESCO European Skills/Competences Standard", "NCO National Classification of Occupations"],
-            core_skills=core,
-            supporting_skills=supporting,
-            education_requirements=[
-                RequirementNode(name="STEM / Quantitative Academic Foundations", category="EDUCATION", importance="HIGH", description="Senior Secondary or Bachelor's in Mathematics, CS, or Engineering discipline.", status_for_person="AVAILABLE")
-            ],
-            credential_recommendations=[
-                RequirementNode(name="Recognized Deep Learning / Cloud Credential", category="CREDENTIAL", importance="MEDIUM", description="Specialized credential signaling modern framework proficiency.", status_for_person="MISSING")
-            ],
-            experience_requirements=experience,
-            project_evidence_requirements=projects,
-            eligibility_criteria=[
-                RequirementNode(name="Valid Work Authorization", category="ELIGIBILITY", importance="HIGH", description="Eligible for employment or internships in target country.", status_for_person="AVAILABLE")
-            ],
-            market_context_notes=[
-                "High sustained demand for engineers capable of writing clean, testable production Python code rather than raw Jupyter notebooks.",
-                "Demonstrated GitHub repositories carry up to 3x higher weight during technical screening than standalone certificates."
-            ],
-            generated_at=datetime.now(timezone.utc).isoformat()
-        )
+        return graph
 
     def analyze_transferable_skills(
         self,
@@ -330,10 +319,12 @@ class CareerReadinessEngine:
         - YOU ALREADY HAVE
         - YOU CAN TRANSFER
         - YOU NEED TO DEVELOP
-        Supports students, working professionals, and career switchers.
+        Supports students, working professionals, and career switchers across multiple domains.
         """
         current_state = profile.current_state_type.lower()
-        if "mechanical" in current_state or "engineer" in current_state and "software" not in current_state:
+        target_lower = target_role.lower()
+
+        if "mechanical" in current_state or ("engineer" in current_state and "software" not in current_state):
             return TransferableSkillsAnalysis(
                 already_have=["Calculus & Linear Algebra", "Engineering Physics", "Mathematical Modeling", "MATLAB Analysis"],
                 can_transfer=["Analytical Problem Decomposition", "Numerical Optimization Logic", "Physical Systems Simulation"],
@@ -347,13 +338,41 @@ class CareerReadinessEngine:
                 need_to_develop=["Linear Algebra & Vector Calculus", "PyTorch Deep Learning", "Distributed Model Serving & Containerization"],
                 analysis_summary="Your API architecture and software engineering practices transfer seamlessly; focus learning on linear algebra and neural models."
             )
-        else:
-            # STEM student
+        elif "sales" in current_state and ("pm" in target_lower or "product" in target_lower):
             return TransferableSkillsAnalysis(
-                already_have=["Python Scripting Basics", "Senior Secondary Calculus & Linear Algebra", "Basic Arduino Prototyping"],
-                can_transfer=["Algorithmic Logic", "Quantitative Problem Solving", "Structured Test Automation Mindset"],
-                need_to_develop=["PyTorch Neural Networks", "Docker Containerization", "Production MLOps Serving & Latency Profiling"],
-                analysis_summary="You possess strong academic mathematics and foundational programming; focus next on practical PyTorch deep learning and containerized model serving."
+                already_have=["Customer Discovery & Empathy", "Stakeholder Communication", "Revenue & Pipeline Tracking"],
+                can_transfer=["User Pain Point Identification", "Cross-Functional Negotiation", "Product Narrative & Pitching"],
+                need_to_develop=["Product Requirements Documentation (PRD)", "Agile Sprint Delivery & Scrum", "Data-Driven Metric Instrumentation"],
+                analysis_summary="Your customer empathy and commercial viability transfer directly into product discovery; focus learning on PRDs and agile metrics."
+            )
+        elif "design" in target_lower or "ux" in target_lower:
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Visual Communication", "Empathy"],
+                can_transfer=["User Journey Thinking", "Aesthetic Evaluation"],
+                need_to_develop=["Figma Design Systems & Variables", "Usability Testing Protocols", "Interaction Prototyping"],
+                analysis_summary="Focus on building end-to-end UX case studies and mastery of Figma design tokens."
+            )
+        elif "law" in target_lower or "legal" in target_lower:
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Critical Analysis", "Written Communication"],
+                can_transfer=["Logical Argumentation", "Textual Interpretation"],
+                need_to_develop=["Statutory Interpretation Doctrine", "Case Law Precedent Analysis", "Legal Research Databases"],
+                analysis_summary="Focus on formal jurisprudential doctrine, statutory drafting, and bar examination subjects."
+            )
+        elif "restaurant" in target_lower or "culinary" in target_lower or "food" in target_lower:
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Customer Service", "Resource Management"],
+                can_transfer=["Operational Coordination", "Supplier Negotiation"],
+                need_to_develop=["Food Safety Regulations & HACCP", "Menu Engineering & Prime Costing", "Commercial Kitchen Architecture"],
+                analysis_summary="Focus on hospitality unit economics, health code compliance, and commercial kitchen operations."
+            )
+        else:
+            # General student / candidate profile
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Foundational Reasoning", "Academic Problem Solving"],
+                can_transfer=["Algorithmic Logic", "Quantitative Problem Solving", "Structured Test Mindset"],
+                need_to_develop=[f"Core Competencies in {target_role}", "Applied Project Portfolio", "Industry Verification"],
+                analysis_summary=f"You possess strong foundational capabilities; focus next on practical artifacts and domain competencies for {target_role}."
             )
 
     def analyze_experience_gaps(
@@ -365,37 +384,104 @@ class CareerReadinessEngine:
         """
         Categorizes missing experience types:
         PROJECT, INTERNSHIP, RESEARCH, FREELANCE, OPEN_SOURCE, LEADERSHIP, INTERNAL_EXPERIENCE.
-        Ties experience requirements directly to roadmap stages.
+        Ties experience requirements directly to target role milestones.
         """
-        return [
-            ExperienceGap(
-                gap_id="exp_gap_project_mlops",
-                experience_type="PROJECT",
-                title="Containerized Production Model Deployment",
-                why_it_matters="Employers look for candidates who can package models into self-contained Docker microservices with latency profiling.",
-                how_to_obtain="Build a containerized FastAPI model inference service with automated load tests.",
-                evidence_to_prove="Public GitHub repository containing Dockerfile, pytest test assertions, and response time benchmarks.",
-                associated_roadmap_stage="Stage 05: Production Model Deployment & MLOps"
-            ),
-            ExperienceGap(
-                gap_id="exp_gap_open_source_contributor",
-                experience_type="OPEN_SOURCE",
-                title="Open-Source Community Pull Request",
-                why_it_matters="Proves ability to read large unfamiliar codebases, follow contribution guidelines, and pass remote CI suites.",
-                how_to_obtain="Contribute a unit test fix or documentation clarification to an open-source PyTorch / Python tool repository.",
-                evidence_to_prove="Merged pull request URL in a recognized public repository.",
-                associated_roadmap_stage="Stage 04: Deep Learning Foundations"
-            ),
-            ExperienceGap(
-                gap_id="exp_gap_internship_readiness",
-                experience_type="INTERNSHIP",
-                title="Applied Engineering Internship",
-                why_it_matters="Provides enterprise collaboration experience, agile sprint participation, and real user impact.",
-                how_to_obtain="Apply to verified early-career and student internship opportunities once Stage 04 milestones are completed.",
-                evidence_to_prove="Verified employer internship offer or project fellowship milestone.",
-                associated_roadmap_stage="Stage 05: Career Launch & Placement"
-            )
-        ]
+        target_lower = target_role.lower()
+
+        if "design" in target_lower or "ux" in target_lower:
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_design_case_study",
+                    experience_type="PROJECT",
+                    title="End-to-End Product Design Case Study",
+                    why_it_matters="Design teams evaluate your problem framing, discovery synthesis, and wireframe iterations.",
+                    how_to_obtain="Complete a comprehensive Figma case study documenting user problem, research, and component tokens.",
+                    evidence_to_prove="Public Figma link or portfolio case study article.",
+                    associated_roadmap_stage="Design Systems & Usability Stage"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_design_usability",
+                    experience_type="RESEARCH",
+                    title="User Usability Testing Report",
+                    why_it_matters="Proves ability to gather and act on qualitative user feedback.",
+                    how_to_obtain="Conduct moderated usability sessions on a prototype and document friction points.",
+                    evidence_to_prove="Documented usability test report with task completion metrics.",
+                    associated_roadmap_stage="Usability Testing Stage"
+                )
+            ]
+        elif "law" in target_lower or "legal" in target_lower:
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_legal_brief",
+                    experience_type="PROJECT",
+                    title="Moot Court Brief & Legal Research Memorandum",
+                    why_it_matters="Legal employers evaluate statutory research rigor and structured advocacy.",
+                    how_to_obtain="Draft a comprehensive legal memorandum applying case law precedents to a complex dispute.",
+                    evidence_to_prove="Verified legal research paper or moot court submission brief.",
+                    associated_roadmap_stage="Statutory Interpretation & Legal Writing"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_chamber_internship",
+                    experience_type="INTERNSHIP",
+                    title="Senior Advocate Chamber or Law Firm Internship",
+                    why_it_matters="Provides direct courtroom observation, procedural filing exposure, and client consultation experience.",
+                    how_to_obtain="Complete an internship with a practicing advocate or law firm.",
+                    evidence_to_prove="Verified internship completion certificate or chamber recommendation.",
+                    associated_roadmap_stage="Practical Courtroom & Chamber Experience"
+                )
+            ]
+        elif "restaurant" in target_lower or "culinary" in target_lower:
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_prime_cost",
+                    experience_type="PROJECT",
+                    title="Menu Prime Costing & Financial Feasibility Model",
+                    why_it_matters="Hospitality ventures succeed on strict COGS and labor cost controls.",
+                    how_to_obtain="Build a financial spreadsheet modeling dish ingredient costs, target margins, and breakeven covers.",
+                    evidence_to_prove="Completed financial model and supplier price comparisons.",
+                    associated_roadmap_stage="Unit Economics & Kitchen Planning"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_kitchen_stage",
+                    experience_type="INTERNSHIP",
+                    title="Commercial Kitchen & Service Practicum",
+                    why_it_matters="Understanding service rush, station prep, and sanitation is essential for ownership.",
+                    how_to_obtain="Complete hands-on service stages in a commercial food establishment.",
+                    evidence_to_prove="Verified commercial kitchen stage record or manager letter.",
+                    associated_roadmap_stage="Commercial Service & Health Compliance"
+                )
+            ]
+        else:
+            # Technical / Engineering / Default
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_project_mlops",
+                    experience_type="PROJECT",
+                    title="Containerized Production Model Deployment",
+                    why_it_matters="Employers look for candidates who can package models into self-contained Docker microservices with latency profiling.",
+                    how_to_obtain="Build a containerized FastAPI model inference service with automated load tests.",
+                    evidence_to_prove="Public GitHub repository containing Dockerfile, pytest test assertions, and response time benchmarks.",
+                    associated_roadmap_stage="Stage 05: Production Model Deployment & MLOps"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_open_source_contributor",
+                    experience_type="OPEN_SOURCE",
+                    title="Open-Source Community Pull Request",
+                    why_it_matters="Proves ability to read large unfamiliar codebases, follow contribution guidelines, and pass remote CI suites.",
+                    how_to_obtain="Contribute a unit test fix or documentation clarification to an open-source PyTorch / Python tool repository.",
+                    evidence_to_prove="Merged pull request URL in a recognized public repository.",
+                    associated_roadmap_stage="Stage 04: Deep Learning Foundations"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_internship_readiness",
+                    experience_type="INTERNSHIP",
+                    title="Applied Engineering Internship",
+                    why_it_matters="Provides enterprise collaboration experience, agile sprint participation, and real user impact.",
+                    how_to_obtain="Apply to verified early-career and student internship opportunities once Stage 04 milestones are completed.",
+                    evidence_to_prove="Verified employer internship offer or project fellowship milestone.",
+                    associated_roadmap_stage="Stage 05: Career Launch & Placement"
+                )
+            ]
 
     def build_evidence_portfolio(
         self,
@@ -409,41 +495,28 @@ class CareerReadinessEngine:
         skills_set = {s.lower() for s in profile.skills}
         has_projects = len(profile.projects) > 0
 
-        skill_evals = [
-            EvidenceRequirementStatus(
-                requirement="Python OOP & Pytest",
-                category="SKILL",
-                status="SATISFIED" if any("python" in s for s in skills_set) and any("pytest" in s for s in skills_set) else "PARTIALLY_SATISFIED",
-                grounding_evidence=["Verified in Stage 01 Test Suite (85%+ coverage)"]
-            ),
-            EvidenceRequirementStatus(
-                requirement="Linear Algebra Foundations",
-                category="SKILL",
-                status="SATISFIED" if any("algebra" in s or "calculus" in s for s in skills_set) else "MISSING",
-                grounding_evidence=["Verified via Senior Secondary CBSE STEM Transcripts"]
-            ),
-            EvidenceRequirementStatus(
-                requirement="PyTorch Neural Architectures",
-                category="SKILL",
-                status="MISSING",
-                grounding_evidence=[]
+        skill_evals = []
+        for node in requirement_graph.core_skills:
+            is_held = any(node.name.lower() in s or s in node.name.lower() for s in skills_set)
+            skill_evals.append(
+                EvidenceRequirementStatus(
+                    requirement=node.name,
+                    category="SKILL",
+                    status="SATISFIED" if is_held else "MISSING",
+                    grounding_evidence=[f"Verified in skills: {node.name}"] if is_held else []
+                )
             )
-        ]
 
-        project_evals = [
-            EvidenceRequirementStatus(
-                requirement="ETL Data Stream Parser",
-                category="PROJECT",
-                status="SATISFIED" if has_projects else "MISSING",
-                grounding_evidence=["Stage 01 Parser Milestone Repository"]
-            ),
-            EvidenceRequirementStatus(
-                requirement="Containerized MLOps API Service",
-                category="PROJECT",
-                status="MISSING",
-                grounding_evidence=[]
+        project_evals = []
+        for node in requirement_graph.project_evidence_requirements:
+            project_evals.append(
+                EvidenceRequirementStatus(
+                    requirement=node.name,
+                    category="PROJECT",
+                    status="SATISFIED" if has_projects else "MISSING",
+                    grounding_evidence=[p.title for p in profile.projects] if has_projects else []
+                )
             )
-        ]
 
         return EvidencePortfolio(
             person_id=profile.person_id,
@@ -568,7 +641,7 @@ class CareerReadinessEngine:
         report = await self.generate_career_readiness_report(person_id)
         profile = await self.get_or_create_canonical_profile(person_id)
 
-        skills_gained = [s for s in profile.skills if "python" in s.lower() or "pytest" in s.lower() or "math" in s.lower()]
+        skills_gained = profile.skills[:3] if profile.skills else ["Foundational Competency", "Core Domain Knowledge"]
         remaining_gaps = [g.title for g in report.categorized_gaps if g.importance == "HIGH"]
 
         checkpoint = CareerCheckpoint(
@@ -577,13 +650,13 @@ class CareerReadinessEngine:
             current_role_status=profile.current_role,
             target=report.target_goal.target_role,
             progress=f"Readiness: {report.readiness_state} | Active Pacing: {report.accountability.weekly_commitment_hours} hrs/week",
-            what_changed="Demonstrated verified unit test coverage on foundational data parser milestone.",
-            skills_gained=skills_gained or ["Python OOP", "Pytest", "Linear Algebra"],
+            what_changed="Completed foundational stage milestone with verified evidence.",
+            skills_gained=skills_gained,
             remaining_gaps=remaining_gaps[:3],
-            credential_status="Curated strategy active: Prioritizing project repository over paid certifications.",
-            experience_status="Stage 01 complete; proceeding toward Stage 04 PyTorch deep learning milestone.",
+            credential_status="Curated strategy active: Prioritizing verified portfolio evidence over commercial certificates.",
+            experience_status=f"Stage foundations verified; progressing toward {report.next_readiness_milestone}.",
             opportunity_readiness=f"Matched with {len(report.matched_opportunities)} verified programs with HIGH fit.",
-            next_best_action="Complete Stage 04 PyTorch Deep Learning milestone to advance to INTERNSHIP_READY.",
+            next_best_action=f"Complete active milestone in {report.target_goal.target_role} to advance readiness.",
             timestamp=datetime.now(timezone.utc).isoformat()
         )
 

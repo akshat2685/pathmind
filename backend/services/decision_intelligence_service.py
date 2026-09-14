@@ -31,7 +31,7 @@ class DecisionIntelligenceService:
         current_stage_num = graph.learning_context.get("current_stage_number", 1)
         skills = graph.capability_context.get("developing_skills", [])
         demonstrated = graph.capability_context.get("demonstrated_skills", [])
-        target_role = graph.goal_context.get("primary_target_role", "Applied AI Specialist")
+        target_role = graph.goal_context.get("primary_target_role") or "Target Profession"
 
         # 1. Check if there are regression risks
         if graph.capability_context.get("skills_at_risk"):
@@ -59,7 +59,7 @@ class DecisionIntelligenceService:
         # 2. Check if verified opportunities have upcoming deadlines
         if graph.opportunity_context and len(demonstrated) >= 2:
             top_opp = graph.opportunity_context[0]
-            opp_title = top_opp.get("title", "Open Source Fellowship")
+            opp_title = top_opp.get("title", "Verified Opportunity")
             opp_org = top_opp.get("organization", "Verified Partner")
             return NextActionRecommendation(
                 action_title=f"Review & Apply: {opp_title} at {opp_org}",
@@ -68,7 +68,7 @@ class DecisionIntelligenceService:
                 target_opportunity_id=top_opp.get("opportunity_id"),
                 facts=[
                     f"You have verified skills in {', '.join(demonstrated[:3])}.",
-                    f"'{opp_title}' directly values your demonstrated background in machine systems."
+                    f"'{opp_title}' aligns with your demonstrated competencies in {', '.join(demonstrated[:2])}."
                 ],
                 interpretation=[
                     "Applying to verified opportunities early builds real industry traction in parallel with roadmap progression."
@@ -80,25 +80,51 @@ class DecisionIntelligenceService:
                 downstream_consequence="Enters candidate selection pool with direct evidence verification provenance."
             )
 
-        # 3. Default: Complete active stage milestone proof
+        # 3. Dynamic target-specific next action derived from stage requirements
+        lower_stage = current_stage_title.lower()
+        if any(w in lower_stage for w in ["research", "survey", "literature"]):
+            act_type = "RESEARCH_MILESTONE"
+            act_title = f"Draft Research Synthesis for {current_stage_title}"
+            tradeoff_text = "Requires dedicated scholarly reading and literature review documentation."
+        elif any(w in lower_stage for w in ["design", "ux", "ui", "prototype", "journey"]):
+            act_type = "SUBMIT_PORTFOLIO_EVIDENCE"
+            act_title = f"Submit Design Artifact for {current_stage_title}"
+            tradeoff_text = "Requires authoring a verifiable design artifact or prototype in Figma rather than reviewing concepts."
+        elif any(w in lower_stage for w in ["legal", "law", "jurisprudence", "brief", "drafting"]):
+            act_type = "LEGAL_MILESTONE"
+            act_title = f"Draft Legal Memorandum for {current_stage_title}"
+            tradeoff_text = "Requires legal research synthesis and statutory citation formatting."
+        elif any(w in lower_stage for w in ["food", "safety", "menu", "restaurant", "culinary"]):
+            act_type = "OPERATIONS_MILESTONE"
+            act_title = f"Complete Operational Plan for {current_stage_title}"
+            tradeoff_text = "Requires formulating concrete standard operating procedures and cost models."
+        elif any(w in lower_stage for w in ["python", "code", "mlops", "software", "api", "pipeline"]):
+            act_type = "COMPLETE_STAGE_EVIDENCE"
+            act_title = f"Submit Code Evidence for {current_stage_title}"
+            tradeoff_text = "Requires implementing executable code with unit tests rather than merely reading notes."
+        else:
+            act_type = "COMPLETE_STAGE_MILESTONE"
+            act_title = f"Submit Milestone Evidence for {current_stage_title}"
+            tradeoff_text = "Requires producing a verifiable practical artifact to prove milestone mastery."
+
         return NextActionRecommendation(
-            action_title=f"Submit Code Evidence for {current_stage_title}",
-            action_type="COMPLETE_STAGE_EVIDENCE",
+            action_title=act_title,
+            action_type=act_type,
             priority="NOW",
             target_stage_id=current_stage_id,
             target_skill=skills[0] if skills else None,
             facts=[
                 f"Currently working on Stage 0{current_stage_num}: {current_stage_title}.",
-                f"Required skills to prove: {', '.join(skills)}.",
+                f"Required skills to prove: {', '.join(skills) if skills else 'Core competencies'}.",
                 f"Target career outcome: {target_role}."
             ],
             interpretation=[
-                f"Completing this stage's code milestone satisfies {len(skills)} prerequisite requirements in your career readiness graph."
+                f"Completing this milestone satisfies prerequisite requirements in your career readiness graph."
             ],
             tradeoffs=[
-                "Requires implementing executable code with unit tests rather than merely reading notes."
+                tradeoff_text
             ],
-            recommendation_rationale=f"Build and submit your {current_stage_title} script or repository to unlock downstream milestones.",
+            recommendation_rationale=f"Complete and submit your {current_stage_title} deliverable to unlock downstream milestones.",
             downstream_consequence=f"Unlocks Stage 0{current_stage_num + 1} and advances career readiness toward {target_role}."
         )
 
@@ -112,16 +138,16 @@ class DecisionIntelligenceService:
             "stage_number": graph.learning_context.get("current_stage_number", 1),
             "progress_percent": graph.learning_context.get("progress_percent", 0.0),
             "completed_stages": graph.learning_context.get("completed_stages", 0),
-            "total_stages": graph.learning_context.get("total_stages", 5),
+            "total_stages": graph.learning_context.get("total_stages", 4),
             "verified_skills_count": graph.capability_context.get("total_verified_skills", 0)
         }
 
         # 2. Where Am I Going?
         where_am_i_going = {
-            "target_role": graph.goal_context.get("primary_target_role", "Applied AI Specialist"),
+            "target_role": graph.goal_context.get("primary_target_role") or "Target Outcome",
             "readiness_tier": graph.career_context.get("readiness_tier", "DEVELOPING"),
             "match_score": graph.career_context.get("overall_match_score", 65.0),
-            "target_timeline": graph.goal_context.get("timeline", "6 Months")
+            "target_timeline": graph.goal_context.get("timeline") or "Self-Paced"
         }
 
         # 3. What Changed?
@@ -137,7 +163,7 @@ class DecisionIntelligenceService:
         if graph.learning_context.get("current_blocker"):
             blocker = {
                 "title": "Prerequisite Stage Locked",
-                "description": f"Stage 0{graph.learning_context.get('current_stage_number')} requires verified code evidence before downstream stages unlock.",
+                "description": f"Stage 0{graph.learning_context.get('current_stage_number')} requires verified milestone evidence before downstream stages unlock.",
                 "missing_requirements": graph.capability_context.get("developing_skills", [])
             }
 

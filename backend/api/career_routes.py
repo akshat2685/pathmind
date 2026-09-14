@@ -60,19 +60,28 @@ async def set_career_goal(
         existing_goal = await store.get_career_goal(active_id)
         version = (existing_goal.get("version", 1) + 1) if existing_goal else 1
 
+        target_role = goal_payload.get("target_role") or goal_payload.get("target_outcome") or "Career Goal"
+        target_industry = goal_payload.get("target_industry") or goal_payload.get("target_domain") or "General"
+
         goal = TargetOutcome(
             goal_id=f"goal_{active_id}",
             person_id=active_id,
             goal_type=goal_payload.get("goal_type", "career"),
-            target_role=goal_payload.get("target_role", "Applied Machine Learning Systems Engineer"),
-            target_industry=goal_payload.get("target_industry", "Artificial Intelligence & Software Engineering"),
-            geography=goal_payload.get("geography", "India & Global"),
+            target_role=target_role,
+            target_industry=target_industry,
+            geography=goal_payload.get("geography", "Global"),
             target_timeline=goal_payload.get("target_timeline", "12–18 Months"),
             priority=goal_payload.get("priority", "HIGH"),
             version=version,
             constraints=goal_payload.get("constraints", {})
         )
         await store.save_career_goal(active_id, goal.model_dump(mode="json"))
+        # Synchronize canonical goal model
+        await store.save_goal(active_id, {
+            "target_outcome": target_role,
+            "target_domain": target_industry,
+            "constraints": goal_payload.get("constraints", {})
+        })
         return goal
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to set career goal: {str(e)}")
@@ -88,12 +97,20 @@ async def get_career_goal(
 
 @router.get("/requirement-graph", response_model=CareerRequirementGraph)
 async def get_career_requirement_graph(
-    target_role: Optional[str] = Query("Applied Machine Learning Systems Engineer"),
+    target_role: Optional[str] = Query(None),
     person_id: str = Depends(get_person_id)
 ):
     try:
         profile = await engine.get_or_create_canonical_profile(person_id)
-        return engine.build_requirement_graph(target_role or "Applied Machine Learning Systems Engineer", profile.skills)
+        effective_role = target_role
+        if not effective_role:
+            stored_goal = await store.get_goal(person_id)
+            if stored_goal and stored_goal.get("target_outcome"):
+                effective_role = stored_goal["target_outcome"]
+            else:
+                stored_cgoal = await store.get_career_goal(person_id)
+                effective_role = (stored_cgoal or {}).get("target_role") or "Career Goal"
+        return engine.build_requirement_graph(effective_role, profile.skills)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch requirement graph: {str(e)}")
 
@@ -169,7 +186,10 @@ async def tailor_resume_for_role(
 ):
     try:
         profile = await engine.get_or_create_canonical_profile(person_id)
-        target_role = payload.get("target_role", "Applied Machine Learning Systems Engineer")
+        target_role = payload.get("target_role") or payload.get("target_outcome")
+        if not target_role:
+            stored_goal = await store.get_goal(person_id)
+            target_role = (stored_goal or {}).get("target_outcome") or "Professional Role"
         return engine.resume_agent.generate_tailored_resume(
             profile=profile,
             target_role=target_role
