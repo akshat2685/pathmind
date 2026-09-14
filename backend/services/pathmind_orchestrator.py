@@ -57,9 +57,9 @@ class PathmindOrchestrator:
         self.resume_agent = ResumeAgent()
         self.accountability_agent = AccountabilityAgent()
 
-        self.opportunity_engine = OpportunityMatchingEngine(store=self.store)
+        self.career_engine = CareerReadinessEngine(store=self.store)
+        self.opportunity_engine = OpportunityMatchingEngine(store=self.store, career_engine=self.career_engine)
         self.second_brain = SecondBrainService(store=self.store)
-        self.career_engine = CareerReadinessEngine()
         self.execution_engine = ExecutionEngine(store=self.store)
 
         # In-memory idempotency cache (keyed by person_id:idempotency_key)

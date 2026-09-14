@@ -9,11 +9,13 @@ from backend.core.opportunity_schemas import (
     CreatePreparationPlanRequest
 )
 from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/opportunities", tags=["Universal Opportunity Intelligence Layer"])
-matching_engine = OpportunityMatchingEngine()
+career_engine = CareerReadinessEngine()
+matching_engine = OpportunityMatchingEngine(career_engine=career_engine)
 get_person_id = get_authenticated_person
 
 @router.get("", response_model=List[CanonicalOpportunity])
@@ -70,7 +72,7 @@ async def get_interview_prep(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        return await matching_engine.generate_interview_prep(person_id=person_id, opportunity_id=opportunity_id)
+        return await matching_engine.get_interview_prep_package(person_id=person_id, opportunity_id=opportunity_id)
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:

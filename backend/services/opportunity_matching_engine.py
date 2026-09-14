@@ -37,8 +37,7 @@ class OpportunityMatchingEngine:
         self.agent = agent or OpportunityReasoningAgent()
         
         if career_engine is None:
-            from backend.services.career_readiness_engine import CareerReadinessEngine
-            career_engine = CareerReadinessEngine(store=self.store)
+            raise ValueError("career_engine dependency must be provided to OpportunityMatchingEngine")
         self.career_engine = career_engine
 
     async def get_all_opportunities(
@@ -186,6 +185,7 @@ class OpportunityMatchingEngine:
             organization=opp.organization,
             requirements=opp.requirements
         )
+        plan["opportunity_id"] = opportunity_id
         return ApplicationPreparationPlan(**plan)
 
     async def get_interview_prep_package(
@@ -204,4 +204,5 @@ class OpportunityMatchingEngine:
             organization=opp.organization,
             requirements=opp.requirements
         )
+        package["opportunity_id"] = opportunity_id
         return InterviewPrepPackage(**package)

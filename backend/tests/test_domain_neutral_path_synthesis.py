@@ -38,7 +38,8 @@ def trajectory_engine():
 
 @pytest.fixture
 def opp_engine(clean_store):
-    return OpportunityMatchingEngine(store=clean_store)
+    from backend.services.career_readiness_engine import CareerReadinessEngine
+    return OpportunityMatchingEngine(store=clean_store, career_engine=CareerReadinessEngine(store=clean_store))
 
 
 # ==============================================================================
