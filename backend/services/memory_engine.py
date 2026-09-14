@@ -94,11 +94,23 @@ class MemoryEngine:
         if memories:
             concept_words = [w.lower() for w in current_concept.split() if len(w) > 3]
             matched_mem = next((m for m in memories if any(w in m.topic.lower() or w in m.title.lower() for w in concept_words)), None)
+            
             if not matched_mem:
-                # Default to the most foundational or latest verified memory
-                recursion_mem = next((m for m in memories if "recursion" in m.topic.lower() or "recursion" in m.title.lower()), None)
-                matched_mem = recursion_mem or memories[0]
-        
+                concept_expansions = {
+                    "tree": ["recursion", "call stack", "stack frame", "traversal"],
+                    "graph": ["tree", "recursion", "dfs", "bfs"],
+                    "recursion": ["call stack", "base case"],
+                    "litigation": ["jurisprudence", "constitutional", "legal"],
+                    "contract": ["jurisprudence", "statutory"],
+                    "menu": ["culinary", "food safety", "costing"],
+                    "genomics": ["molecular", "biology", "dna"]
+                }
+                for word, related in concept_expansions.items():
+                    if word in current_concept.lower():
+                        matched_mem = next((m for m in memories if any(r in m.topic.lower() or r in m.title.lower() for r in related)), None)
+                        if matched_mem:
+                            break
+
         if matched_mem:
             return CrossStageBridgeResponse(
                 person_id=person_id,
@@ -113,9 +125,9 @@ class MemoryEngine:
         return CrossStageBridgeResponse(
             person_id=person_id,
             current_concept=current_concept,
-            past_concept="Foundational Competencies",
+            past_concept="NO_RECORDED_MEMORY",
             past_stage="Prerequisite Milestones",
-            context="Foundational concept mastery will be connected here as you progress.",
-            connection_explanation=f"{current_concept} requires structured problem-solving foundations. Complete prerequisite stages to unlock specific concept linkages.",
-            confidence="MEDIUM"
+            context="No prior recorded memory connects to this concept.",
+            connection_explanation=f"No prior recorded memory connects to {current_concept}. Complete foundational milestones to establish concept linkages.",
+            confidence="LOW"
         )

@@ -329,7 +329,7 @@ class RequirementGraphService:
             )
 
         # 4. RESEARCHER / SCIENTIFIC INVESTIGATOR
-        elif "researcher" in lower or "research" in lower or "biotechnology" in lower:
+        elif ("researcher" in lower or "research" in lower or "biotechnology" in lower) and not any(k in lower for k in ["cfd", "fluid dynamics", "mathematician", "drone"]):
             discipline = target_domain or "Scientific Domain"
             core = [
                 RequirementNode(
@@ -673,7 +673,822 @@ class RequirementGraphService:
                 generated_at=now_iso
             )
 
-        # 7. DEFAULT / FALLBACK: GENERIC PROFESSIONAL OR TECHNICAL GROUNDED IN OUTCOME
+        # 7. CLINICAL PSYCHOLOGIST / MENTAL HEALTH PRACTITIONER
+        elif any(k in lower for k in ["psycholog", "therapist", "mental health", "counselor", "psychiatry"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_psych_assessment",
+                    name="Psychological Assessment & Psychometric Evaluation",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Administering, scoring, and interpreting standardized cognitive, behavioral, and personality batteries (WAIS, MMPI, BDI).",
+                    source="American Psychological Association (APA) / Rehabilitation Council of India",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Supervised psychological assessment report and battery administration logs."
+                ),
+                RequirementNode(
+                    requirement_id="req_psych_diagnostics",
+                    name="Diagnostic Formulation & Psychopathology (DSM-5 / ICD-11)",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Differential diagnosis of psychiatric disorders, etiology formulation, and biopsychosocial synthesis.",
+                    source="WHO ICD-11 / APA DSM-5 Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Diagnostic case synthesis reports."
+                ),
+                RequirementNode(
+                    requirement_id="req_psych_therapy",
+                    name="Evidence-Based Psychotherapy (CBT & Interpersonal)",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Formulating case conceptualizations and delivering Cognitive Behavioral Therapy, behavioral activation, and distress tolerance interventions.",
+                    source="Clinical Psychology Guidelines / NICE Guidelines",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Verified clinical intervention case study with treatment plan."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_psych_crisis",
+                    name="Crisis Intervention & Suicide Risk Assessment",
+                    category="SUPPORTING_SKILL",
+                    importance="CRITICAL",
+                    description="Structured risk assessment protocols, safety planning, and de-escalation for acute psychiatric crises.",
+                    source="Clinical Safety Standard",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Safety planning and crisis intervention protocol documentation."
+                ),
+                RequirementNode(
+                    requirement_id="req_psych_ethics",
+                    name="Clinical Ethics, Confidentiality & Duty of Care",
+                    category="LEGAL_OR_REGULATORY",
+                    importance="CRITICAL",
+                    description="Adherence to client confidentiality, informed consent, boundary management, and mandatory reporting.",
+                    source="APA Ethical Principles / Mental Healthcare Act",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Passing evaluation in Professional Clinical Ethics."
+                )
+            ]
+            education = [
+                RequirementNode(
+                    requirement_id="req_psych_degree",
+                    name="Master's (M.Phil / M.Sc) or Psy.D / Ph.D in Clinical Psychology",
+                    category="EDUCATION",
+                    importance="CRITICAL",
+                    description="Accredited graduate degree in Clinical Psychology from a recognized University or Medical College.",
+                    source="National Regulatory Board for Clinical Psychology",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Degree certificate or enrollment verification in recognized clinical program."
+                )
+            ]
+            credentials = [
+                RequirementNode(
+                    requirement_id="req_psych_license",
+                    name="Clinical Psychologist Registration / Board License",
+                    category="CREDENTIAL",
+                    importance="CRITICAL",
+                    description="Official licensure or registry certification authorizing independent clinical practice.",
+                    source="State Licensing Board / RCI Register",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Active clinical license registration number or board qualification record."
+                )
+            ]
+            experience = [
+                RequirementNode(
+                    requirement_id="req_psych_practicum",
+                    name="Supervised Clinical Practicum / Internship (1000+ Clock Hours)",
+                    category="EXPERIENCE",
+                    importance="CRITICAL",
+                    description="Direct clinical patient contact hours conducted under supervision of a licensed clinical psychologist in a hospital or clinic setting.",
+                    source="Clinical Training Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Supervisor-certified clinical hours logbook and competency evaluation."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_psych_case_study",
+                    name="Anonymized Clinical Case Formulation Portfolio",
+                    category="PROJECT_EVIDENCE",
+                    importance="HIGH",
+                    description="Comprehensive case report detailing assessment findings, differential diagnosis, treatment plan, and outcome metrics.",
+                    source="Clinical Portfolio Requirement",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="De-identified clinical case formulation portfolio."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Healthcare & Clinical Psychology",
+                source_standards=["American Psychological Association (APA)", "National Mental Healthcare Standards (RCI)"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=education,
+                credential_recommendations=credentials,
+                experience_requirements=experience,
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Clinical psychology is a legally regulated healthcare profession requiring accredited education and supervised hours."],
+                generated_at=now_iso
+            )
+
+        # 8. PROFESSIONAL PHOTOGRAPHER / COMMERCIAL VISUAL IMAGING
+        elif any(k in lower for k in ["photograph", "camera", "imaging", "cinematograph"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_photo_exposure",
+                    name="Exposure Triangle, Optical Systems & Sensor Physics",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Mastery of aperture, shutter speed, ISO, focal length compression, depth of field, and dynamic range.",
+                    source="Professional Photography Educational Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Technical exposure test shoots demonstrating manual mode control across lighting environments."
+                ),
+                RequirementNode(
+                    requirement_id="req_photo_lighting",
+                    name="Studio Strobe Lighting, Modifiers & Lighting Ratios",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Shaping light with key, fill, rim, and background strobes using softboxes, beauty dishes, grids, and flags.",
+                    source="Commercial Photography Association",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Lighting diagram portfolio with corresponding studio test deliverables."
+                ),
+                RequirementNode(
+                    requirement_id="req_photo_post_processing",
+                    name="Color Calibration, RAW Processing & Retouching",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Non-destructive RAW processing in Adobe Lightroom / Capture One, color grading, frequency separation retouching.",
+                    source="Digital Imaging Industry Benchmark",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="RAW before/after edit comparisons and color-managed deliverables."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_photo_contracts",
+                    name="Commercial Image Licensing & Model Releases",
+                    category="LEGAL_OR_REGULATORY",
+                    importance="HIGH",
+                    description="Drafting commercial licensing contracts, usage buyouts, copyright ownership terms, and talent releases.",
+                    source="Professional Photographers Copyright Standard",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Sample licensing contract and signed model release templates."
+                ),
+                RequirementNode(
+                    requirement_id="req_photo_dam",
+                    name="Digital Asset Management & Client Delivery",
+                    category="SUPPORTING_SKILL",
+                    importance="MEDIUM",
+                    description="Ingestion catalogs, metadata tagging, redundant RAID/cloud archiving, and proofing gallery delivery.",
+                    source="Digital Asset Management Best Practice",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Organized catalog taxonomy and client delivery gallery proof."
+                )
+            ]
+            education = [
+                RequirementNode(
+                    requirement_id="req_photo_edu",
+                    name="Foundational Visual Arts or Photography Education",
+                    category="EDUCATION",
+                    importance="OPTIONAL",
+                    description="Formal degree is optional; portfolio quality and client delivery track record are primary hiring criteria.",
+                    source="Commercial Imaging Industry Benchmark",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Formal degree or equivalent self-directed portfolio evidence."
+                )
+            ]
+            credentials = [
+                RequirementNode(
+                    requirement_id="req_photo_cred",
+                    name="Certified Professional Photographer (CPP / PPA)",
+                    category="CREDENTIAL",
+                    importance="OPTIONAL",
+                    description="Recognized professional designation signaling technical competence, though portfolio dominates hiring.",
+                    source="Professional Photographers of America",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="CPP certification or accredited association membership."
+                )
+            ]
+            experience = [
+                RequirementNode(
+                    requirement_id="req_photo_client_exp",
+                    name="Commercial Client Shoots or Editorial Commissions",
+                    category="EXPERIENCE",
+                    importance="HIGH",
+                    description="Planning, directing, and delivering commercial or editorial photography assignments under client deadlines.",
+                    source="Industry Standard",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Client assignment invoices, published tearsheets, or client testimonials."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_photo_portfolio",
+                    name="Curated Commercial Photography Portfolio Gallery",
+                    category="PROJECT_EVIDENCE",
+                    importance="CRITICAL",
+                    description="High-resolution web gallery showcasing 3 cohesive series (commercial, portrait, editorial) with creative direction notes.",
+                    source="Hiring Portfolio Requirement",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Live curated portfolio website with metadata and high-resolution photo essays."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Visual Arts & Commercial Photography",
+                source_standards=["Professional Photographers of America (PPA)", "Advertising Photographers Association"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=education,
+                credential_recommendations=credentials,
+                experience_requirements=experience,
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Commercial photography evaluates creative direction, lighting mastery, and client reliability over formal degrees."],
+                generated_at=now_iso
+            )
+
+        # 9. TEACHER / K-12 EDUCATOR
+        elif any(k in lower for k in ["teacher", "educator", "teaching", "pedagog", "school teacher"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_teach_pck",
+                    name="Pedagogical Content Knowledge & Learning Theories",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Applying cognitive development theories (Piaget, Vygotsky, Bloom) to structure concepts for learner comprehension.",
+                    source="National Council for Teacher Education (NCTE) / InTASC Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Pedagogical analysis and lesson design documents."
+                ),
+                RequirementNode(
+                    requirement_id="req_teach_lesson_plans",
+                    name="Curriculum Unit Design & Differentiated Lesson Planning",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Formulating multi-week curricular units with clear learning objectives, differentiated instruction, and accommodations.",
+                    source="InTASC Model Core Teaching Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Complete curricular unit plan with differentiated materials."
+                ),
+                RequirementNode(
+                    requirement_id="req_teach_classroom",
+                    name="Classroom Management & Socio-Emotional Learning",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Cultivating an inclusive, focused, and psychologically safe classroom culture using proactive behavioral management.",
+                    source="State Education Department Teaching Framework",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Classroom management plan and restorative behavioral rubric."
+                ),
+                RequirementNode(
+                    requirement_id="req_teach_assessment",
+                    name="Formative & Summative Student Assessment Design",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Constructing valid rubric-based assessments, exit tickets, and feedback mechanisms to measure mastery.",
+                    source="Educational Measurement Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Assessment rubric and student feedback analysis protocol."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_teach_safeguarding",
+                    name="Child Protection, Safeguarding & Mandatory Reporting",
+                    category="LEGAL_OR_REGULATORY",
+                    importance="CRITICAL",
+                    description="Compliance with child safety legislation, protection policies, confidentiality, and mandatory reporting obligations.",
+                    source="POCSO / State Child Protection Act",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Child safeguarding certification or passing evaluation."
+                )
+            ]
+            education = [
+                RequirementNode(
+                    requirement_id="req_teach_degree",
+                    name="Bachelor of Education (B.Ed) or Accredited Teaching Degree",
+                    category="EDUCATION",
+                    importance="CRITICAL",
+                    description="Accredited degree in education or postgraduate teaching qualification required by law for school instruction.",
+                    source="NCTE / State Education Qualification Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="B.Ed degree certificate or university enrollment verification."
+                )
+            ]
+            credentials = [
+                RequirementNode(
+                    requirement_id="req_teach_tet",
+                    name="Teacher Eligibility Test (CTET / State TET / PRAXIS)",
+                    category="CREDENTIAL",
+                    importance="CRITICAL",
+                    description="Mandatory qualification examination demonstrating subject and pedagogical teaching eligibility.",
+                    source="Central Board of Secondary Education (CBSE) / State Education Board",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Valid CTET or State TET qualification scorecard."
+                )
+            ]
+            experience = [
+                RequirementNode(
+                    requirement_id="req_teach_practicum",
+                    name="Supervised Student Teaching Practicum (Classroom Internship)",
+                    category="EXPERIENCE",
+                    importance="CRITICAL",
+                    description="Supervised full-time classroom teaching internship under an experienced mentor educator.",
+                    source="NCTE Teacher Training Norms",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Mentor teacher observation reviews and practicum completion certificate."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_teach_portfolio",
+                    name="Teaching Portfolio & Unit Plan Artifacts",
+                    category="PROJECT_EVIDENCE",
+                    importance="HIGH",
+                    description="Documented unit plans, student work samples (anonymized), assessment rubrics, and video teaching reflections.",
+                    source="Teacher Professional Evaluation Standard",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Comprehensive teaching portfolio notebook."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Education & K-12 Instruction",
+                source_standards=["National Council for Teacher Education (NCTE)", "InTASC Model Core Teaching Standards"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=education,
+                credential_recommendations=credentials,
+                experience_requirements=experience,
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Teaching in accredited institutions mandates formal pedagogical education (B.Ed) and teacher eligibility qualification."],
+                generated_at=now_iso
+            )
+
+        # 10. CIVIL SERVICES CANDIDATE / PUBLIC ADMINISTRATION
+        elif any(k in lower for k in ["civil services", "upsc", "public policy", "ias", "ips", "administrative officer", "public administration"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_civ_governance",
+                    name="Constitutional Polity, Governance & Administrative Law",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Constitutional provisions, center-state relations, statutory bodies, administrative tribunals, and democratic governance structures.",
+                    source="Union Public Service Commission (UPSC) Syllabus / IIPA",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Analytical answers on constitutional governance and public policy dilemmas."
+                ),
+                RequirementNode(
+                    requirement_id="req_civ_economy",
+                    name="Economic Development, Fiscal Policy & Budgetary Analysis",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Macroeconomic indicators, monetary and fiscal policy, inclusive growth, infrastructure, and budget analysis.",
+                    source="Ministry of Finance / UPSC General Studies Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Economic survey analysis memoranda and policy critiques."
+                ),
+                RequirementNode(
+                    requirement_id="req_civ_ethics",
+                    name="Public Service Ethics, Integrity & Administrative Aptitude",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Ethical dilemmas in governance, public accountability, conflict of interest management, and foundational civil service values.",
+                    source="Second Administrative Reforms Commission (ARC) / UPSC Ethics",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Ethical case study analyses evaluating bureaucratic trade-offs."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_civ_foreign_policy",
+                    name="International Relations & Strategic Geopolitics",
+                    category="SUPPORTING_SKILL",
+                    importance="HIGH",
+                    description="Bilateral agreements, regional groupings, multilateral treaties, and geopolitical strategy.",
+                    source="Ministry of External Affairs / UPSC Standards",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Geopolitical brief on contemporary bilateral relations."
+                )
+            ]
+            education = [
+                RequirementNode(
+                    requirement_id="req_civ_degree",
+                    name="Bachelor's Degree in Any Discipline from a Recognized University",
+                    category="EDUCATION",
+                    importance="CRITICAL",
+                    description="Graduation degree from a recognized central, state, or deemed university as mandated by commission eligibility rules.",
+                    source="UPSC Civil Services Examination Rules",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="University undergraduate degree certificate."
+                )
+            ]
+            credentials = [
+                RequirementNode(
+                    requirement_id="req_civ_exam",
+                    name="Civil Services Examination (CSE Prelims, Mains & Interview)",
+                    category="CREDENTIAL",
+                    importance="CRITICAL",
+                    description="Nationwide competitive examination conducted by UPSC for recruitment to IAS, IPS, IFS, and central civil services.",
+                    source="Union Public Service Commission",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Official commission scorecard / qualification notice."
+                )
+            ]
+            experience = [
+                RequirementNode(
+                    requirement_id="req_civ_practicum",
+                    name="Public Policy Research or Administrative Internship",
+                    category="EXPERIENCE",
+                    importance="MEDIUM",
+                    description="Internship with government departments, policy think tanks (NITI Aayog, PRS Legislative Research), or district administrative offices.",
+                    source="Civil Services Training Framework",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Internship completion certificate or published policy brief."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_civ_portfolio",
+                    name="Public Policy Analysis Essay & Mock Benchmark Scorecards",
+                    category="PROJECT_EVIDENCE",
+                    importance="HIGH",
+                    description="Curated collection of policy evaluations, essay answers, and competitive examination benchmark test scores.",
+                    source="Civil Services Preparation Standard",
+                    retrieved_at=now_iso,
+                    geographic_scope=geography,
+                    evidence_requirement="Evaluated policy essay portfolio and test series percentiles."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Public Administration & Civil Services",
+                source_standards=["Union Public Service Commission (UPSC)", "Department of Personnel and Training (DoPT)"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=education,
+                credential_recommendations=credentials,
+                experience_requirements=experience,
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Civil Services recruitment is governed strictly by competitive national examinations and statutory commission guidelines."],
+                generated_at=now_iso
+            )
+
+        # 11. THEORETICAL MATHEMATICIAN / PURE MATHEMATICS
+        elif any(k in lower for k in ["mathematician", "pure mathematics", "theoretical math"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_math_proofs",
+                    name="Axiomatic Reasoning & Mathematical Proofs",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Rigorous mathematical proof techniques: induction, contraposition, epsilon-delta formulations, and formal logic.",
+                    source="American Mathematical Society (AMS) Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Evaluated rigorous proof problem sets or peer-reviewed expository mathematical paper."
+                ),
+                RequirementNode(
+                    requirement_id="req_math_abstract_algebra",
+                    name="Abstract Algebra (Groups, Rings, Fields & Galois Theory)",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Homomorphisms, quotient structures, Sylow theorems, polynomial rings, and Galois correspondence.",
+                    source="AMS Core Graduate Mathematics Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Formal problem set verifications in group theory and field extensions."
+                ),
+                RequirementNode(
+                    requirement_id="req_math_real_analysis",
+                    name="Real & Complex Analysis & Metric Spaces",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Measure theory, Lebesgue integration, metric space compactness, Cauchy sequences, and contour integration.",
+                    source="International Mathematical Union Guidelines",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Expository notes and analysis proofs in metric spaces and measure theory."
+                ),
+                RequirementNode(
+                    requirement_id="req_math_topology",
+                    name="Point-Set & Differential Topology",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Topological spaces, continuous maps, manifolds, fundamental groups, and covering spaces.",
+                    source="AMS Graduate Curriculum Benchmark",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Documented topology proofs and homotopy classifications."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_math_latex",
+                    name="Scholarly Mathematical Typesetting (LaTeX / TeX)",
+                    category="SUPPORTING_SKILL",
+                    importance="HIGH",
+                    description="Typesetting complex mathematical manuscripts, theorem environments, and commutative diagrams.",
+                    source="AMS Author Handbook",
+                    retrieved_at=now_iso,
+                    evidence_requirement="LaTeX compiled manuscript source file and PDF."
+                )
+            ]
+            education = [
+                RequirementNode(
+                    requirement_id="req_math_degree",
+                    name="Bachelor's / Master's / Ph.D. in Pure Mathematics",
+                    category="EDUCATION",
+                    importance="CRITICAL",
+                    description="Formal academic education in pure mathematics from an accredited university.",
+                    source="Higher Education Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="University academic transcripts in mathematics."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_math_preprints",
+                    name="Original Mathematical Manuscript or Expository Thesis",
+                    category="PROJECT_EVIDENCE",
+                    importance="CRITICAL",
+                    description="An original mathematical research draft or comprehensive expository monograph deposited on arXiv or presented to a faculty committee.",
+                    source="Academic Mathematics Benchmark",
+                    retrieved_at=now_iso,
+                    evidence_requirement="arXiv Math preprint link or faculty-reviewed thesis document."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Mathematical Sciences & Pure Research",
+                source_standards=["American Mathematical Society (AMS)", "International Mathematical Union (IMU)"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=education,
+                credential_recommendations=[],
+                experience_requirements=[],
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Theoretical mathematics demands formal proof construction, rigorous axiomatic deduction, and scholarly publication."],
+                generated_at=now_iso
+            )
+
+        # 12. OPERATIONS MANAGER
+        elif any(k in lower for k in ["operations manager", "ops manager", "business operations"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_ops_process",
+                    name="Cross-Functional Process Optimization & Lean Workflows",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Value stream mapping, operational bottleneck mitigation, and continuous process improvement methodologies.",
+                    source="Association for Supply Chain Management (ASCM) / Lean Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="End-to-end process workflow blueprint and cycle time optimization report."
+                ),
+                RequirementNode(
+                    requirement_id="req_ops_telemetry",
+                    name="KPI Dashboard Design, Telemetry & Operational Metrics",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Designing metric telemetry, SLA tracking, OKR governance, and operational scorecard reporting.",
+                    source="Operations Management Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Operational dashboard architecture and SLA performance review deck."
+                ),
+                RequirementNode(
+                    requirement_id="req_ops_vendor",
+                    name="Vendor Management & Procurement Contract Negotiation",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="RFP drafting, vendor evaluation matrices, contract negotiations, and external partner performance scorecards.",
+                    source="Procurement Best Practices",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Vendor comparison scorecard and negotiated service level agreement (SLA) terms."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_ops_change",
+                    name="Organizational Change Management & Stakeholder Alignment",
+                    category="SUPPORTING_SKILL",
+                    importance="HIGH",
+                    description="Leading cross-departmental rollouts, team enablement, and stakeholder communication.",
+                    source="Prosci / Change Management Institute",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Change management plan and stakeholder communication cadence runbook."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_ops_sop",
+                    name="Operational Transformation Case Study & Standard Operating Procedures",
+                    category="PROJECT_EVIDENCE",
+                    importance="HIGH",
+                    description="Detailed business case documenting workflow transformation, cost reduction, and standard operating procedures (SOP).",
+                    source="Operations Industry Benchmark",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Documented operations case study and comprehensive SOP runbook."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Business Operations & Enterprise Management",
+                source_standards=["Association for Supply Chain Management (ASCM)", "Project Management Institute (PMI)"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=[],
+                credential_recommendations=[],
+                experience_requirements=[],
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Operations leadership emphasizes measurable process efficiency, SLA attainment, and cross-functional execution."],
+                generated_at=now_iso
+            )
+
+        # 13. AUTONOMOUS DRONE HARDWARE SPECIALIST
+        elif any(k in lower for k in ["drone hardware", "drone", "uav", "aerospace hardware"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_drone_embedded",
+                    name="Embedded Flight Controller Firmware & Microcontrollers (C/C++)",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Real-time flight firmware architecture, PX4 / ArduPilot customization, STM32 microcontrollers, and UART/CAN bus protocols.",
+                    source="IEEE Aerospace & Electronic Systems / DroneCode Consortium",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Custom flight controller firmware build and bench testing log."
+                ),
+                RequirementNode(
+                    requirement_id="req_drone_sensors",
+                    name="Sensor Fusion & State Estimation (IMU, LiDAR, Optical Flow)",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Extended Kalman Filter (EKF) tuning, IMU vibration filtering, optical flow calibration, and magnetometer degaussing.",
+                    source="Robotics Navigation Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Sensor calibration report and state estimation flight telemetry plots."
+                ),
+                RequirementNode(
+                    requirement_id="req_drone_ros",
+                    name="ROS 2 Hardware Interfaces & Actuator Control (ESC/BLDC)",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="micro-ROS hardware interfacing, DShot/PWM electronic speed controller configuration, and motor thrust-to-weight testing.",
+                    source="Open Robotics / ROS 2 Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="ROS 2 node integration code and motor dyno test bench results."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_drone_cad",
+                    name="Avionics Packaging, Thermal Dissipation & Vibration Isolation (CAD/FEA)",
+                    category="SUPPORTING_SKILL",
+                    importance="HIGH",
+                    description="CAD airframe packaging, mechanical vibration damping mounts, and thermal dissipation simulations.",
+                    source="Aerospace Mechanical Design Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="CAD assembly model (.STEP) and structural FEA vibration report."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_drone_prototype",
+                    name="Autonomous Drone Hardware Prototype & Flight Telemetry Logs",
+                    category="PROJECT_EVIDENCE",
+                    importance="CRITICAL",
+                    description="Physical prototype integration with recorded autonomous flight log files verifying waypoint navigation and sensor stability.",
+                    source="UAV Hardware Engineering Standard",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Flight log analysis (.ulog) and hardware build log video."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Aerospace, Robotics & Hardware Systems",
+                source_standards=["IEEE Aerospace and Electronic Systems Society", "DroneCode Foundation"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=[],
+                credential_recommendations=[],
+                experience_requirements=[],
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["Drone hardware engineering combines rigorous embedded firmware development with mechanical dynamics and electrical reliability."],
+                generated_at=now_iso
+            )
+
+        # 14. COMPUTATIONAL FLUID DYNAMICS (CFD) RESEARCHER
+        elif any(k in lower for k in ["computational fluid dynamics", "cfd", "fluid dynamics", "aerodynamics"]):
+            core = [
+                RequirementNode(
+                    requirement_id="req_cfd_pde",
+                    name="Navier-Stokes Equations & Continuum Fluid Mechanics",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Derivation of conservation laws (mass, momentum, energy), boundary layer theory, and compressible vs incompressible flow regimes.",
+                    source="AIAA Fluid Dynamics Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Analytical fluid mechanics problem sets and theoretical flow derivations."
+                ),
+                RequirementNode(
+                    requirement_id="req_cfd_discretization",
+                    name="Numerical Discretization & Mesh Generation (FVM / FEM)",
+                    category="CORE_SKILL",
+                    importance="CRITICAL",
+                    description="Finite Volume Method (FVM), spatial/temporal discretization schemes, structured/unstructured boundary layer meshing, and grid independence studies.",
+                    source="ASME Verification & Validation Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Mesh convergence study and discretization error evaluation report."
+                ),
+                RequirementNode(
+                    requirement_id="req_cfd_turbulence",
+                    name="Turbulence Modeling (RANS, LES & DNS)",
+                    category="CORE_SKILL",
+                    importance="HIGH",
+                    description="Reynolds-Averaged Navier-Stokes (k-epsilon, k-omega SST), wall functions, Large Eddy Simulation (LES), and energy cascade theory.",
+                    source="Computational Mechanics Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Turbulence model comparative benchmark study."
+                )
+            ]
+            supporting = [
+                RequirementNode(
+                    requirement_id="req_cfd_hpc",
+                    name="High-Performance Parallel Solvers (OpenFOAM / MPI)",
+                    category="SUPPORTING_SKILL",
+                    importance="HIGH",
+                    description="Configuring parallel CFD solvers, domain decomposition, and running simulations on multi-node HPC clusters.",
+                    source="HPC Scientific Computing Standards",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Simulation configuration files and MPI parallel scaling benchmark curves."
+                )
+            ]
+            projects = [
+                RequirementNode(
+                    requirement_id="req_cfd_validation",
+                    name="CFD Simulation Validation Study Against Experimental Benchmarks",
+                    category="PROJECT_EVIDENCE",
+                    importance="CRITICAL",
+                    description="Validated CFD investigation matching numerical pressure and velocity distributions against published experimental wind tunnel datasets.",
+                    source="AIAA Benchmark Guidelines",
+                    retrieved_at=now_iso,
+                    evidence_requirement="Comprehensive validation report comparing simulation against experimental benchmark data."
+                )
+            ]
+            return CareerRequirementGraph(
+                target_role=target_outcome,
+                target_industry="Aerospace, Mechanical & Computational Science",
+                source_standards=["American Institute of Aeronautics and Astronautics (AIAA)", "ASME Committee on Verification and Validation"],
+                core_skills=core,
+                supporting_skills=supporting,
+                education_requirements=[],
+                credential_recommendations=[],
+                experience_requirements=[],
+                project_evidence_requirements=projects,
+                eligibility_criteria=[],
+                market_context_notes=["CFD research evaluates numerical rigor, turbulence model selection, and experimental validation over black-box GUI execution."],
+                generated_at=now_iso
+            )
+
+        # 15. DEFAULT / FALLBACK: GENERIC PROFESSIONAL OR TECHNICAL GROUNDED IN OUTCOME
         else:
             core = [
                 RequirementNode(

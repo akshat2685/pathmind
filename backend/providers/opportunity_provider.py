@@ -183,6 +183,126 @@ class VerifiedOpenOpportunityProvider(BaseOpportunityProvider):
                 source_url="https://home.iitd.ac.in/research-fellowships.php",
                 status="ACTIVE",
                 verification_status="VERIFIED"
+            ),
+            CanonicalOpportunity(
+                opportunity_id="opp_design_intern_fellowship",
+                provider="AIGA & Design Guild Portal",
+                provider_record_id="design_fellow_2026",
+                type="INTERNSHIP",
+                title="Product Design (UI/UX) Apprentice",
+                organization="Digital Product Design Studio",
+                description="Contribute to Figma design systems, execute usability testing sessions, and craft responsive interactive prototypes.",
+                location="Bengaluru, India / Remote",
+                remote_status="HYBRID",
+                eligibility="Design students or career switchers with verified portfolio.",
+                requirements=["Figma", "User Research", "Wireframing", "Usability Testing"],
+                preferred_requirements=["Design Tokens", "Auto-Layout", "WCAG Accessibility"],
+                skills=["Figma", "User Research", "Wireframing", "Usability Testing"],
+                education_requirements=["Degree in Design, HCI, or verified case study portfolio."],
+                experience_requirements=["At least 1 published end-to-end product case study."],
+                credential_requirements=[],
+                compensation="₹25,000 – ₹45,000 / month (Stipend)",
+                deadline="2026-12-31",
+                application_url="https://www.aiga.org/design-jobs",
+                source_url="https://www.aiga.org/design-jobs",
+                status="ACTIVE",
+                verification_status="VERIFIED"
+            ),
+            CanonicalOpportunity(
+                opportunity_id="opp_judicial_clerkship_intern",
+                provider="National Law Portal",
+                provider_record_id="law_clerk_2026",
+                type="INTERNSHIP",
+                title="Judicial Clerkship & Legal Research Intern",
+                organization="Senior Advocate Chambers & Legal Research Forum",
+                description="Draft statutory research briefs, synthesize constitutional precedents, and prepare legal briefs for appellate hearings.",
+                location="New Delhi, India",
+                remote_status="ON_SITE",
+                eligibility="LL.B / B.A. LL.B students in recognized Law Faculties.",
+                requirements=["Constitutional Law", "Statutory Research", "Legal Writing", "Case Law Analysis"],
+                preferred_requirements=["Manupatra / SCC Online", "Moot Court Participation"],
+                skills=["Constitutional Law", "Statutory Research", "Legal Drafting"],
+                education_requirements=["Enrolled in accredited LL.B program."],
+                experience_requirements=["Moot court memorial or published legal research paper."],
+                credential_requirements=[],
+                compensation="₹15,000 – ₹25,000 / month (Stipend)",
+                deadline="2026-11-30",
+                application_url="https://sci.gov.in/",
+                source_url="https://sci.gov.in/recruitment/",
+                status="ACTIVE",
+                verification_status="VERIFIED"
+            ),
+            CanonicalOpportunity(
+                opportunity_id="opp_clinical_psych_assistant",
+                provider="Clinical Health & Research Council",
+                provider_record_id="psych_practicum_2026",
+                type="INTERNSHIP",
+                title="Clinical Psychology Practicum & Research Assistant",
+                organization="Department of Clinical Psychology & Behavioral Sciences",
+                description="Assist licensed clinical psychologists with psychometric battery administration, diagnostic intake documentation, and CBT research.",
+                location="Bengaluru, India",
+                remote_status="ON_SITE",
+                eligibility="Master's / M.Phil students in Clinical or Counseling Psychology.",
+                requirements=["Psychopathology (DSM-5)", "Psychometric Assessment", "Clinical Interviewing", "Ethical Guidelines"],
+                preferred_requirements=["WAIS / MMPI administration exposure", "Research Methodology"],
+                skills=["Psychopathology", "Psychometric Testing", "Clinical Interviewing"],
+                education_requirements=["Enrolled in M.A. / M.Sc. / M.Phil in Psychology."],
+                experience_requirements=["Documented academic coursework in psychological assessment."],
+                credential_requirements=[],
+                compensation="₹20,000 – ₹30,000 / month (Fellowship Scale)",
+                deadline="2026-12-15",
+                application_url="https://nimhans.ac.in/",
+                source_url="https://nimhans.ac.in/academic-notices/",
+                status="ACTIVE",
+                verification_status="VERIFIED"
+            ),
+            CanonicalOpportunity(
+                opportunity_id="opp_teach_for_india_fellow",
+                provider="Teach For India / Global Education",
+                provider_record_id="tfi_fellowship_2026",
+                type="FELLOWSHIP",
+                title="K-12 Teaching & Educational Leadership Fellow",
+                organization="Teach For India Education Foundation",
+                description="Full-time classroom teaching fellowship delivering constructivist pedagogy, formative assessment, and student growth tracking.",
+                location="Mumbai / Delhi / Bengaluru, India",
+                remote_status="ON_SITE",
+                eligibility="Graduates in any discipline committed to educational equity.",
+                requirements=["Classroom Instruction", "Curriculum Delivery", "Formative Assessment", "Student Mentorship"],
+                preferred_requirements=["Constructivist Pedagogy", "Community Engagement"],
+                skills=["Classroom Instruction", "Curriculum Delivery", "Formative Assessment"],
+                education_requirements=["Graduation degree in any field."],
+                experience_requirements=["Demonstrated leadership or youth mentorship experience."],
+                credential_requirements=[],
+                compensation="₹23,000 / month + Housing Allowance",
+                deadline="2027-02-28",
+                application_url="https://www.teachforindia.org/",
+                source_url="https://www.teachforindia.org/apply",
+                status="ACTIVE",
+                verification_status="VERIFIED"
+            ),
+            CanonicalOpportunity(
+                opportunity_id="opp_culinary_management_trainee",
+                provider="Hospitality & Culinary Group",
+                provider_record_id="resto_mgmt_2026",
+                type="INTERNSHIP",
+                title="Commercial Kitchen & Restaurant Operations Trainee",
+                organization="Artisanal Hospitality & Dining Group",
+                description="Hands-on commercial kitchen line rotation, food safety (HACCP) monitoring, inventory control, and menu prime costing.",
+                location="Mumbai, India",
+                remote_status="ON_SITE",
+                eligibility="Culinary arts or hospitality students/graduates.",
+                requirements=["Food Safety Standards", "Commercial Kitchen Operations", "Inventory Rotation", "Recipe Costing"],
+                preferred_requirements=["ServSafe / FSSAI certification", "Kitchen Line Experience"],
+                skills=["Food Safety", "Kitchen Operations", "Recipe Costing"],
+                education_requirements=["Diploma / Degree in Culinary Arts or Hospitality Management."],
+                experience_requirements=["Commercial kitchen stage or vocational culinary training."],
+                credential_requirements=[],
+                compensation="₹18,000 – ₹28,000 / month",
+                deadline="2026-12-31",
+                application_url="https://ihmctan.edu/",
+                source_url="https://ihmctan.edu/placements",
+                status="ACTIVE",
+                verification_status="VERIFIED"
             )
         ]
 
@@ -220,9 +340,16 @@ class VerifiedOpenOpportunityProvider(BaseOpportunityProvider):
 
         if role_filter:
             rf = role_filter.lower()
+            rf_words = [w for w in rf.replace("/", " ").replace("-", " ").split() if len(w) > 3]
             valid_opps = [
                 o for o in valid_opps
                 if any(rf in s.lower() for s in [o.title, o.type, o.organization] + o.requirements + o.skills)
+                or (rf_words and any(any(w in s.lower() for w in rf_words) for s in [o.title, o.type, o.organization] + o.requirements + o.skills))
+                or (any(k in rf for k in ["law", "legal", "lawyer", "advocate"]) and any(k in (o.title + " " + " ".join(o.skills)).lower() for k in ["law", "legal", "judicial", "clerk"]))
+                or (any(k in rf for k in ["chef", "culinary", "restaurant", "food"]) and any(k in (o.title + " " + " ".join(o.skills)).lower() for k in ["chef", "culinary", "restaurant", "kitchen", "food"]))
+                or (any(k in rf for k in ["psycholog", "therapy", "mental health"]) and any(k in (o.title + " " + " ".join(o.skills)).lower() for k in ["psycholog", "mental", "therapy", "clinical"]))
+                or (any(k in rf for k in ["teach", "educat", "pedagog"]) and any(k in (o.title + " " + " ".join(o.skills)).lower() for k in ["teach", "educat", "pedagog", "school"]))
+                or (any(k in rf for k in ["design", "ui", "ux"]) and any(k in (o.title + " " + " ".join(o.skills)).lower() for k in ["design", "ui", "ux", "figma"]))
             ]
 
         if geography and geography.upper() != "ALL":

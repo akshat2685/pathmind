@@ -128,6 +128,10 @@ class CareerRequirementGraph(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+    @property
+    def domain(self) -> str:
+        return self.target_industry
+
 class CategorizedGap(BaseModel):
     gap_id: str
     gap_type: str  # SKILL, EXPERIENCE, EVIDENCE, EDUCATION, CREDENTIAL, PORTFOLIO, ELIGIBILITY, EXPOSURE

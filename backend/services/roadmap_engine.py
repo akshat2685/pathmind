@@ -248,7 +248,14 @@ class RoadmapEngine:
         lower = target_outcome.lower()
         now_ts = int(datetime.now(timezone.utc).timestamp())
         actual_constraints = constraints or {}
-        weekly_hours = actual_constraints.get("weekly_hours", 10)
+        weekly_hours = actual_constraints.get("weekly_hours")
+
+        def calc_effort(base_weeks: int) -> str:
+            if weekly_hours is None or weekly_hours <= 0:
+                return f"{base_weeks} Weeks (TIMELINE_UNCERTAIN: unspecified weekly availability)"
+            total_hours = base_weeks * 10
+            scaled_weeks = max(1, round(total_hours / weekly_hours))
+            return "1 Week" if scaled_weeks == 1 else f"{scaled_weeks} Weeks"
 
         # 1. LAWYER / LEGAL ADVOCATE
         if "lawyer" in lower or "advocate" in lower or "legal" in lower or "attorney" in lower:
@@ -289,7 +296,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Jurisprudential case analysis brief."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=False,
                 status="ACTIVE"
             )
@@ -305,7 +312,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Annotated research brief with statutory cross-references."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -321,7 +328,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Verified legal brief or moot court memorial."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -337,7 +344,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Bar examination practice test record and enrollment documentation."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="4 Weeks",
+                estimated_effort=calc_effort(4),
                 locked=True,
                 status="LOCKED"
             )
@@ -397,7 +404,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["User research deck and journey map document."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=False,
                 status="ACTIVE"
             )
@@ -413,7 +420,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Comprehensive Figma component library file."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -429,7 +436,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Interactive Figma prototype link and usability test summary report."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -445,7 +452,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Live public portfolio URL with 2 comprehensive case studies."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -503,7 +510,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Food safety compliance protocol and concept deck."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=False,
                 status="ACTIVE"
             )
@@ -519,7 +526,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Recipe costing model maintaining food cost <= 30%."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -535,7 +542,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Vendor comparison matrix and station standard operating procedures."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -551,7 +558,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Municipal trade license filing and soft launch operating runbook."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -579,7 +586,7 @@ class RoadmapEngine:
             current_mission_id = "mission_01_haccp_plan"
 
         # 4. RESEARCHER
-        elif "researcher" in lower or "research" in lower:
+        elif ("researcher" in lower or "research" in lower) and not any(k in lower for k in ["cfd", "fluid dynamics", "mathematician", "drone"]):
             discipline = target_domain or "Scientific Domain"
             st1 = Stage(
                 stage_id="stage_01_literature_survey",
@@ -610,7 +617,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Comprehensive research survey with annotated bibliography."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=False,
                 status="ACTIVE"
             )
@@ -626,7 +633,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Experimental protocol document with statistical power analysis."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -642,7 +649,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Reproducible analysis workbook and raw data telemetry."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -658,7 +665,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Complete manuscript draft or preprint repository URL."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="4 Weeks",
+                estimated_effort=calc_effort(4),
                 locked=True,
                 status="LOCKED"
             )
@@ -716,7 +723,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Customer interview synthesis deck."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=False,
                 status="ACTIVE"
             )
@@ -732,7 +739,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Complete Product Requirements Document (PRD) with user stories."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -748,7 +755,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Event tracking instrumentation schema and product telemetry dashboard."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=True,
                 status="LOCKED"
             )
@@ -764,7 +771,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=["Public product teardown document with strategic improvement proposals."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -791,7 +798,855 @@ class RoadmapEngine:
             current_stage_id = "stage_01_customer_discovery"
             current_mission_id = "mission_01_opp_tree"
 
-        # 6. AI/ML SPECIFIC GOAL
+        # 6. CLINICAL PSYCHOLOGIST
+        elif any(k in lower for k in ["psycholog", "mental health", "therap", "counsel"]):
+            st1 = Stage(
+                stage_id="stage_01_psychopathology_ethics",
+                phase_id="phase_01_clinical_foundations",
+                stage_number=1,
+                title="Psychopathology, Diagnostic Systems & Clinical Ethics",
+                objective="Master DSM-5/ICD-11 diagnostic criteria, clinical interview techniques, and mental health ethical codes.",
+                skills=["Diagnostic Classification (DSM-5)", "Clinical Interviewing", "Ethical Standards", "Mental Status Examination"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_diagnostic_intake",
+                        stage_id="stage_01_psychopathology_ethics",
+                        objective="Conduct a simulated diagnostic intake interview and author a structured clinical assessment note.",
+                        why="Diagnostic intake and ethical risk assessment are prerequisites to any therapeutic intervention.",
+                        estimated_time="5–6 hours",
+                        steps=[
+                            "Review standardized Mental Status Examination (MSE) protocols.",
+                            "Conduct structured diagnostic interview based on DSM-5 clinical criteria.",
+                            "Draft intake report identifying symptoms, differential diagnoses, and ethical boundaries."
+                        ],
+                        resources=[],
+                        evidence_requirements=["De-identified clinical intake interview note and differential diagnosis formulation."],
+                        completion_criteria="Intake report documents MSE observations and ethical safeguards.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Clinical intake evaluation notes and diagnostic case analysis."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_psychological_assessment",
+                phase_id="phase_01_clinical_foundations",
+                stage_number=2,
+                title="Psychological Assessment & Psychometric Testing",
+                objective="Administer, score, and interpret standardized psychometric batteries (WAIS, MMPI, BDI) with case formulation.",
+                skills=["Psychometric Testing", "Cognitive Assessment", "Personality Inventories", "Case Formulation"],
+                prerequisites=["stage_01_psychopathology_ethics"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Comprehensive psychometric evaluation report and interpretive summary."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_cbt_interventions",
+                phase_id="phase_02_therapeutic_practice",
+                stage_number=3,
+                title="Evidence-Based Psychotherapy & CBT Modalities",
+                objective="Execute Cognitive Behavioral Therapy (CBT) cognitive restructuring, behavioral activation, and exposure protocols.",
+                skills=["CBT Protocol Delivery", "Cognitive Restructuring", "Behavioral Activation", "Therapeutic Alliance"],
+                prerequisites=["stage_02_psychological_assessment"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Written CBT treatment plan with thought records and behavioral homework protocols."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_supervised_practicum",
+                phase_id="phase_03_licensure",
+                stage_number=4,
+                title="Supervised Clinical Practicum & Ethical Case Defense",
+                objective="Complete documented clinical contact hours under licensed supervision and defend treatment outcomes.",
+                skills=["Clinical Case Defense", "Supervisor Consultation", "Outcome Measurement", "Statutory Licensure"],
+                prerequisites=["stage_03_cbt_interventions"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Supervisor logbook of clinical hours and evaluated case defense transcript."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_clinical_foundations",
+                    title="Phase 1: Psychopathology & Assessment",
+                    description="Diagnostic classifications, clinical interviewing, and standardized psychometric evaluation.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_therapeutic_practice",
+                    title="Phase 2: Evidence-Based Therapeutic Modalities",
+                    description="Cognitive behavioral interventions, treatment planning, and therapeutic alliance.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_licensure",
+                    title="Phase 3: Supervised Practicum & Licensure",
+                    description="Documented clinical hours under licensed supervision and case defense.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_psychopathology_ethics"
+            current_mission_id = "mission_01_diagnostic_intake"
+
+        # 7. PROFESSIONAL PHOTOGRAPHER
+        elif any(k in lower for k in ["photo", "photographer"]):
+            st1 = Stage(
+                stage_id="stage_01_camera_optics_exposure",
+                phase_id="phase_01_visual_foundations",
+                stage_number=1,
+                title="Optical Physics, Camera Architecture & Manual Exposure",
+                objective="Master depth of field, focal length distortion, dynamic range, and exposure triangle in manual mode.",
+                skills=["Manual Exposure", "Focal Length Optics", "Dynamic Range Control", "Composition Geometry"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_exposure_triad",
+                        stage_id="stage_01_camera_optics_exposure",
+                        objective="Shoot a high-contrast editorial scene demonstrating precise manual exposure and histogram evaluation.",
+                        why="Full manual optical control ensures repeatable results across erratic natural and commercial lighting.",
+                        estimated_time="4–5 hours",
+                        steps=[
+                            "Set camera to full manual exposure mode.",
+                            "Capture bracketed exposures evaluating RAW histogram clipping.",
+                            "Submit 3 calibrated test shots demonstrating aperture depth-of-field control."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Uncompressed RAW image files with complete EXIF exposure metadata."],
+                        completion_criteria="Histograms confirm zero unintended highlight clipping and sharp focus plane.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["RAW image collection with documented EXIF exposure settings."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_studio_strobe_lighting",
+                phase_id="phase_01_visual_foundations",
+                stage_number=2,
+                title="Studio Strobe Lighting, Off-Camera Flash & Modifiers",
+                objective="Master 3-point studio lighting, lighting contrast ratios, softboxes, beauty dishes, and optical flags.",
+                skills=["Off-Camera Flash", "Strobe Synchronization", "Light Modifiers", "Lighting Ratio Control"],
+                prerequisites=["stage_01_camera_optics_exposure"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Studio lighting diagrams and corresponding high-resolution portrait photographs."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_raw_grading_postproduction",
+                phase_id="phase_02_commercial_production",
+                stage_number=3,
+                title="Color-Calibrated RAW Post-Production & Frequency Separation",
+                objective="Execute non-destructive RAW conversion in Lightroom/Capture One and frequency separation skin retouching in Photoshop.",
+                skills=["RAW Color Grading", "ICC Profiles", "Frequency Separation", "Dodge & Burn"],
+                prerequisites=["stage_02_studio_strobe_lighting"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Before/after layered PSD or TIFF retouched image file."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_commercial_editorial_delivery",
+                phase_id="phase_03_business_launch",
+                stage_number=4,
+                title="Commercial Editorial Portfolio, Client Runbooks & Gallery Delivery",
+                objective="Publish a 15-image curated editorial portfolio, commercial rate card, model release runbook, and delivery portal.",
+                skills=["Portfolio Curation", "Commercial Rate Cards", "Model Releases", "Client Proofing"],
+                prerequisites=["stage_03_raw_grading_postproduction"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Live public portfolio URL and client delivery contract template."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_visual_foundations",
+                    title="Phase 1: Optical Mechanics & Studio Lighting",
+                    description="Manual exposure mastery, optical physics, and off-camera studio strobe lighting.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_commercial_production",
+                    title="Phase 2: Post-Production & Retouching",
+                    description="Color calibration, RAW development, and non-destructive editorial retouching.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_business_launch",
+                    title="Phase 3: Portfolio & Commercial Delivery",
+                    description="Curated commercial portfolio, client contracts, and gallery delivery.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_camera_optics_exposure"
+            current_mission_id = "mission_01_exposure_triad"
+
+        # 8. TEACHER / K-12 EDUCATOR
+        elif any(k in lower for k in ["teach", "educat", "pedagog", "school"]):
+            st1 = Stage(
+                stage_id="stage_01_pedagogical_foundations",
+                phase_id="phase_01_pedagogy",
+                stage_number=1,
+                title="Educational Psychology & Constructivist Pedagogy",
+                objective="Master cognitive developmental theory (Piaget, Vygotsky ZPD), Bloom's taxonomy, and learner motivation.",
+                skills=["Educational Psychology", "Constructivist Learning", "Bloom's Taxonomy", "Zone of Proximal Development"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_constructivist_lesson",
+                        stage_id="stage_01_pedagogical_foundations",
+                        objective="Design an inquiry-based constructivist lesson plan applying Bloom's Taxonomy cognitive scaffolding.",
+                        why="Effective teaching requires deliberate pedagogical architecture rather than mere rote information delivery.",
+                        estimated_time="5–6 hours",
+                        steps=[
+                            "Select a core curricular topic in your subject domain.",
+                            "Map learning objectives across Bloom's Taxonomy cognitive levels.",
+                            "Design interactive student scaffolding exercises."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Complete lesson plan document with pedagogical rationale and scaffolding tasks."],
+                        completion_criteria="Plan incorporates active student inquiry and explicit cognitive stages.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Constructivist lesson plan and pedagogical rationale brief."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_curriculum_instructional_design",
+                phase_id="phase_01_pedagogy",
+                stage_number=2,
+                title="Curriculum Architecture, Unit Design & Assessment Rubrics",
+                objective="Design multi-week curriculum units utilizing backward design (UbD), formative checks, and diagnostic rubrics.",
+                skills=["Understanding by Design (UbD)", "Curriculum Alignment", "Formative Assessment", "Rubric Construction"],
+                prerequisites=["stage_01_pedagogical_foundations"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["4-week curricular unit map with diagnostic assessment rubrics."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_classroom_management_inclusion",
+                phase_id="phase_02_instructional_practice",
+                stage_number=3,
+                title="Classroom Management, Behavioral Systems & Inclusive Learning",
+                objective="Implement positive behavioral interventions, proactive routines, and differentiated Universal Design for Learning (UDL).",
+                skills=["Classroom Management", "PBIS Framework", "Universal Design for Learning (UDL)", "Differentiated Instruction"],
+                prerequisites=["stage_02_curriculum_instructional_design"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Classroom management plan and differentiated learning accommodation matrix."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_student_teaching_practicum",
+                phase_id="phase_03_teaching_credentials",
+                stage_number=4,
+                title="Supervised Student Teaching Practicum & Teaching Licensure",
+                objective="Complete supervised student teaching placement, classroom observation evaluations, and state licensure examination (CTET/B.Ed).",
+                skills=["Classroom Teaching Delivery", "Mentor Teacher Evaluation", "State Teacher Certification", "Pedagogical Reflection"],
+                prerequisites=["stage_03_classroom_management_inclusion"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Supervising teacher evaluation report and state teaching examination scorecard."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_pedagogy",
+                    title="Phase 1: Pedagogical Foundations & Curriculum Design",
+                    description="Educational psychology, Bloom's taxonomy, and backward curricular architecture.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_instructional_practice",
+                    title="Phase 2: Classroom Management & Inclusive Learning",
+                    description="Behavioral systems, differentiated instruction, and Universal Design for Learning.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_teaching_credentials",
+                    title="Phase 3: Practicum & State Teacher Certification",
+                    description="Supervised student teaching and teacher eligibility examination.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_pedagogical_foundations"
+            current_mission_id = "mission_01_constructivist_lesson"
+
+        # 9. CIVIL SERVICES / UPSC CANDIDATE
+        elif any(k in lower for k in ["upsc", "civil services", "public policy", "ias", "ips"]):
+            st1 = Stage(
+                stage_id="stage_01_polity_governance_economy",
+                phase_id="phase_01_prelims_foundations",
+                stage_number=1,
+                title="Constitutional Polity, Governance & Indian Economy Foundations",
+                objective="Master Indian Constitution articles, separation of powers, statutory bodies, macroeconomics, and fiscal policy.",
+                skills=["Indian Polity", "Constitutional Articles", "Governance Frameworks", "Macroeconomics"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_constitutional_doctrine",
+                        stage_id="stage_01_polity_governance_economy",
+                        objective="Analyze landmark Supreme Court constitutional bench decisions and draft a policy governance summary.",
+                        why="Constitutional doctrine and statutory frameworks form the core foundation of civil administration.",
+                        estimated_time="6–7 hours",
+                        steps=[
+                            "Review foundational constitutional provisions on basic structure doctrine and judicial review.",
+                            "Analyze key governance reform commissions (e.g. 2nd ARC recommendations).",
+                            "Draft a 250-word evaluative answer analyzing constitutional checks and balances."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Evaluated 250-word GS Paper II format answer script."],
+                        completion_criteria="Answer incorporates constitutional articles and commission references.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Evaluated constitutional policy answer script."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_mains_answer_writing",
+                phase_id="phase_02_mains_integration",
+                stage_number=2,
+                title="General Studies Mains Integrated Answer Writing (GS I–IV)",
+                objective="Master multi-dimensional answer writing across History, Geography, Polity, Economy, Environment, and Security.",
+                skills=["Answer Structuring", "Multi-Dimensional Analysis", "Current Affairs Integration", "Speed & Time Management"],
+                prerequisites=["stage_01_polity_governance_economy"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Evaluated full-length GS Mains test paper with mentor assessment."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_optional_subject_mastery",
+                phase_id="phase_02_mains_integration",
+                stage_number=3,
+                title="Optional Subject Advanced Conceptual Mastery & PYQs",
+                objective="Complete exhaustive academic coverage of chosen optional subject with past 10 years' question analysis.",
+                skills=["Optional Subject Theory", "Academic Depth", "PYQ Deconstruction", "Scholarly Arguments"],
+                prerequisites=["stage_02_mains_answer_writing"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Comprehensive optional subject test series evaluation copy."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_ethics_personality_interview",
+                phase_id="phase_03_interview_readiness",
+                stage_number=4,
+                title="Ethics, Integrity & Personality Test Board Interview Preparation",
+                objective="Resolve administrative ethics case studies (GS IV) and participate in personality test mock interview boards.",
+                skills=["Ethics Case Studies", "Administrative Poise", "Nuanced Articulation", "Policy Defense"],
+                prerequisites=["stage_03_optional_subject_mastery"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Mock interview board evaluation transcript and scored ethics case study copy."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_prelims_foundations",
+                    title="Phase 1: Polity, Governance & Economic Foundations",
+                    description="Constitutional law, statutory governance frameworks, and Indian economy fundamentals.",
+                    stages=[st1]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_mains_integration",
+                    title="Phase 2: Mains Multi-Disciplinary Writing & Optional Mastery",
+                    description="General Studies Papers I–IV answer structuring and comprehensive optional subject depth.",
+                    stages=[st2, st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_interview_readiness",
+                    title="Phase 3: Ethics & Personality Test Board Preparation",
+                    description="Administrative ethics case resolution and board interview simulations.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_polity_governance_economy"
+            current_mission_id = "mission_01_constitutional_doctrine"
+
+        # 10. THEORETICAL MATHEMATICIAN / PURE MATHEMATICS
+        elif any(k in lower for k in ["mathematician", "pure mathematics", "theoretical math"]):
+            st1 = Stage(
+                stage_id="stage_01_abstract_algebra",
+                phase_id="phase_01_algebraic_foundations",
+                stage_number=1,
+                title="Abstract Algebra: Groups, Rings & Galois Theory",
+                objective="Master foundational algebraic structures, group homomorphisms, quotient rings, and field extensions.",
+                skills=["Group Theory", "Ring Theory", "Field Extensions", "Galois Theory"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_galois_proof",
+                        stage_id="stage_01_abstract_algebra",
+                        objective="Construct formal proofs of solvability by radicals using Galois correspondence for polynomial extensions.",
+                        why="Abstract algebra develops the foundational language and proof rigor essential for modern pure mathematics.",
+                        estimated_time="6–8 hours",
+                        steps=[
+                            "Review group actions, normal subgroups, and Sylow theorems.",
+                            "Formulate field splitting extensions and determine Galois groups.",
+                            "Draft rigorous axiomatic proofs with detailed intermediate lemmas."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Evaluated problem set proof document in LaTeX."],
+                        completion_criteria="Proofs adhere to rigorous epsilon-delta and axiomatic deduction standards.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Abstract algebra problem set verifications in LaTeX."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_real_analysis_measure",
+                phase_id="phase_01_algebraic_foundations",
+                stage_number=2,
+                title="Real Analysis, Metric Spaces & Measure Theory",
+                objective="Master metric space completeness, Lebesgue measure, dominated convergence theorem, and Hilbert spaces.",
+                skills=["Metric Spaces", "Lebesgue Integration", "Measure Theory", "Cauchy Sequences"],
+                prerequisites=["stage_01_abstract_algebra"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Real analysis and measure theory proof portfolio."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_topology_manifolds",
+                phase_id="phase_02_geometric_foundations",
+                stage_number=3,
+                title="Point-Set & Differential Topology",
+                objective="Master topological spaces, compact Hausdorff manifolds, fundamental groups, and differential forms.",
+                skills=["Topological Spaces", "Manifolds", "Homotopy", "Compactness"],
+                prerequisites=["stage_02_real_analysis_measure"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Documented topology proofs and homotopy classifications."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_formal_proofs_monograph",
+                phase_id="phase_03_mathematical_synthesis",
+                stage_number=4,
+                title="Formal Mathematical Proofs & Expository Monograph",
+                objective="Author an original mathematical manuscript or comprehensive expository monograph formatted in LaTeX for scholarly dissemination.",
+                skills=["Axiomatic Deduction", "Scholarly LaTeX", "Mathematical Proof Writing", "Expository Research"],
+                prerequisites=["stage_03_topology_manifolds"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Complete mathematical research draft or expository thesis manuscript."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_algebraic_foundations",
+                    title="Phase 1: Abstract Algebra & Real Analysis",
+                    description="Group theory, field extensions, and rigorous measure theory.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_geometric_foundations",
+                    title="Phase 2: Topology & Smooth Manifolds",
+                    description="Point-set topology, homotopy groups, and differential geometry.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_mathematical_synthesis",
+                    title="Phase 3: Formal Proofs & Scholarly Publication",
+                    description="Authoring mathematical manuscripts and rigorous proof defenses.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_abstract_algebra"
+            current_mission_id = "mission_01_galois_proof"
+
+        # 11. OPERATIONS MANAGER
+        elif any(k in lower for k in ["operations manager", "ops manager", "business operations"]):
+            st1 = Stage(
+                stage_id="stage_01_process_optimization",
+                phase_id="phase_01_ops_foundations",
+                stage_number=1,
+                title="Cross-Functional Process Optimization & Lean Workflows",
+                objective="Map end-to-end organizational value streams, eliminate operational bottlenecks, and implement Lean Six Sigma practices.",
+                skills=["Value Stream Mapping", "Bottleneck Mitigation", "Six Sigma", "Workflow Design"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_value_stream",
+                        stage_id="stage_01_process_optimization",
+                        objective="Conduct a value stream audit of an enterprise workflow and author a cycle-time reduction blueprint.",
+                        why="Operational efficiency hinges on rigorous bottleneck diagnosis and waste elimination.",
+                        estimated_time="5–6 hours",
+                        steps=[
+                            "Map current-state cross-functional handoffs across departments.",
+                            "Identify throughput constraints, wait times, and failure demand.",
+                            "Design future-state streamlined process workflow with measurable SLAs."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Comprehensive value stream map and process optimization runbook."],
+                        completion_criteria="Blueprint identifies specific cycle-time bottlenecks and measurable KPIs.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Process mapping blueprint and cycle-time optimization report."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_kpi_telemetry",
+                phase_id="phase_01_ops_foundations",
+                stage_number=2,
+                title="KPI Dashboard Design, Telemetry & Operational Metrics",
+                objective="Establish real-time metric instrumentation, SLA governance frameworks, and executive operational reviews.",
+                skills=["Metric Telemetry", "SLA Governance", "Capacity Planning", "OKR Alignment"],
+                prerequisites=["stage_01_process_optimization"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Executive KPI dashboard design and SLA tracking schema."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(2),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_vendor_procurement",
+                phase_id="phase_02_ops_execution",
+                stage_number=3,
+                title="Vendor Management & Procurement Contract Negotiations",
+                objective="Draft comprehensive RFPs, evaluate vendor cost models, and negotiate high-stakes SLAs.",
+                skills=["RFP Drafting", "Vendor Scorecards", "SLA Negotiations", "Supplier Risk Management"],
+                prerequisites=["stage_02_kpi_telemetry"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Vendor evaluation scorecard and negotiated SLA contract."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_transformation_runbook",
+                phase_id="phase_03_ops_leadership",
+                stage_number=4,
+                title="Enterprise Transformation Runbook & SOP Publication",
+                objective="Lead organizational change management, author definitive standard operating procedures (SOP), and present business transformation.",
+                skills=["Change Management", "SOP Runbooks", "Executive Presentations", "Operational Scaling"],
+                prerequisites=["stage_03_vendor_procurement"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Enterprise transformation business case and complete SOP runbook."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_ops_foundations",
+                    title="Phase 1: Process Optimization & KPI Telemetry",
+                    description="Value stream mapping, bottleneck mitigation, and metric dashboards.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_ops_execution",
+                    title="Phase 2: Procurement & Vendor Management",
+                    description="RFP drafting, SLA contract negotiations, and supplier governance.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_ops_leadership",
+                    title="Phase 3: Organizational Transformation",
+                    description="Change management execution and standard operating procedures.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_process_optimization"
+            current_mission_id = "mission_01_value_stream"
+
+        # 12. AUTONOMOUS DRONE HARDWARE SPECIALIST
+        elif any(k in lower for k in ["drone hardware", "drone", "uav", "aerospace hardware"]):
+            st1 = Stage(
+                stage_id="stage_01_embedded_flight_firmware",
+                phase_id="phase_01_avionics_foundations",
+                stage_number=1,
+                title="Embedded Flight Controller Firmware & Microcontrollers (C/C++)",
+                objective="Master real-time flight firmware architecture, PX4 / ArduPilot builds, STM32 microcontrollers, and UART/CAN bus buses.",
+                skills=["PX4 Architecture", "STM32 Microcontrollers", "UART/CAN Protocols", "C/C++ Embedded"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_firmware_build",
+                        stage_id="stage_01_embedded_flight_firmware",
+                        objective="Compile and flash a custom PX4 flight controller firmware module and log hardware-in-the-loop telemetry.",
+                        why="Autonomous drone reliability requires deep control over embedded real-time flight firmware.",
+                        estimated_time="5–6 hours",
+                        steps=[
+                            "Set up embedded ARM toolchain and PX4 development environment.",
+                            "Write a custom sensor driver node handling I2C/SPI telemetry.",
+                            "Flash STM32 flight board and verify 500Hz loop rate."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Custom flight firmware code repository and logic analyzer trace."],
+                        completion_criteria="Firmware executes at targeted real-time frequency without watchdog resets.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Embedded firmware code and flight controller bench test logs."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_sensor_fusion_state_estimation",
+                phase_id="phase_01_avionics_foundations",
+                stage_number=2,
+                title="Sensor Fusion & State Estimation (IMU, LiDAR, Optical Flow)",
+                objective="Implement Extended Kalman Filters (EKF), vibration dampening filters, optical flow odometry, and magnetometer calibration.",
+                skills=["Extended Kalman Filters", "IMU Filtering", "Optical Flow Calibration", "LiDAR Interfacing"],
+                prerequisites=["stage_01_embedded_flight_firmware"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Sensor calibration report and state estimation telemetry plots."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_ros2_actuator_interfaces",
+                phase_id="phase_02_autonomous_integration",
+                stage_number=3,
+                title="ROS 2 Hardware Interfaces & Actuator Control (ESC/BLDC)",
+                objective="Configure micro-ROS nodes, DShot electronic speed controllers, and conduct dynamometer thrust-to-weight testing.",
+                skills=["micro-ROS", "DShot Protocols", "ESC Configuration", "Thrust Bench Testing"],
+                prerequisites=["stage_02_sensor_fusion_state_estimation"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["ROS 2 node integration code and motor dyno test results."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_flight_telemetry_integration",
+                phase_id="phase_03_hardware_flight_test",
+                stage_number=4,
+                title="Autonomous Flight Telemetry & Airframe Integration",
+                objective="Integrate physical avionics into an airframe, run autonomous waypoint missions, and analyze high-rate flight telemetry logs.",
+                skills=["Avionics Packaging", "Vibration Damping", "Autonomous Navigation", "Flight Log Telemetry"],
+                prerequisites=["stage_03_ros2_actuator_interfaces"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Recorded flight log analysis (.ulog) verifying waypoint accuracy."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_avionics_foundations",
+                    title="Phase 1: Embedded Firmware & Sensor Fusion",
+                    description="PX4 microcontrollers, C++ firmware, and Extended Kalman Filtering.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_autonomous_integration",
+                    title="Phase 2: ROS 2 & Actuator Control",
+                    description="micro-ROS hardware interfacing and BLDC motor ESC configuration.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_hardware_flight_test",
+                    title="Phase 3: Airframe Integration & Telemetry",
+                    description="Physical prototype assembly and autonomous flight log verification.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_embedded_flight_firmware"
+            current_mission_id = "mission_01_firmware_build"
+
+        # 13. COMPUTATIONAL FLUID DYNAMICS (CFD) RESEARCHER
+        elif any(k in lower for k in ["computational fluid dynamics", "cfd", "fluid dynamics", "aerodynamics"]):
+            st1 = Stage(
+                stage_id="stage_01_navier_stokes_continuum",
+                phase_id="phase_01_cfd_theory",
+                stage_number=1,
+                title="Navier-Stokes Equations & Continuum Fluid Dynamics",
+                objective="Derive mass, momentum, and energy conservation equations, boundary layer theory, and compressible vs incompressible flow regimes.",
+                skills=["Conservation Laws", "Boundary Layer Theory", "Compressible Flow", "Analytical Aerodynamics"],
+                prerequisites=[],
+                missions=[
+                    Mission(
+                        mission_id="mission_01_boundary_layer",
+                        stage_id="stage_01_navier_stokes_continuum",
+                        objective="Derive analytical solutions for laminar boundary layer equations and compare with numerical benchmarks.",
+                        why="Theoretical fluid dynamics foundations prevent misinterpretation of numerical simulation artifacts.",
+                        estimated_time="5–6 hours",
+                        steps=[
+                            "Derive 2D Navier-Stokes momentum equations in differential form.",
+                            "Apply Blasius similarity transformation for flat plate boundary layer.",
+                            "Document shear stress and skin friction coefficients."
+                        ],
+                        resources=[],
+                        evidence_requirements=["Analytical fluid mechanics derivation notes and validation graphs."],
+                        completion_criteria="Derivation correctly matches standard boundary layer solutions.",
+                        status="ACTIVE"
+                    )
+                ],
+                resources=[],
+                evidence_requirements=["Theoretical fluid mechanics derivations and problem sets."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=False,
+                status="ACTIVE"
+            )
+            st2 = Stage(
+                stage_id="stage_02_fvm_mesh_generation",
+                phase_id="phase_01_cfd_theory",
+                stage_number=2,
+                title="Numerical Discretization & Mesh Generation (FVM / FEM)",
+                objective="Master Finite Volume Method (FVM), spatial/temporal schemes, boundary layer inflation layers, and grid convergence studies.",
+                skills=["Finite Volume Method (FVM)", "Spatial Discretization", "Prism Layer Meshing", "Grid Independence Studies"],
+                prerequisites=["stage_01_navier_stokes_continuum"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Mesh convergence study report with Richardson extrapolation."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st3 = Stage(
+                stage_id="stage_03_turbulence_modeling",
+                phase_id="phase_02_simulation_engineering",
+                stage_number=3,
+                title="Turbulence Modeling: RANS, LES & Wall Functions",
+                objective="Implement and benchmark k-omega SST, k-epsilon, and Large Eddy Simulation (LES) against adverse pressure gradient test cases.",
+                skills=["k-omega SST", "Reynolds Stress", "Large Eddy Simulation", "Wall Functions"],
+                prerequisites=["stage_02_fvm_mesh_generation"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Comparative turbulence modeling benchmark report."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(3),
+                locked=True,
+                status="LOCKED"
+            )
+            st4 = Stage(
+                stage_id="stage_04_hpc_validation_study",
+                phase_id="phase_03_cfd_validation",
+                stage_number=4,
+                title="HPC Parallel Solvers & Experimental Validation Study",
+                objective="Run multi-node parallel CFD simulations in OpenFOAM with MPI and author a comprehensive validation report against wind tunnel datasets.",
+                skills=["OpenFOAM", "MPI Domain Decomposition", "Wind Tunnel Validation", "Scholarly Simulation Defense"],
+                prerequisites=["stage_03_turbulence_modeling"],
+                missions=[],
+                resources=[],
+                evidence_requirements=["Comprehensive validation study comparing simulation against experimental wind tunnel data."],
+                completion_rules={"accuracy_threshold": 80.0},
+                estimated_effort=calc_effort(4),
+                locked=True,
+                status="LOCKED"
+            )
+            phases = [
+                RoadmapPhase(
+                    phase_id="phase_01_cfd_theory",
+                    title="Phase 1: Continuum Fluid Dynamics & FVM Meshing",
+                    description="Navier-Stokes equations, boundary layer theory, and finite volume mesh generation.",
+                    stages=[st1, st2]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_02_simulation_engineering",
+                    title="Phase 2: Turbulence Modeling & HPC Solvers",
+                    description="RANS/LES turbulence modeling and parallel computing.",
+                    stages=[st3]
+                ),
+                RoadmapPhase(
+                    phase_id="phase_03_cfd_validation",
+                    title="Phase 3: Experimental Validation & Defense",
+                    description="Validating numerical pressure and drag against experimental wind tunnel benchmarks.",
+                    stages=[st4]
+                )
+            ]
+            current_stage_id = "stage_01_navier_stokes_continuum"
+            current_mission_id = "mission_01_boundary_layer"
+
+        # 14. AI/ML SPECIFIC GOAL
         elif any(k in lower for k in ["machine learning", "artificial intelligence", "applied ai"]):
             return self.generate_ai_ml_roadmap(person_id, path_id or "path_applied_ai_ml_systems")
 
@@ -826,7 +1681,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=[f"Foundational artifact in {target_outcome}."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="2 Weeks",
+                estimated_effort=calc_effort(2),
                 locked=False,
                 status="ACTIVE"
             )
@@ -842,7 +1697,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=[f"Applied project deliverable in {target_outcome}."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )
@@ -858,7 +1713,7 @@ class RoadmapEngine:
                 resources=[],
                 evidence_requirements=[f"Verified public capstone portfolio in {target_outcome}."],
                 completion_rules={"accuracy_threshold": 80.0},
-                estimated_effort="3 Weeks",
+                estimated_effort=calc_effort(3),
                 locked=True,
                 status="LOCKED"
             )

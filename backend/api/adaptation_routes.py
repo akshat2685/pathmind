@@ -19,7 +19,7 @@ get_person_id = get_authenticated_person
 
 class GoalChangeRequest(BaseModel):
     new_target_role: str
-    target_industry: Optional[str] = "Applied AI & Tech"
+    target_industry: Optional[str] = None
     geography: Optional[str] = "Global / India"
     target_timeline: Optional[str] = "6–9 Months"
 

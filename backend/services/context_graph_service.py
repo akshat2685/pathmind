@@ -13,6 +13,8 @@ from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.mastery_engine import MasteryEngine
 from backend.providers.opportunity_provider import VerifiedOpenOpportunityProvider
 
+from backend.services.proactive_memory_service import ProactiveMemoryService
+
 class ContextGraphService:
     """
     Contextual Interpretation Layer for PATHMIND.
@@ -33,6 +35,7 @@ class ContextGraphService:
         self.readiness_engine = readiness_engine or CareerReadinessEngine()
         self.mastery_engine = mastery_engine or MasteryEngine()
         self.opp_provider = VerifiedOpenOpportunityProvider()
+        self.proactive_memory = ProactiveMemoryService(self.store)
 
     async def assemble_context_graph(self, person_id: str) -> PersonalContextGraph:
         # 1. Identity & Profile
@@ -107,9 +110,13 @@ class ContextGraphService:
             "status": "CURRENT"
         }
 
-        # 7. Memory Context
-        memories_raw = await self.store.get_memories(person_id)
-        memory_context = memories_raw[:5] if memories_raw else []
+        # 7. Memory Context (Proactive & Task-Conditioned)
+        proactive_mem = await self.proactive_memory.get_proactive_memory_context(
+            person_id=person_id,
+            task_type="GENERAL_CONTEXT",
+            current_goal=roadmap.target_outcome
+        )
+        memory_context = [m.model_dump(mode="json") for m in proactive_mem.retrieved_memories]
 
         # 8. Verified Opportunities Context
         opp_records = await self.opp_provider.fetch_opportunities(
@@ -138,17 +145,35 @@ class ContextGraphService:
     async def extract_task_context_package(
         self,
         person_id: str,
-        task_type: str = "NEXT_ACTION"
+        task_type: str = "NEXT_ACTION",
+        current_concept: Optional[str] = None,
+        current_goal: Optional[str] = None
     ) -> TaskContextPackage:
         """
         Relevance filter: Returns only the necessary structured context package for a specific task.
+        Uses ProactiveMemoryService for task-specific, non-flooding contextual retrieval.
         """
         graph = await self.assemble_context_graph(person_id)
 
+        target_role = current_goal or str(graph.goal_context.get("primary_target_role") or "Career Goal")
+        current_stage = str(graph.learning_context.get("current_stage_id") or "stage_01")
+        concept = current_concept or str(graph.learning_context.get("current_stage_title") or "")
+
+        proactive_mem = await self.proactive_memory.get_proactive_memory_context(
+            person_id=person_id,
+            task_type=task_type,
+            current_goal=target_role,
+            current_stage=current_stage,
+            current_concept=concept
+        )
+
         mem_summaries = [
-            f"[{m.get('event_type', 'EVENT')}] {m.get('topic', '')}: {m.get('observation', '')}"
-            for m in graph.memory_context[:3]
+            f"[{m.nature}] {m.title}: {m.content or m.summary}"
+            for m in proactive_mem.retrieved_memories
         ]
+        if not mem_summaries and proactive_mem.proactive_summary:
+            mem_summaries.append(proactive_mem.proactive_summary)
+
         opp_summaries = [
             f"{o.get('title')} at {o.get('organization')} (Deadline: {o.get('deadline', 'Open')})"
             for o in graph.opportunity_context[:2]
@@ -156,8 +181,8 @@ class ContextGraphService:
 
         return TaskContextPackage(
             task_type=task_type,
-            relevant_goal=str(graph.goal_context.get("primary_target_role", "Applied AI Specialist")),
-            relevant_stage_id=str(graph.learning_context.get("current_stage_id", "stage_01")),
+            relevant_goal=target_role,
+            relevant_stage_id=current_stage,
             relevant_skills=list(graph.capability_context.get("developing_skills", [])),
             verified_evidence_summaries=list(graph.capability_context.get("demonstrated_skills", [])),
             active_constraints=dict(graph.constraint_context),

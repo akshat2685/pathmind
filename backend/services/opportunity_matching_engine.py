@@ -59,7 +59,7 @@ class OpportunityMatchingEngine:
         # 1. Retrieve real person profile & career goal
         profile = await self.career_engine.get_or_create_canonical_profile(person_id)
         goal = await self.career_engine.get_or_create_career_goal(person_id)
-        target_role = goal.target_role or "Applied Machine Learning Systems Engineer"
+        target_role = role_filter or goal.target_role or "General Professional Practice"
 
         # 2. Retrieve verified skills from evidence/artifacts
         artifacts = await self.store.get_person_artifacts(person_id)
@@ -82,7 +82,74 @@ class OpportunityMatchingEngine:
         raw_opps = await self.get_all_opportunities(role_filter=role_filter, geography=geography)
         results: List[OpportunityMatchResult] = []
 
+        target_role_lower = target_role.lower()
+        is_generic_or_unspecified = target_role_lower in [
+            "general professional practice",
+            "unspecified",
+            "unspecified career objective",
+            "",
+        ]
+
+        # Explicit non-tech domains where technical opportunities MUST NOT leak
+        non_tech_keywords = [
+            "restaurant", "culinary", "chef", "food", "cook",
+            "law", "legal", "advocate", "paralegal", "attorney", "judicial",
+            "psycholog", "therapy", "therapist", "counsel",
+            "teach", "educat", "k-12",
+            "photograph",
+            "civil service", "upsc",
+            "accountant", "accounting", "auditor",
+        ]
+        is_explicitly_non_tech = any(k in target_role_lower for k in non_tech_keywords)
+
+        # Tech domains
+        tech_keywords = [
+            "ai", "machine learning", "deep learning", "software", "developer", 
+            "data engineer", "data scientist", "robotics", "embedded", "computer", "engineer"
+        ]
+        is_tech_role = any(k in target_role_lower for k in tech_keywords)
+
+        target_words = [] if is_generic_or_unspecified else [
+            w for w in target_role_lower.replace("/", " ").replace("-", " ").replace("(", " ").replace(")", " ").split() if len(w) > 3
+        ]
+
         for opp in raw_opps:
+            opp_text = (opp.title + " " + opp.organization + " " + " ".join(opp.skills) + " " + " ".join(opp.requirements)).lower()
+            opp_is_tech = any(k in opp_text for k in ["python", "git", "software", "machine learning", "pytorch", "fastapi", "c++", "data modeling", "ros 2"])
+
+            # Strict Domain Neutrality: Do NOT match technical software opportunities to explicitly non-technical target roles
+            if is_explicitly_non_tech and opp_is_tech:
+                continue
+
+            # Strict Domain Neutrality: Do NOT match non-technical opportunities to explicitly technical target roles
+            if is_tech_role and not opp_is_tech and any(k in opp_text for k in ["chef", "culinary", "kitchen", "judicial", "paralegal", "psychology", "teaching"]):
+                continue
+
+            # Check if this opportunity genuinely matches target role or domain
+            if not is_generic_or_unspecified:
+                domain_aligned = False
+                domain_families = {
+                    "legal": ["law", "legal", "advocate", "attorney", "judicial", "clerkship", "jurisprudence"],
+                    "design": ["design", "ui", "ux", "figma", "wirefram", "usability", "prototype"],
+                    "culinary": ["culinary", "chef", "food", "cook", "restaurant", "kitchen", "bakery", "hospitality"],
+                    "psychology": ["psycholog", "therapy", "therapist", "counsel", "mental health", "psychiatric"],
+                    "teaching": ["teach", "educat", "pedagog", "school", "curriculum", "classroom"],
+                    "civil_services": ["civil services", "upsc", "public policy", "ias", "ips", "administration"],
+                    "tech": ["ai", "machine learning", "deep learning", "software", "developer", "data", "robotics", "embedded"]
+                }
+                for fam_name, kws in domain_families.items():
+                    if any(k in target_role_lower for k in kws) and any(k in opp_text for k in kws):
+                        domain_aligned = True
+                        break
+
+                keyword_aligned = (
+                    any(w in opp_text for w in target_words) or
+                    any(s.lower() in target_role_lower for s in opp.skills)
+                ) if target_words else False
+
+                if not (domain_aligned or keyword_aligned):
+                    continue
+
             matched_reqs: List[str] = []
             gap_reqs: List[str] = []
             unknown_fields: List[str] = []
@@ -105,11 +172,7 @@ class OpportunityMatchingEngine:
                 if not profile.education:
                     unknown_fields.append("Education background not specified in profile.")
                 else:
-                    edu_degree = profile.education[0].degree.lower()
-                    if "bachelor" in edu_degree or "b.tech" in edu_degree or "m.tech" in edu_degree or "b.s." in edu_degree:
-                        matched_reqs.append(f"Education: {profile.education[0].degree}")
-                    else:
-                        matched_reqs.append(f"Education: {profile.education[0].degree}")
+                    matched_reqs.append(f"Education: {profile.education[0].degree}")
 
             if "india" in opp.location.lower() and profile.current_country.lower() != "india" and opp.remote_status != "REMOTE":
                 if not profile.work_authorization:
@@ -121,25 +184,15 @@ class OpportunityMatchingEngine:
             total_reqs = max(len(opp.requirements), 1)
             coverage = len(matched_reqs) / total_reqs
 
-            # Goal alignment
-            is_goal_aligned = (
-                target_role.lower() in opp.title.lower() or
-                any(s.lower() in target_role.lower() for s in opp.skills) or
-                opp.type in ["OPEN_SOURCE", "RESEARCH", "FELLOWSHIP"]
-            )
-
-            if coverage >= 0.75 and is_goal_aligned:
+            if coverage >= 0.75:
                 fit_state = "STRONG_MATCH"
                 readiness_state = "READY_NOW" if len(gap_reqs) == 0 else "NEAR_READY"
-            elif coverage >= 0.40 and is_goal_aligned:
+            elif coverage >= 0.40:
                 fit_state = "GOOD_MATCH"
                 readiness_state = "NEAR_READY" if len(gap_reqs) <= 1 else "STRETCH"
-            elif is_goal_aligned and len(gap_reqs) > 0:
+            elif len(gap_reqs) > 0:
                 fit_state = "PARTIAL_MATCH"
                 readiness_state = "STRETCH"
-            elif coverage >= 0.50:
-                fit_state = "GOOD_MATCH"
-                readiness_state = "NEAR_READY"
             else:
                 fit_state = "LOW_MATCH"
                 readiness_state = "NOT_RECOMMENDED"
@@ -197,16 +250,16 @@ class OpportunityMatchingEngine:
             raise ValueError(f"Opportunity {opportunity_id} not found.")
 
         goal = await self.career_engine.get_or_create_career_goal(person_id)
-        target_role = goal.target_role or "Applied AI Specialist"
+        target_role = goal.target_role or "Target Role"
 
         # Formulate preparation actions
         actions_data: List[Dict[str, Any]] = []
 
         # Action 1: Gap remediation
-        missing_focus = opp.requirements[0] if opp.requirements else "System Implementation"
+        missing_focus = opp.requirements[0] if opp.requirements else "Demonstrated Competency"
         act1 = {
-            "title": f"Implement & Verify Code Evidence: {missing_focus}",
-            "description": f"Build hands-on unit-tested module satisfying '{missing_focus}' for {opp.title} application.",
+            "title": f"Prepare & Verify Evidence: {missing_focus}",
+            "description": f"Complete practical verified deliverable satisfying '{missing_focus}' for {opp.title} application.",
             "action_type": "EVIDENCE",
             "priority": "NOW",
             "verification_requirement": "EVIDENCE_SUBMISSION"
@@ -215,8 +268,8 @@ class OpportunityMatchingEngine:
 
         # Action 2: Tailor Resume
         act2 = {
-            "title": f"Tailor Resume for {opp.title} at {opp.organization}",
-            "description": "Align keyword terminology and attach verified project repository links.",
+            "title": f"Tailor Profile/Resume for {opp.title} at {opp.organization}",
+            "description": "Align competency terminology and attach verified portfolio evidence links.",
             "action_type": "CAREER_RESEARCH",
             "priority": "NEXT",
             "verification_requirement": "SIMPLE_CONFIRMATION"

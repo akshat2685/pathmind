@@ -39,12 +39,6 @@ export function Sidebar() {
       sub: "Progressive Roadmap",
     },
     {
-      href: "/memory",
-      icon: "memory",
-      label: "Memory Vault",
-      sub: "Personal Intelligence",
-    },
-    {
       href: "/evidence",
       icon: "verified",
       label: "Evidence & Mastery",

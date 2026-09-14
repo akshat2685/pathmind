@@ -10,10 +10,12 @@ from backend.core.memory_schemas import (
     SecondBrainQueryResponse,
     ConsolidateMemoriesRequest,
     ConsolidateMemoriesResponse,
-    SupersedeMemoryRequest
+    SupersedeMemoryRequest,
+    ProactiveMemoryContext
 )
 from backend.services.memory_engine import MemoryEngine
 from backend.services.second_brain_service import SecondBrainService
+from backend.services.proactive_memory_service import ProactiveMemoryService
 from backend.services.store import FirestoreStore
 
 from backend.core.security import get_authenticated_person
@@ -22,6 +24,7 @@ router = APIRouter(prefix="/api/memory", tags=["Longitudinal Learning Memory"])
 store = FirestoreStore()
 engine = MemoryEngine(store=store)
 second_brain = SecondBrainService(store=store)
+proactive_memory = ProactiveMemoryService(store=store)
 get_person_id = get_authenticated_person
 
 @router.get("/personal", response_model=List[MemoryItem])
@@ -152,3 +155,29 @@ async def get_shared_learning_patterns():
         return [SharedLearningPattern(**p) for p in raw_patterns]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve shared patterns: {str(e)}")
+
+
+@router.get("/debug/proactive-context", response_model=ProactiveMemoryContext)
+async def get_debug_proactive_context(
+    task_type: Optional[str] = Query("NEXT_LEARNING_ACTION"),
+    current_concept: Optional[str] = Query(None),
+    current_goal: Optional[str] = Query(None),
+    target_direction: Optional[str] = Query(None),
+    person_id: str = Depends(get_person_id)
+):
+    """
+    Internal Developer / Debug Surface:
+    Inspect what proactive memory context the backend automatically retrieves for a given task,
+    without requiring manual retrieval from the user.
+    """
+    try:
+        return await proactive_memory.get_proactive_memory_context(
+            person_id=person_id,
+            task_type=task_type or "NEXT_LEARNING_ACTION",
+            current_concept=current_concept,
+            current_goal=current_goal,
+            target_direction=target_direction
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate proactive memory context: {str(e)}")
+

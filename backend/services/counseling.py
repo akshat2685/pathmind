@@ -319,6 +319,21 @@ class CounselingAgent:
                     "Please consider sharing business plans, menu costing models, food safety certificates, or commercial kitchen operations documentation.",
                     "Sharing prior hospitality management experience will allow us to accurately calibrate operational milestones."
                 ]
+            elif any(k in goals_text for k in ["psychology", "psychologist", "counselor", "mental health", "therapy", "clinical psych"]):
+                evidence_gaps = [
+                    "Please consider sharing verified clinical practicum records, supervised counseling case hours, or psychology degree transcripts.",
+                    "Sharing clinical certification status or ethical board compliance documentation will allow us to accurately calibrate licensing milestones."
+                ]
+            elif any(k in goals_text for k in ["photo", "photographer", "photography"]):
+                evidence_gaps = [
+                    "Please consider sharing portfolio links (e.g. Behance, personal gallery, editorial tear sheets) demonstrating lighting, composition, and post-production mastery.",
+                    "Sharing client delivery galleries or technical gear competencies will allow us to accurately calibrate advanced commercial studio milestones."
+                ]
+            elif any(k in goals_text for k in ["teacher", "teaching", "educator", "k-12", "pedagogy", "school"]):
+                evidence_gaps = [
+                    "Please consider sharing verified lesson plans, pedagogical unit designs, classroom observations, or teaching credential transcripts (e.g., B.Ed / state license).",
+                    "Sharing student assessment rubrics or curriculum delivery experience will allow us to accurately calibrate instructional leadership milestones."
+                ]
             elif any(k in goals_text for k in ["biotech", "molecular", "genetics", "bioinformatics", "biology"]):
                 evidence_gaps = [
                     "Please consider sharing lab reports, research preprints, wet-lab protocols, or bioinformatics notebooks.",
@@ -409,6 +424,72 @@ class CounselingAgent:
                         rationale="Optimizes front-of-house hospitality, inventory supply chain, and kitchen unit economics.",
                         alignment="Operational rigor and guest experience management",
                         related_occupations=["Food Service Manager (ESCO: 1412.1)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["psychology", "psychologist", "counselor", "mental health", "therapy", "clinical psych"]):
+                candidate_directions = [
+                    "Clinical Psychology & Therapeutic Practice",
+                    "Cognitive Behavioral Counseling & Assessment",
+                    "Mental Health Systems & Clinical Psychotherapy"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Clinical Psychology & Therapeutic Practice",
+                        rationale="Structured focus on psychopathology assessment, evidence-based psychotherapeutic interventions (CBT), and ethical clinical supervision.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Clinical Practice Aspiration'}",
+                        related_occupations=["Clinical Psychologist (ESCO: 2634.1)", "Psychotherapist (ESCO: 2634.2)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Cognitive Behavioral Counseling & Assessment",
+                        rationale="Emphasizes diagnostic psychological testing, clinical interviewing, and structured therapeutic modalities.",
+                        alignment="Empathetic clinical reasoning and psychological assessment",
+                        related_occupations=["Counseling Psychologist (ESCO: 2634.3)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["photo", "photographer", "photography"]):
+                candidate_directions = [
+                    "Commercial & Editorial Photography",
+                    "Portrait & Fine Art Photography",
+                    "Visual Storytelling & Documentary Photography"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="Commercial & Editorial Photography",
+                        rationale="Mastery of studio strobe lighting, professional camera optics, commercial client direction, and high-end RAW grading.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Visual Arts Aspiration'}",
+                        related_occupations=["Photographer (ESCO: 3431)", "Commercial Photographer (ESCO: 3431.1)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Portrait & Fine Art Photography",
+                        rationale="Focuses on human subject direction, ambient and off-camera flash lighting, and portfolio curation.",
+                        alignment="Artistic expression and visual composition",
+                        related_occupations=["Portrait Photographer (ESCO: 3431.2)"],
+                        confidence="MEDIUM"
+                    )
+                ]
+            elif any(k in goals_text for k in ["teacher", "teaching", "educator", "k-12", "pedagogy", "school"]):
+                candidate_directions = [
+                    "K-12 Classroom Education & Pedagogy",
+                    "Curriculum Design & Instructional Leadership",
+                    "Specialized Secondary Subject Instruction"
+                ]
+                candidate_details = [
+                    CandidateDirection(
+                        title="K-12 Classroom Education & Pedagogy",
+                        rationale="Grounds teacher development in constructive pedagogy, classroom management strategies, curriculum alignment, and student assessment.",
+                        alignment=f"Stated Goal + {', '.join(strongest_interests) if strongest_interests else 'Educational Aspiration'}",
+                        related_occupations=["Secondary School Teacher (ESCO: 2330)", "Primary School Teacher (ESCO: 2341)"],
+                        confidence="HIGH"
+                    ),
+                    CandidateDirection(
+                        title="Curriculum Design & Instructional Leadership",
+                        rationale="Focuses on pedagogical framework design, formative learning assessments, and school curriculum coordination.",
+                        alignment="Instructional design and pedagogical leadership",
+                        related_occupations=["Curriculum Developer (ESCO: 2351.1)"],
                         confidence="MEDIUM"
                     )
                 ]

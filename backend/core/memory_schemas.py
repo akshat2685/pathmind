@@ -1,4 +1,5 @@
 from typing import List, Dict, Any, Optional
+from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 from datetime import datetime, timezone
 import uuid
@@ -145,3 +146,39 @@ class SupersedeMemoryRequest(BaseModel):
     new_memory_payload: Dict[str, Any]
 
     model_config = ConfigDict(populate_by_name=True)
+
+class MemoryRelevanceReason(str, Enum):
+    PRIOR_STRUGGLE = "PRIOR_STRUGGLE"
+    PRIOR_SUCCESS = "PRIOR_SUCCESS"
+    LEARNING_PREFERENCE = "LEARNING_PREFERENCE"
+    PAST_DECISION = "PAST_DECISION"
+    GOAL_HISTORY = "GOAL_HISTORY"
+    SKILL_HISTORY = "SKILL_HISTORY"
+    KNOWN_CONSTRAINT = "KNOWN_CONSTRAINT"
+    PAST_PROJECT = "PAST_PROJECT"
+    CAREER_PREFERENCE = "CAREER_PREFERENCE"
+    MISCONCEPTION_PATTERN = "MISCONCEPTION_PATTERN"
+    PAST_STRATEGY = "PAST_STRATEGY"
+    RELATED_CONCEPT = "RELATED_CONCEPT"
+    OTHER = "OTHER"
+
+class ProactiveMemoryContext(BaseModel):
+    """
+    Structured internal memory context retrieved proactively for a specific task.
+    Never exposes internal scoring or raw database IDs to regular user-facing experiences.
+    """
+    person_id: str
+    task_type: str
+    retrieved_memories: List[MemoryItem] = Field(default_factory=list)
+    relevance_reasons: List[str] = Field(default_factory=list)
+    confidence: str = "HIGH"  # HIGH, MEDIUM, LOW
+    source_provenance: List[str] = Field(default_factory=list)
+    conflicting_memories: List[MemoryItem] = Field(default_factory=list)
+    temporal_state: str = "CURRENT"  # CURRENT, SUPERSEDED, HISTORICAL, MIXED
+    evidence_status: str = "VERIFIED"  # VERIFIED, UNVERIFIED, SELF_REPORTED, INFERRED
+    status: str = "ACTIVE_RECALL"  # ACTIVE_RECALL, NO_RELEVANT_MEMORY, CONFLICT_DETECTED, SUPERSEDED_BY_CURRENT_INPUT, UNVERIFIED_MEMORY_ONLY
+    proactive_summary: Optional[str] = None
+    retrieved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    model_config = ConfigDict(populate_by_name=True)
+

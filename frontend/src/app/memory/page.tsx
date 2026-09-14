@@ -3,8 +3,8 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
 
 export const metadata = {
-  title: "Memory Vault — PATHMIND",
-  description: "Longitudinal personal memory vault, natural recall engine, and shared collective intelligence.",
+  title: "Memory Subsystem Diagnostics — PATHMIND",
+  description: "Internal developer/diagnostic surface to inspect proactive memory recall, provenance chains, and conflict detection.",
 };
 
 export default function MemoryPage() {

@@ -67,7 +67,7 @@ class ProgressAnalysisService:
                 progress_classification=classification,
                 regression_events=regressions,
                 recovery_events=recoveries,
-                transfer_domains=["Applied AI Software Engineering"] if mastery_state == "TRANSFER" else []
+                transfer_domains=["Cross-Domain Application"] if mastery_state == "TRANSFER" else []
             )
             records.append(record)
 
@@ -190,9 +190,9 @@ class ProgressAnalysisService:
                 "readiness_tier": graph.career_context.get("readiness_tier", "DEVELOPING")
             },
             "next": {
-                "next_milestone": f"Complete {current_stage} verified project repository",
-                "target_horizon": graph.goal_context.get("timeline", "6 Months"),
-                "upcoming_opportunity": graph.opportunity_context[0].get("title") if graph.opportunity_context else "Open Source Opportunity Match"
+                "next_milestone": f"Complete {current_stage} verified evidence deliverable",
+                "target_horizon": graph.goal_context.get("timeline") or graph.goal_context.get("target_timeline") or "Calibrated to Weekly Availability",
+                "upcoming_opportunity": graph.opportunity_context[0].get("title") if graph.opportunity_context else "Verified Domain Opportunity Match"
             }
         }
 

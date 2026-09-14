@@ -38,8 +38,8 @@ from backend.services.requirement_graph_service import RequirementGraphService
 from backend.services.store import FirestoreStore
 
 class CareerReadinessEngine:
-    def __init__(self):
-        self.store = FirestoreStore()
+    def __init__(self, store: Optional[FirestoreStore] = None):
+        self.store = store or FirestoreStore()
         self.knowledge_service = KnowledgeService()
         self.opportunity_service = OpportunityService()
         self.requirement_graph_service = RequirementGraphService(self.knowledge_service)
@@ -257,6 +257,14 @@ class CareerReadinessEngine:
                 target_ind = "Design & Human-Computer Interaction"
             elif any(w in target_role.lower() for w in ["restaurant", "culinary", "hospitality"]):
                 target_ind = "Hospitality & Culinary Arts"
+            elif any(w in target_role.lower() for w in ["psycholog", "therapy", "mental health", "counsel"]):
+                target_ind = "Mental Health & Clinical Psychology"
+            elif any(w in target_role.lower() for w in ["photo", "photographer"]):
+                target_ind = "Visual Arts & Commercial Photography"
+            elif any(w in target_role.lower() for w in ["teach", "educat", "pedagog", "school"]):
+                target_ind = "Education & Pedagogy"
+            elif any(w in target_role.lower() for w in ["upsc", "civil services", "public policy", "ias", "ips"]):
+                target_ind = "Public Administration & Governance"
             elif any(w in target_role.lower() for w in ["biotech", "biology", "genetics"]):
                 target_ind = "Life Sciences & Biotechnology"
             else:
@@ -338,12 +346,21 @@ class CareerReadinessEngine:
                 need_to_develop=["Linear Algebra & Vector Calculus", "PyTorch Deep Learning", "Distributed Model Serving & Containerization"],
                 analysis_summary="Your API architecture and software engineering practices transfer seamlessly; focus learning on linear algebra and neural models."
             )
-        elif "sales" in current_state and ("pm" in target_lower or "product" in target_lower):
+        elif any(k in target_lower for k in ["product manager", "product management", "associate product manager"]) or ("product" in target_lower and "designer" not in target_lower):
+            base_skills = profile.skills or ["Customer Discovery & Empathy", "Stakeholder Communication"]
             return TransferableSkillsAnalysis(
-                already_have=["Customer Discovery & Empathy", "Stakeholder Communication", "Revenue & Pipeline Tracking"],
-                can_transfer=["User Pain Point Identification", "Cross-Functional Negotiation", "Product Narrative & Pitching"],
-                need_to_develop=["Product Requirements Documentation (PRD)", "Agile Sprint Delivery & Scrum", "Data-Driven Metric Instrumentation"],
-                analysis_summary="Your customer empathy and commercial viability transfer directly into product discovery; focus learning on PRDs and agile metrics."
+                already_have=base_skills,
+                can_transfer=["Cross-Functional Collaboration", "Problem Decomposition", "Strategic Communication"],
+                need_to_develop=["Product Requirements Documentation (PRD)", "Product Discovery & User Research", "Opportunity-Solution Tree Roadmapping", "Product Analytics & Metrics"],
+                analysis_summary="Your existing background transfers directly into product discovery and cross-functional coordination; focus learning on PRDs, user discovery, and roadmapping."
+            )
+        elif any(k in target_lower for k in ["academic / scientific researcher", "scientific researcher", "academic researcher", "research scientist"]) or (target_lower.strip() == "researcher"):
+            base_skills = profile.skills or ["Quantitative Analysis", "Critical Reading"]
+            return TransferableSkillsAnalysis(
+                already_have=base_skills,
+                can_transfer=["Analytical Rigor", "Data Modeling", "Systematic Inquiry"],
+                need_to_develop=["Literature Review & Systematic Synthesis", "Formal Research Methodology", "Hypothesis Testing & Statistical Inference", "Peer-Reviewed Manuscript Preparation"],
+                analysis_summary="Focus on formal research methodology, systematic literature benchmarking, and peer-reviewed preprint publication."
             )
         elif "design" in target_lower or "ux" in target_lower:
             return TransferableSkillsAnalysis(
@@ -366,6 +383,69 @@ class CareerReadinessEngine:
                 need_to_develop=["Food Safety Regulations & HACCP", "Menu Engineering & Prime Costing", "Commercial Kitchen Architecture"],
                 analysis_summary="Focus on hospitality unit economics, health code compliance, and commercial kitchen operations."
             )
+        elif any(k in target_lower for k in ["psycholog", "mental health", "therap", "counsel"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Active Listening", "Empathetic Communication"],
+                can_transfer=["Behavioral Observation", "Qualitative Case Synthesis", "Diagnostic Interviewing"],
+                need_to_develop=["Psychopathology & DSM-5 Diagnostic Criteria", "Cognitive Behavioral Therapy (CBT) Protocols", "Supervised Clinical Hours & Ethics"],
+                analysis_summary="Focus on formal clinical diagnostic training, therapeutic intervention modalities, and supervised practicum hours."
+            )
+        elif any(k in target_lower for k in ["photo", "photographer"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Visual Aesthetic Sense", "Composition"],
+                can_transfer=["Creative Framing", "Visual Storytelling", "Client Communication"],
+                need_to_develop=["Studio Strobe Lighting Techniques", "Commercial RAW Post-Processing", "High-Volume Client Delivery Galleries"],
+                analysis_summary="Focus on studio lighting mastery, commercial portfolio curation, and color-calibrated RAW processing."
+            )
+        elif any(k in target_lower for k in ["teach", "educat", "pedagog", "school"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Subject Matter Knowledge", "Oral Presentation"],
+                can_transfer=["Concept Decomposition", "Student Mentorship", "Curriculum Structuring"],
+                need_to_develop=["Constructivist Pedagogy & Unit Design", "Differentiated Instruction Strategies", "Classroom Management & State TET / B.Ed"],
+                analysis_summary="Focus on pedagogical framework design, differentiated lesson planning, and supervised student teaching practicum."
+            )
+        elif any(k in target_lower for k in ["upsc", "civil services", "public policy", "ias", "ips"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Analytical Reading", "Critical Comprehension"],
+                can_transfer=["Multi-Perspective Policy Evaluation", "Socio-Economic Reasoning", "Structured Essay Synthesis"],
+                need_to_develop=["General Studies Mains Answer Structuring", "Optional Subject Comprehensive Mastery", "Ethics & Administrative Case Study Protocols"],
+                analysis_summary="Focus on structured answer writing frameworks, current affairs synthesis, and exhaustive optional subject preparation."
+            )
+        elif any(k in target_lower for k in ["biotech", "molecular", "genetics", "bioinformatics", "biology"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Laboratory Safety", "Scientific Method"],
+                can_transfer=["Hypothesis Formulation", "Quantitative Data Analysis", "Experimental Protocol Design"],
+                need_to_develop=["Molecular Assay Protocols & PCR", "Bioinformatics Sequence Alignment", "Peer-Reviewed Scientific Manuscript Preparation"],
+                analysis_summary="Focus on hands-on wet-lab assays, computational sequence modeling, and academic preprint contributions."
+            )
+        elif any(k in target_lower for k in ["mathematician", "pure mathematics", "theoretical math"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Abstract Reasoning", "Quantitative Rigor"],
+                can_transfer=["Axiomatic Deduction", "Analytical Proof Mindset", "Logical Formalism"],
+                need_to_develop=["Abstract Algebra (Groups, Rings, Fields)", "Real Analysis & Measure Theory", "Point-Set & Differential Topology", "LaTeX Manuscript Exposition"],
+                analysis_summary="Focus on formal proof construction in higher algebra, measure-theoretic real analysis, and axiomatic topology."
+            )
+        elif any(k in target_lower for k in ["operations manager", "ops manager", "business operations"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Organizational Coordination", "Stakeholder Communication"],
+                can_transfer=["Workflow Optimization", "Executive Communication", "Cross-Departmental Logistics"],
+                need_to_develop=["Value Stream Mapping & Lean Workflows", "KPI Dashboard Design & Telemetry", "Vendor Procurement & SLA Negotiations"],
+                analysis_summary="Focus on quantitative workflow diagnostics, real-time KPI telemetry, and high-stakes vendor contract negotiations."
+            )
+        elif any(k in target_lower for k in ["drone hardware", "drone", "uav", "aerospace hardware"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["CAD Modeling", "Statics & Dynamics"],
+                can_transfer=["Mechanical System Architecture", "Kinematic Analysis", "Structural FEA"],
+                need_to_develop=["Embedded Flight Controller Firmware (PX4/C++)", "Sensor Fusion (IMU/LiDAR/Optical Flow)", "ROS 2 Hardware Interfaces & ESC Protocols"],
+                analysis_summary="Focus on embedded real-time flight firmware, multi-sensor Kalman filtering, and actuator bus communications."
+            )
+        elif any(k in target_lower for k in ["computational fluid dynamics", "cfd", "fluid dynamics", "aerodynamics"]):
+            return TransferableSkillsAnalysis(
+                already_have=profile.skills or ["Multivariable Calculus", "Fluid Mechanics"],
+                can_transfer=["Continuum Mechanics", "Differential Equations", "Thermodynamic Principles"],
+                need_to_develop=["Numerical Discretization & FVM Meshing", "Turbulence Modeling (RANS/LES)", "HPC Parallel OpenFOAM / MPI Solvers"],
+                analysis_summary="Focus on finite volume discretization schemes, turbulence model selection, and parallel HPC cluster execution."
+            )
         else:
             # General student / candidate profile
             return TransferableSkillsAnalysis(
@@ -374,6 +454,9 @@ class CareerReadinessEngine:
                 need_to_develop=[f"Core Competencies in {target_role}", "Applied Project Portfolio", "Industry Verification"],
                 analysis_summary=f"You possess strong foundational capabilities; focus next on practical artifacts and domain competencies for {target_role}."
             )
+
+    # Alias for semantic compatibility
+    evaluate_transferable_skills = analyze_transferable_skills
 
     def analyze_experience_gaps(
         self,
@@ -451,8 +534,197 @@ class CareerReadinessEngine:
                     associated_roadmap_stage="Commercial Service & Health Compliance"
                 )
             ]
-        else:
-            # Technical / Engineering / Default
+        elif any(k in target_lower for k in ["psycholog", "mental health", "therap", "counsel"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_clinical_practicum",
+                    experience_type="INTERNSHIP",
+                    title="Supervised Clinical Psychology Practicum",
+                    why_it_matters="Licensing boards require documented client contact hours under a licensed clinical supervisor.",
+                    how_to_obtain="Complete structured clinical placement conducting intake interviews and supervised psychotherapy.",
+                    evidence_to_prove="Signed supervisor practicum logbook and institutional internship certificate.",
+                    associated_roadmap_stage="Stage 03: Supervised Clinical Practicum"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_psych_eval_report",
+                    experience_type="PROJECT",
+                    title="Comprehensive Psychological Assessment & Case Formulation",
+                    why_it_matters="Clinics evaluate diagnostic reasoning, psychometric test interpretation, and treatment planning.",
+                    how_to_obtain="Conduct diagnostic evaluation battery (WAIS, MMPI) and synthesize full clinical case formulation.",
+                    evidence_to_prove="De-identified comprehensive psychological assessment report.",
+                    associated_roadmap_stage="Stage 02: Psychological Assessment & Diagnostic Formulation"
+                )
+            ]
+        elif any(k in target_lower for k in ["photo", "photographer"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_photo_portfolio",
+                    experience_type="PROJECT",
+                    title="Commercial Editorial Portfolio & Lighting Case Study",
+                    why_it_matters="Art directors and clients select photographers entirely based on published lighting mastery and cohesive visual style.",
+                    how_to_obtain="Produce a 15-image editorial collection documenting lighting diagrams, modifier choices, and RAW post-processing.",
+                    evidence_to_prove="Curated online gallery link and behind-the-scenes lighting breakdown documentation.",
+                    associated_roadmap_stage="Stage 02: Advanced Studio & Location Lighting Mastery"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_photo_client_delivery",
+                    experience_type="FREELANCE",
+                    title="Commercial Client Commission & Delivery Workflow",
+                    why_it_matters="Proves ability to manage client brief, rate card, model release, and deadline delivery.",
+                    how_to_obtain="Execute a commissioned or commercial test shoot with full contract, call sheet, and deliverables.",
+                    evidence_to_prove="Delivered client gallery, signed model releases, and commercial invoice.",
+                    associated_roadmap_stage="Stage 03: Professional Portfolio, Client Business & Delivery"
+                )
+            ]
+        elif any(k in target_lower for k in ["teach", "educat", "pedagog", "school"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_teach_practicum",
+                    experience_type="INTERNSHIP",
+                    title="Supervised Classroom Teaching Practicum",
+                    why_it_matters="School administrations require verified classroom teaching hours with pedagogical mentor evaluations.",
+                    how_to_obtain="Complete a multi-week classroom teaching placement delivering structured lessons and student grading.",
+                    evidence_to_prove="Supervising teacher evaluation report and classroom observation logs.",
+                    associated_roadmap_stage="Stage 03: Classroom Practicum & Student Teaching"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_teach_lesson_plans",
+                    experience_type="PROJECT",
+                    title="Curriculum Unit Design & Differentiated Assessment Rubrics",
+                    why_it_matters="Demonstrates ability to design standards-aligned lesson plans with differentiated learning accommodations.",
+                    how_to_obtain="Design a comprehensive 4-week instructional unit with diagnostic rubrics and student activities.",
+                    evidence_to_prove="Published lesson plan portfolio and differentiated assessment guide.",
+                    associated_roadmap_stage="Stage 02: Curriculum Design & Instructional Strategies"
+                )
+            ]
+        elif any(k in target_lower for k in ["upsc", "civil services", "public policy", "ias", "ips"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_upsc_mains_writing",
+                    experience_type="PROJECT",
+                    title="General Studies Mains Evaluated Answer Writing Series",
+                    why_it_matters="UPSC selection depends overwhelmingly on written Mains marks; structured answer presentation is vital.",
+                    how_to_obtain="Complete comprehensive timed answer writing tests across GS Papers I–IV with faculty review.",
+                    evidence_to_prove="Evaluated test copies with mentor marks, feedback, and model answer comparisons.",
+                    associated_roadmap_stage="Stage 02: Mains Comprehensive Answer Writing & Optional Mastery"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_upsc_mock_interview",
+                    experience_type="RESEARCH",
+                    title="Personality Test & Board Mock Interview Series",
+                    why_it_matters="Evaluates administrative poise, nuanced policy articulation, and ethical decision-making.",
+                    how_to_obtain="Participate in mock interview boards with retired senior civil servants.",
+                    evidence_to_prove="Detailed mock interview board evaluation transcript and score rubric.",
+                    associated_roadmap_stage="Stage 03: Personality Test & Interview Preparation"
+                )
+            ]
+        elif any(k in target_lower for k in ["biotech", "molecular", "genetics", "bioinformatics", "biology"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_lab_protocol",
+                    experience_type="PROJECT",
+                    title="Standardized Molecular Assay Protocol & Wet-Lab Notebook",
+                    why_it_matters="Research labs evaluate experimental reproducibility, pipetting precision, and rigorous protocol tracking.",
+                    how_to_obtain="Perform and document recombinant DNA, PCR, or cell culture assays with negative controls.",
+                    evidence_to_prove="Validated laboratory notebook or research poster presentation.",
+                    associated_roadmap_stage="Laboratory Assays & Molecular Methods"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_research_thesis",
+                    experience_type="RESEARCH",
+                    title="Scientific Research Preprint or Co-Authored Manuscript",
+                    why_it_matters="Primary signal for scientific investigation is peer-reviewed methodology and statistical validation.",
+                    how_to_obtain="Synthesize experimental findings into a formal research paper or conference submission.",
+                    evidence_to_prove="Preprint URL (e.g. bioRxiv) or co-authored academic publication.",
+                    associated_roadmap_stage="Scientific Writing & Publication"
+                )
+            ]
+        elif any(k in target_lower for k in ["mathematician", "pure mathematics", "theoretical math"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_math_monograph",
+                    experience_type="RESEARCH",
+                    title="Expository Mathematical Monograph or arXiv Preprint",
+                    why_it_matters="Academic mathematical admissions and research fellowships evaluate original proof formulation and scholarly exposition.",
+                    how_to_obtain="Author a LaTeX monograph deconstructing a seminal theorem or presenting an original mathematical result.",
+                    evidence_to_prove="arXiv Math preprint URL or faculty-evaluated thesis defense document.",
+                    associated_roadmap_stage="Formal Mathematical Proofs & Expository Monograph"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_math_proof_portfolio",
+                    experience_type="PROJECT",
+                    title="Advanced Proof Verification Portfolio",
+                    why_it_matters="Demonstrates rigorous epsilon-delta argumentation and axiomatic mastery in abstract algebra and topology.",
+                    how_to_obtain="Compile an evaluated proof portfolio across group theory, measure theory, and differential topology.",
+                    evidence_to_prove="Evaluated LaTeX proof portfolio document with complete lemmas.",
+                    associated_roadmap_stage="Abstract Algebra: Groups, Rings & Galois Theory"
+                )
+            ]
+        elif any(k in target_lower for k in ["operations manager", "ops manager", "business operations"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_ops_transformation",
+                    experience_type="PROJECT",
+                    title="Cross-Functional Value Stream Transformation Study",
+                    why_it_matters="Proves ability to audit real-world bottlenecks, reduce operational cycle times, and establish measurable SLAs.",
+                    how_to_obtain="Perform an end-to-end process mapping audit of an enterprise workflow and author a Lean Six Sigma runbook.",
+                    evidence_to_prove="Comprehensive process optimization blueprint and executive KPI review deck.",
+                    associated_roadmap_stage="Cross-Functional Process Optimization & Lean Workflows"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_ops_procurement",
+                    experience_type="INTERNAL_EXPERIENCE",
+                    title="Vendor Procurement RFP & Contract Negotiation",
+                    why_it_matters="Evaluates commercial judgment, vendor scorecarding, and supplier risk governance.",
+                    how_to_obtain="Lead or shadow a competitive vendor bidding process from RFP drafting to contract finalization.",
+                    evidence_to_prove="Vendor evaluation scorecard and negotiated SLA contract agreement.",
+                    associated_roadmap_stage="Vendor Management & Procurement Contract Negotiations"
+                )
+            ]
+        elif any(k in target_lower for k in ["drone hardware", "drone", "uav", "aerospace hardware"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_drone_prototype",
+                    experience_type="PROJECT",
+                    title="Autonomous Drone Hardware Flight Prototype",
+                    why_it_matters="Hardware teams evaluate physical avionics packaging, vibration damping, and successful autonomous flight test logs.",
+                    how_to_obtain="Integrate flight controller, ESCs, motors, and sensors onto an airframe and execute autonomous waypoint flights.",
+                    evidence_to_prove="Recorded flight log analysis file (.ulog) and hardware build log video.",
+                    associated_roadmap_stage="Autonomous Flight Telemetry & Airframe Integration"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_drone_firmware",
+                    experience_type="OPEN_SOURCE",
+                    title="PX4 / ArduPilot Flight Firmware Driver Module",
+                    why_it_matters="Proves ability to write embedded C++ drivers for real-time aerospace operating systems.",
+                    how_to_obtain="Write and benchmark a custom sensor driver or actuator module in PX4 / micro-ROS.",
+                    evidence_to_prove="Public repository or pull request with passing bench test telemetry.",
+                    associated_roadmap_stage="Embedded Flight Controller Firmware & Microcontrollers"
+                )
+            ]
+        elif any(k in target_lower for k in ["computational fluid dynamics", "cfd", "fluid dynamics", "aerodynamics"]):
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_cfd_validation",
+                    experience_type="RESEARCH",
+                    title="CFD Experimental Validation & Mesh Convergence Study",
+                    why_it_matters="Simulation engineering requires proving that numerical solutions match physical wind tunnel data without grid dependence.",
+                    how_to_obtain="Conduct a grid convergence index study and validate RANS/LES pressure profiles against experimental benchmark data.",
+                    evidence_to_prove="Complete CFD validation report matching numerical data with experimental wind tunnel records.",
+                    associated_roadmap_stage="HPC Parallel Solvers & Experimental Validation Study"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_cfd_hpc",
+                    experience_type="PROJECT",
+                    title="High-Performance OpenFOAM Parallel Scaling Study",
+                    why_it_matters="Demonstrates capability to configure multi-core MPI domain decomposition on high-performance computing clusters.",
+                    how_to_obtain="Set up and run an OpenFOAM parallel simulation comparing speedup curves across compute nodes.",
+                    evidence_to_prove="Simulation case directory, MPI run script, and scalability plot.",
+                    associated_roadmap_stage="Numerical Discretization & Mesh Generation"
+                )
+            ]
+        elif any(k in target_lower for k in ["ai", "machine learning", "deep learning", "software", "data"]):
+            # Technical / Engineering
             return [
                 ExperienceGap(
                     gap_id="exp_gap_project_mlops",
@@ -480,6 +752,28 @@ class CareerReadinessEngine:
                     how_to_obtain="Apply to verified early-career and student internship opportunities once Stage 04 milestones are completed.",
                     evidence_to_prove="Verified employer internship offer or project fellowship milestone.",
                     associated_roadmap_stage="Stage 05: Career Launch & Placement"
+                )
+            ]
+        else:
+            # Generic domain fallback - DO NOT default to Docker or PyTorch
+            return [
+                ExperienceGap(
+                    gap_id="exp_gap_domain_capstone",
+                    experience_type="PROJECT",
+                    title=f"Comprehensive {target_role} Capstone Portfolio Artifact",
+                    why_it_matters="Employers and clients evaluate concrete work output and demonstrated problem-solving rigor.",
+                    how_to_obtain=f"Complete a structured, end-to-end practical project or case study demonstrating core skills in {target_role}.",
+                    evidence_to_prove="Verified project artifact, portfolio link, or formal documentation report.",
+                    associated_roadmap_stage=f"{target_role} Capstone Stage"
+                ),
+                ExperienceGap(
+                    gap_id="exp_gap_supervised_practicum",
+                    experience_type="INTERNSHIP",
+                    title=f"Supervised Practicum / Apprenticeship in {target_role}",
+                    why_it_matters="Real-world supervised exposure provides institutional credibility and procedural mastery.",
+                    how_to_obtain=f"Secure an entry-level apprenticeship, internship, or supervised field practicum in {target_role}.",
+                    evidence_to_prove="Letter of completion, employer evaluation, or verified recommendation.",
+                    associated_roadmap_stage=f"{target_role} Field Practicum Stage"
                 )
             ]
 

@@ -94,7 +94,7 @@ class ProactiveInterventionEngine:
                         priority="CRITICAL",
                         title=f"Application Closing Soon: {top_opp.get('title')}",
                         what_happened=f"Verified opportunity at {top_opp.get('organization')} closes on {deadline_str}.",
-                        why_it_matters=f"Matches your verified background in {', '.join(graph.capability_context.get('demonstrated_skills', [])[:2]) or 'Applied AI'}.",
+                        why_it_matters=f"Matches your verified background in {', '.join(graph.capability_context.get('demonstrated_skills', [])[:2]) or 'your core competencies'}.",
                         what_should_i_do="Review the verified application prompt and submit your proof portfolio.",
                         what_happens_if_ignored="The current cohort application window will close until the next seasonal cycle.",
                         action_url="/readiness",

@@ -50,7 +50,16 @@ class AdaptivePlanningAgent:
         )
 
         changed_stages = []
-        unchanged_stages = ["stage_01_python_foundations", "stage_02_math_and_linear_algebra"]
+        # Dynamically derive preserved unchanged stages from active roadmap
+        existing_stage_ids = []
+        for phase in current_roadmap.get("phases", []):
+            stages = phase.get("stages", []) if isinstance(phase, dict) else getattr(phase, "stages", [])
+            for stage in stages:
+                s_id = stage.get("stage_id") if isinstance(stage, dict) else getattr(stage, "stage_id", None)
+                if s_id:
+                    existing_stage_ids.append(s_id)
+
+        unchanged_stages = existing_stage_ids[:2] if len(existing_stage_ids) >= 2 else (existing_stage_ids or ["foundational_prerequisites"])
 
         if event.change_type == "GOAL_CHANGE":
             new_role = event.trigger_data.get("new_target_role", "Target Role")

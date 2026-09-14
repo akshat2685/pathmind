@@ -230,6 +230,142 @@ class TrajectoryEngine:
             )
             return [path_biotech]
 
+        elif any(k in goals_text for k in ["psycholog", "mental health", "therap", "counsel"]):
+            path_psych = CandidatePath(
+                path_id="path_clinical_psychology",
+                title="Clinical Psychology & Therapeutic Practice",
+                domain="Clinical & Counseling Psychology",
+                description="Focuses on psychopathology assessment, standardized psychometric evaluation, evidence-based cognitive psychotherapy, and supervised clinical practice.",
+                fit_score=94.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Aligns directly with clinical psychology, mental health care, and therapeutic practice goals."],
+                supporting_evidence=["Stated mental health and counseling objective."],
+                missing_evidence=["Supervised clinical practicum logs and diagnostic assessment reports."],
+                required_skills=["Psychopathology & DSM-5 Diagnostic Criteria", "Standardized Psychological Testing (WAIS, MMPI)", "Cognitive Behavioral Therapy (CBT)", "Clinical Ethical Codes & Confidentiality", "Intake Interviewing & MSE"],
+                current_skills_held=["Active Listening", "Empathetic Communication"],
+                transferable_skills=["Behavioral Observation", "Qualitative Case Synthesis"],
+                skill_gaps=[SkillGap(skill_name="Psychometric Battery Administration", category="CORE", current_status="MISSING", description="Administering, scoring, and interpreting standardized intelligence and personality batteries.", recommended_action="Complete diagnostic assessment practicum under a licensed supervisor.")],
+                education_routes=[EducationRoute(route_type="TRADITIONAL_DEGREE", title="M.Phil / Psy.D in Clinical Psychology", description="Post-graduate professional degree required for clinical licensing.", estimated_duration="2 Years", institutions_or_paths=["Recognized Medical Institutes & Universities"], geographic_relevance="India & Global")],
+                credential_options=[CredentialOption(title="Clinical Psychologist Licensure / RCI Registration", issuer="Rehabilitation Council of India / State Board", classification="MANDATORY", purpose="Statutory license required to practice clinical psychotherapy.")],
+                india_context={"nco_code": "2634.10", "regulatory_body": "Rehabilitation Council of India (RCI)"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2634.1", "esco_title": "Clinical Psychologist"}
+            )
+            path_cbt = CandidatePath(
+                path_id="path_cognitive_behavioral_counseling",
+                title="Cognitive Behavioral Counseling & Assessment",
+                domain="Counseling Psychology",
+                description="Focuses on structured cognitive-behavioral intervention protocols, case conceptualization, and psychoeducation.",
+                fit_score=90.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Specialized focus on evidence-based cognitive behavioral counseling modalities."],
+                supporting_evidence=["Declared therapeutic practice interest."],
+                missing_evidence=["Counseling case formulation and supervised hours."],
+                required_skills=["CBT Protocol Delivery", "Cognitive Restructuring", "Behavioral Activation", "Therapeutic Alliance"],
+                current_skills_held=["Empathetic Communication"],
+                transferable_skills=["Interpersonal Facilitation"],
+                skill_gaps=[SkillGap(skill_name="CBT Case Conceptualization", category="CORE", current_status="MISSING", description="Authoring structured CBT case formulation notes.", recommended_action="Complete Beck Institute certified training modules.")],
+                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title="Specialized CBT Practitioner Certification", description="Applied therapeutic intervention training.", estimated_duration="6–12 Months", institutions_or_paths=["Beck Institute / Recognized Counseling Institutes"], geographic_relevance="Global")],
+                credential_options=[CredentialOption(title="Certified CBT Practitioner", issuer="Beck Institute", classification="STRONGLY_USEFUL", purpose="Validates competency in evidence-based CBT protocols.")],
+                india_context={"nco_code": "2634.20"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2634.3", "esco_title": "Counseling Psychologist"}
+            )
+            return [path_psych, path_cbt]
+
+        elif any(k in goals_text for k in ["photo", "photographer"]):
+            path_photo = CandidatePath(
+                path_id="path_commercial_editorial_photography",
+                title="Commercial & Editorial Photography",
+                domain="Visual Arts & Commercial Photography",
+                description="Focuses on optical mechanics, studio strobe multi-light setups, commercial creative direction, color-calibrated RAW post-processing, and editorial portfolio delivery.",
+                fit_score=93.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Directly aligns with professional photography, studio lighting, and commercial visual arts goals."],
+                supporting_evidence=["Declared photography objective."],
+                missing_evidence=["Published commercial editorial tear-sheets and lighting breakdown documentation."],
+                required_skills=["Manual Exposure & Optical Physics", "Studio Strobe Multi-Light Ratios", "RAW Color Grading (Capture One / Lightroom)", "Commercial Client Direction", "Frequency Separation Retouching"],
+                current_skills_held=["Visual Composition", "Aesthetic Framing"],
+                transferable_skills=["Creative Storytelling", "Client Communication"],
+                skill_gaps=[SkillGap(skill_name="Studio Strobe Multi-Light Ratios", category="CORE", current_status="MISSING", description="Controlling key, fill, and rim strobe lighting ratios with optical modifiers.", recommended_action="Produce a 15-image editorial collection documenting lighting diagrams.")],
+                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title="Commercial Photography Portfolio & Studio Apprenticeship", description="Hands-on commercial studio assistantship and portfolio curation.", estimated_duration="12–18 Months", institutions_or_paths=["Commercial Photography Studios & Workshops"], geographic_relevance="Global")],
+                credential_options=[CredentialOption(title="Certified Professional Photographer (CPP)", issuer="Professional Photographers of America (PPA)", classification="STRONGLY_USEFUL", purpose="Validates technical mastery of lighting, optics, and commercial color science.")],
+                india_context={"nco_code": "3431.10"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/3431", "esco_title": "Photographer"}
+            )
+            return [path_photo]
+
+        elif any(k in goals_text for k in ["teach", "educat", "pedagog", "school"]):
+            path_teacher = CandidatePath(
+                path_id="path_k12_classroom_education",
+                title="K-12 Classroom Education & Pedagogy",
+                domain="Education & Pedagogy",
+                description="Focuses on educational psychology, constructivist unit design, backward curricular planning (UbD), positive behavioral classroom management, and supervised student teaching.",
+                fit_score=94.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Directly fulfills classroom teaching, pedagogy, and educator development aspirations."],
+                supporting_evidence=["Declared teaching objective."],
+                missing_evidence=["Supervised student teaching evaluations and state teaching eligibility scores."],
+                required_skills=["Educational Psychology (Bloom's, Vygotsky)", "Curriculum Backward Design (UbD)", "Formative & Diagnostic Assessment Rubrics", "Classroom Behavioral Management (PBIS)", "Universal Design for Learning (UDL)"],
+                current_skills_held=["Subject Matter Expertise", "Oral Communication"],
+                transferable_skills=["Concept Explanation", "Student Mentorship"],
+                skill_gaps=[SkillGap(skill_name="Constructivist Unit & Rubric Architecture", category="CORE", current_status="MISSING", description="Authoring differentiated 4-week instructional units with diagnostic rubrics.", recommended_action="Design an instructional unit plan with UDL accommodations.")],
+                education_routes=[EducationRoute(route_type="TRADITIONAL_DEGREE", title="Bachelor of Education (B.Ed)", description="Professional teaching degree required for school appointments.", estimated_duration="2 Years", institutions_or_paths=["University Faculty of Education / Teacher Training Colleges"], geographic_relevance="India & Global")],
+                credential_options=[CredentialOption(title="Central Teacher Eligibility Test (CTET) / State TET", issuer="CBSE / National Council for Teacher Education", classification="MANDATORY", purpose="Statutory qualifying examination for K-12 teaching appointments.")],
+                india_context={"nco_code": "2330.10", "regulatory_body": "National Council for Teacher Education (NCTE)"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/2330", "esco_title": "Secondary School Teacher"}
+            )
+            return [path_teacher]
+
+        elif any(k in goals_text for k in ["upsc", "civil services", "public policy", "ias", "ips"]):
+            path_civ = CandidatePath(
+                path_id="path_civil_services_public_admin",
+                title="Civil Services & Public Administration",
+                domain="Public Administration & Policy",
+                description="Focuses on Indian constitutional governance, macroeconomics, multi-disciplinary Mains answer writing, optional subject mastery, and administrative ethics.",
+                fit_score=93.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=["Directly aligns with civil service examination and public administration leadership goals."],
+                supporting_evidence=["Declared public service aspiration."],
+                missing_evidence=["Evaluated General Studies Mains test copies and optional subject syllabus completion."],
+                required_skills=["Constitutional Law & Indian Polity", "Socio-Economic Development Policy", "GS Mains Multi-Dimensional Answer Structuring", "Administrative Ethics & Case Study Resolution", "Current Affairs Analytical Synthesis"],
+                current_skills_held=["Analytical Reading", "Critical Comprehension"],
+                transferable_skills=["Logical Synthesis", "Policy Argumentation"],
+                skill_gaps=[SkillGap(skill_name="GS Mains Multi-Dimensional Answer Writing", category="CORE", current_status="MISSING", description="Drafting timed, structured evaluative answers across GS I–IV papers.", recommended_action="Enroll in and complete a full-length evaluative Mains answer writing test series.")],
+                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title="Civil Services Comprehensive Syllabus & Test Preparation", description="Structured preparation across General Studies, Optional Subject, and Essay papers.", estimated_duration="12–18 Months", institutions_or_paths=["Self-Directed / Public Policy Foundations"], geographic_relevance="India")],
+                credential_options=[CredentialOption(title="UPSC Civil Services Examination (Preliminary & Mains)", issuer="Union Public Service Commission", classification="MANDATORY", purpose="Constitutional qualifying examination for All India and Central Civil Services.")],
+                india_context={"nco_code": "1112.10", "regulatory_body": "Union Public Service Commission (UPSC)"},
+                global_context={"esco_uri": "http://data.europa.eu/esco/occupation/1112", "esco_title": "Government Administrator"}
+            )
+            return [path_civ]
+
+        elif goals and not any(k in goals_text for k in ["ai", "machine learning", "robotics", "software", "developer", "coding", "data", "engineer"]):
+            primary_goal = goals[0].strip()
+            path_custom = CandidatePath(
+                path_id=f"path_{primary_goal.lower().replace(' ', '_')[:30]}",
+                title=f"{primary_goal} Professional Pathway",
+                domain=f"{primary_goal} Practice",
+                description=f"Directly derived from stated candidate goal: '{primary_goal}'. Structured around core domain competencies, practical deliverables, and industry verification.",
+                fit_score=90.0,
+                fit_level="HIGH",
+                confidence="HIGH",
+                why_it_matches=[f"Directly matches stated objective: '{primary_goal}'."],
+                supporting_evidence=[f"Declared candidate aspiration in {primary_goal}."],
+                missing_evidence=[f"Verified portfolio artifacts and domain-specific credentials for {primary_goal}."],
+                required_skills=[f"Core {primary_goal} Methodology", "Domain Problem Solving", "Professional Standards"],
+                current_skills_held=["Analytical Reasoning", "Communication"],
+                transferable_skills=["Project Management", "Structured Problem Solving"],
+                skill_gaps=[SkillGap(skill_name=f"Applied {primary_goal} Competencies", category="CORE", current_status="MISSING", description=f"Demonstrated practical execution in {primary_goal}.", recommended_action="Build verified portfolio artifacts.")],
+                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title=f"Applied {primary_goal} Preparation", description=f"Focused preparation for {primary_goal}.", estimated_duration="12 Months", institutions_or_paths=["Recognized Training Institutions"], geographic_relevance="Global")],
+                credential_options=[],
+                india_context={},
+                global_context={}
+            )
+            return [path_custom]
+
         # 1. Candidate Path 1: Applied AI & Machine Learning Systems (Default / Technical)
         traj_ai = self.corpus_service.match_similar_trajectories(["ai", "machine learning"], interests, limit=1)
         why_ai = ["Directly leverages mathematical and algorithmic strengths demonstrated in academic profile."]
@@ -653,13 +789,16 @@ class TrajectoryEngine:
                 for path in candidate_paths:
                     path.risks.append(f"Counselor Note: {contradiction.suggested_clarification}")
 
-        target_domain_decomposed = "Engineering -> (Applied AI Systems | Autonomous Robotics | Distributed Cloud Architecture)"
-        overall_reasoning = (
-            f"Based on your profile, strongest Holland dimensions (Investigative & Realistic), "
-            f"and hands-on robotics/hackathon evidence, we decomposed your broad engineering goal into "
-            f"3 concrete, highly aligned candidate trajectories. Each path outlines exact skill gaps, "
-            f"education routes, and empirical patterns from similar scholar journeys."
-        )
+        if candidate_paths:
+            target_domain_decomposed = f"{candidate_paths[0].domain} -> ({' | '.join(p.title for p in candidate_paths)})"
+            overall_reasoning = (
+                f"Based on your profile, evidence signals, and target outcome direction, "
+                f"we synthesized {len(candidate_paths)} concrete, highly aligned candidate pathways. "
+                f"Each path outlines exact skill gaps, education routes, and verified domain requirements."
+            )
+        else:
+            target_domain_decomposed = "Unspecified Domain"
+            overall_reasoning = "No candidate pathways could be synthesized from the available profile evidence."
 
         return DiscoveryResponse(
             person_id=person_id,
@@ -679,35 +818,93 @@ class TrajectoryEngine:
         """
         Lightweight counterfactual 'What If?' sandbox. Modifies education routes, pacing,
         and skill priorities without resetting the entire application state.
+        When target role changes, performs graph comparison between requirement graphs.
         """
         adjusted = base_path.model_copy(deep=True)
         trade_off_notes = []
 
-        if modification_type == "LOW_BUDGET" or "afford" in modification_prompt.lower() or "cost" in modification_prompt.lower():
+        lower_prompt = (modification_prompt or "").lower()
+        lower_type = (modification_type or "").lower()
+
+        # Check if modification represents a target outcome change
+        new_target = None
+        if "product manager" in lower_prompt or "pm" in lower_prompt or "product management" in lower_prompt:
+            new_target = "Product Manager"
+        elif "restaurant" in lower_prompt or "culinary" in lower_prompt or "bistro" in lower_prompt:
+            new_target = "Restaurant Owner & Hospitality Entrepreneur"
+        elif "lawyer" in lower_prompt or "legal" in lower_prompt or "advocate" in lower_prompt:
+            new_target = "Corporate Lawyer & Legal Consultant"
+        elif "design" in lower_prompt or "ux" in lower_prompt:
+            new_target = "Product Designer (UI/UX)"
+        elif "psycholog" in lower_prompt or "therap" in lower_prompt:
+            new_target = "Clinical Psychologist"
+        elif "photograph" in lower_prompt:
+            new_target = "Commercial Photographer"
+        elif "teach" in lower_prompt or "educat" in lower_prompt:
+            new_target = "K-12 School Teacher"
+        elif "civil services" in lower_prompt or "upsc" in lower_prompt:
+            new_target = "Civil Services Administrator"
+        elif "goal_change" in lower_type or "target_change" in lower_type:
+            new_target = modification_prompt.strip()
+
+        if new_target:
+            from backend.services.requirement_graph_service import RequirementGraphService
+            req_service = RequirementGraphService()
+            base_graph = req_service.build_requirement_graph_for_outcome(base_path.title)
+            target_graph = req_service.build_requirement_graph_for_outcome(new_target)
+
+            base_skills = {n.name for n in base_graph.core_skills}
+            target_skills = {n.name for n in target_graph.core_skills}
+
+            shared_assets = sorted(list(base_skills.intersection(target_skills)))
+            discarded_assumptions = sorted(list(base_skills - target_skills))
+            new_requirements = sorted(list(target_skills - base_skills))
+
+            trade_off_notes.append(f"Target Outcome Shift: '{base_path.title}' -> '{new_target}'")
+            trade_off_notes.append(f"Shared Assets (Retained): {', '.join(shared_assets) if shared_assets else 'Foundational reasoning and structured problem solving'}")
+            trade_off_notes.append(f"Discarded Assumptions: {', '.join(discarded_assumptions) if discarded_assumptions else 'Domain-specific prerequisites no longer mandated'}")
+            trade_off_notes.append(f"New Requirements to Develop: {', '.join(new_requirements) if new_requirements else 'Target domain core competencies'}")
+            trade_off_notes.append("Timeline Delta: Shift requires redirecting milestone focus to new domain evidence; previous shared competencies accelerate foundational stages.")
+
+            adjusted.title = new_target
+            adjusted.domain = getattr(target_graph, "domain", getattr(target_graph, "target_industry", "Domain"))
+            adjusted.required_skills = [n.name for n in target_graph.core_skills]
+            adjusted.transferable_skills = shared_assets or ["Foundational Reasoning"]
+            adjusted.skill_gaps = [
+                SkillGap(
+                    skill_name=n.name,
+                    category="CORE",
+                    current_status="MISSING",
+                    description=n.description,
+                    recommended_action=f"Develop proficiency in {n.name} through focused coursework or practical artifacts."
+                )
+                for n in target_graph.core_skills if n.name not in base_skills
+            ]
+        elif modification_type == "LOW_BUDGET" or "afford" in lower_prompt or "cost" in lower_prompt:
             adjusted.education_routes = [
                 EducationRoute(
                     route_type="PROJECT_BASED_ACCELERATED",
                     title="Low-Cost Open-Source Apprenticeship & Public Specialization",
-                    description="Leverages free high-quality open-source curricula (Fast.ai, Open Source Society University, MIT OpenCourseWare) paired with public GitHub development.",
+                    description="Leverages free high-quality open-source curricula paired with public portfolio development.",
                     estimated_duration="18–24 Months",
-                    institutions_or_paths=["MIT OCW", "Fast.ai", "Local Makerspaces", "GitHub Sponsors"],
+                    institutions_or_paths=["Open Source Curricula", "Local Industry Apprenticeships", "Public Portfolios"],
                     geographic_relevance="Global"
                 )
             ]
             adjusted.credential_options = [c for c in adjusted.credential_options if c.classification != "LOW_VALUE"]
-            trade_off_notes.append("Decreased financial expenditure to near zero; relies entirely on self-discipline and verifiable public code artifacts.")
-            trade_off_notes.append("Requires self-advocacy and networking in open-source communities to secure initial apprenticeship/internship opportunities.")
+            trade_off_notes.append("Decreased financial expenditure to near zero; relies entirely on self-discipline and verifiable public evidence artifacts.")
+            trade_off_notes.append("Requires self-advocacy and networking in domain communities to secure initial apprenticeship/internship opportunities.")
 
-        elif modification_type == "SELF_PACED_5_HOURS" or "5 hours" in modification_prompt.lower() or "time" in modification_prompt.lower():
+        elif modification_type == "SELF_PACED_5_HOURS" or "5 hours" in lower_prompt or "time" in lower_prompt:
             for route in adjusted.education_routes:
                 route.estimated_duration = "Extended Pacing (36–48 Months at 5 hrs/week)"
                 route.description += " [Adjusted for part-time/weekend study pacing]."
             trade_off_notes.append("Pacing extended to 36+ months to accommodate low weekly time commitment.")
             trade_off_notes.append("Milestones restructured into modular, weekly atomic deliverables.")
 
-        elif modification_type == "GLOBAL_MIGRATION" or "abroad" in modification_prompt.lower() or "global" in modification_prompt.lower():
-            trade_off_notes.append("Prioritized international ESCO skill taxonomy standards and globally recognized CNCF/IEEE credentials.")
-            trade_off_notes.append("Recommended English technical writing and international open-source repository contributions as primary hiring bridge.")
+        elif modification_type == "GLOBAL_MIGRATION" or "abroad" in lower_prompt or "global" in lower_prompt:
+            trade_off_notes.append("Prioritized international ESCO skill taxonomy standards and globally recognized professional credentials.")
+            trade_off_notes.append("Recommended English domain writing and international public evidence contributions as primary bridge.")
 
         else:
             trade_off_notes.append(f"Custom counterfactual variation applied: '{modification_prompt}'.")

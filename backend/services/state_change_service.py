@@ -20,7 +20,7 @@ class StateChangeService:
         target_timeline: Optional[str] = None
     ) -> StateChangeEvent:
         current_goal = await self.store.get_career_goal(person_id)
-        prev_role = current_goal.get("target_role", "Applied Machine Learning Systems Engineer") if current_goal else "Applied Machine Learning Systems Engineer"
+        prev_role = current_goal.get("target_role", "Initial Career Target") if current_goal else "Initial Career Target"
         
         return StateChangeEvent(
             person_id=person_id,
@@ -30,7 +30,7 @@ class StateChangeService:
             trigger_data={
                 "previous_role": prev_role,
                 "new_target_role": new_target_role,
-                "target_industry": target_industry or (current_goal.get("target_industry") if current_goal else "Applied AI & Tech"),
+                "target_industry": target_industry or (current_goal.get("target_industry") if current_goal else "Target Professional Domain"),
                 "geography": geography or (current_goal.get("geography") if current_goal else "Global / India"),
                 "target_timeline": target_timeline or (current_goal.get("target_timeline") if current_goal else "6–9 Months")
             }
