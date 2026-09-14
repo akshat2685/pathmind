@@ -39,11 +39,12 @@ class RealAPIProviderAdapter(BaseOpportunityProvider):
     Fails safely and honestly if API keys are missing or requests are rate-limited.
     No fabricated opportunities are injected.
     """
-    def __init__(self, api_endpoint: str = "https://jobs.github.com/positions.json"): # Example endpoint
-        self.api_endpoint = api_endpoint
+    def __init__(self, api_endpoint: str = "https://jobs.github.com/positions.json", endpoint_url: Optional[str] = None): # Example endpoint
+        self.api_endpoint = endpoint_url or api_endpoint
         self._is_connected = False
         self._status_code = "UNKNOWN"
         self._api_key = os.environ.get("REAL_OPPORTUNITY_API_KEY")
+        self._opportunities = []
 
     def get_provider_name(self) -> str:
         return "Real API Provider Adapter"
@@ -61,6 +62,10 @@ class RealAPIProviderAdapter(BaseOpportunityProvider):
         geography: Optional[str] = None
     ) -> List[CanonicalOpportunity]:
         
+        if self._opportunities:
+            now = datetime.now(timezone.utc).isoformat()
+            return [o for o in self._opportunities if o.deadline == "UNKNOWN" or o.deadline >= now]
+
         # Determine strict eligibility constraints via canonical goal domains
         query_params = {}
         if role_filter:

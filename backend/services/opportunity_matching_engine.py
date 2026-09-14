@@ -65,7 +65,7 @@ class OpportunityMatchingEngine:
         goal: CanonicalGoal = await self.career_engine.get_or_create_career_goal(person_id)
         
         target_role = role_filter or goal.target_role or "General Professional Practice"
-        target_domain = goal.target_domain
+        target_domain = getattr(goal, "domain", getattr(goal, "target_domain", "Unknown"))
 
         # 2. Retrieve verified skills from evidence/artifacts
         artifacts = await self.store.get_person_artifacts(person_id)

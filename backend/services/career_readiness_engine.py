@@ -32,7 +32,7 @@ from backend.services.career_agents import (
     ResumeAgent,
     AccountabilityAgent
 )
-from backend.services.opportunity_service import OpportunityService
+from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
 from backend.services.knowledge import KnowledgeService
 from backend.services.requirement_graph_service import RequirementGraphService
 from backend.services.store import FirestoreStore
@@ -41,7 +41,7 @@ class CareerReadinessEngine:
     def __init__(self, store: Optional[FirestoreStore] = None):
         self.store = store or FirestoreStore()
         self.knowledge_service = KnowledgeService()
-        self.opportunity_service = OpportunityService()
+        self.opportunity_matching_engine = OpportunityMatchingEngine(self.store)
         self.requirement_graph_service = RequirementGraphService(self.knowledge_service)
         
         # 5 Focused ADK Agents
@@ -686,10 +686,9 @@ class CareerReadinessEngine:
         )
 
         # 8. Match Verified Opportunities
-        opportunities = await self.opportunity_service.match_opportunities_for_person(
-            profile=profile,
-            target_role=goal.target_role,
-            readiness_state=readiness_state
+        opportunities = await self.opportunity_matching_engine.match_opportunities_for_person(
+            person_id=person_id,
+            role_filter=goal.target_role
         )
 
         # 9. Tailor Fact-Validated Resume
