@@ -20,13 +20,13 @@ class FirestoreStore:
         self.db = None
         self._available = False
         
-        has_creds = bool(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.environ.get("KUBERNETES_SERVICE_HOST"))
+        has_creds = bool(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.environ.get("KUBERNETES_SERVICE_HOST") or os.environ.get("FIRESTORE_EMULATOR_HOST"))
         if has_creds or settings.FIRESTORE_PROJECT_ID:
             try:
                 from google.cloud import firestore
-                # Only activate if credentials or explicit cloud environment is detected
-                if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.path.exists(os.path.expanduser("~/.config/gcloud/application_default_credentials.json")):
-                    self.db = firestore.AsyncClient(project=settings.FIRESTORE_PROJECT_ID)
+                # Only activate if credentials, explicit cloud environment, or emulator is detected
+                if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.path.exists(os.path.expanduser("~/.config/gcloud/application_default_credentials.json")) or os.environ.get("FIRESTORE_EMULATOR_HOST"):
+                    self.db = firestore.AsyncClient(project=settings.FIRESTORE_PROJECT_ID or "demo-project")
                     self._available = True
             except Exception:
                 self.db = None

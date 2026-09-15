@@ -120,6 +120,14 @@ export function CareerExplorer() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
         : "scholar-user";
 
+      const userGoal = typeof window !== "undefined" ? localStorage.getItem("pathmind_user_goal") : null;
+      
+      if (!userGoal) {
+        setLoading(false);
+        setError("NEEDS_USER_INPUT: No goal selected. Please complete onboarding first.");
+        return;
+      }
+
       const res = await fetch(`${baseUrl}/api/trajectories/discover`, {
         method: "POST",
         headers: {
@@ -128,13 +136,13 @@ export function CareerExplorer() {
         },
         body: JSON.stringify({
           person_id: personId,
-          goals: ["Explore Applied AI, Robotics, and Systems Engineering"],
+          goals: [userGoal],
           geographic_preference: "India & Global"
         })
       });
 
       if (!res.ok) {
-        throw new Error("Discovery request failed");
+        throw new Error("SOURCE_UNAVAILABLE");
       }
 
       const data = await res.json();
@@ -146,7 +154,7 @@ export function CareerExplorer() {
       }
     } catch (err) {
       console.error(err);
-      setError("Unable to load live trajectory pathways. Falling back to offline discovery cache.");
+      setError("SOURCE_UNAVAILABLE: Unable to load live trajectory pathways. Backend service may be unavailable.");
     } finally {
       setLoading(false);
     }
