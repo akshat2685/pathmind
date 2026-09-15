@@ -2,6 +2,21 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 
+class AssessmentBlueprint(BaseModel):
+    id: str
+    person_id: str
+    learner_stage: str
+    aspiration: str
+    domain: str
+    assessment_goal: str
+    dimensions: List[str] = Field(default_factory=list)
+    evidence_required: List[str] = Field(default_factory=list)
+    difficulty_level: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class AssessmentItem(BaseModel):
     id: str
     construct_name: str = Field(..., alias="construct")

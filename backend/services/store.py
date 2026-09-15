@@ -99,7 +99,10 @@ class FirestoreStore:
                 "opportunity_applications": [],
                 "execution_pause_state": None,
                 "orchestration_traces": [],
-                "action_proposals": []
+                "action_proposals": [],
+                "profile": None,
+                "blueprints": {},
+                "baselines": []
             }
 
     # --- Knowledge Cache ---
@@ -578,6 +581,93 @@ class FirestoreStore:
 
     async def save_profile(self, person_id: str, profile_data: Dict[str, Any]) -> None:
         await self.save_career_profile(person_id, profile_data)
+
+    # --- Canonical Person Profile, Blueprints, Baselines ---
+
+    async def save_person_profile(self, person_id: str, profile_data: Dict[str, Any]):
+        async with self.get_person_lock(person_id):
+            self._ensure_person_bucket(person_id)
+            self._in_memory_persons[person_id]["profile"] = profile_data
+            
+            if self._available:
+                try:
+                    await self.db.collection("persons").document(person_id).set({"profile": profile_data}, merge=True)
+                except Exception as e:
+                    print(f"Firestore save error (profile): {e}")
+
+    async def get_person_profile(self, person_id: str) -> Optional[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        if self._in_memory_persons[person_id].get("profile"):
+            return self._in_memory_persons[person_id]["profile"]
+            
+        if self._available:
+            try:
+                doc = await self.db.collection("persons").document(person_id).get()
+                if doc.exists:
+                    data = doc.to_dict()
+                    profile = data.get("profile")
+                    if profile:
+                        self._in_memory_persons[person_id]["profile"] = profile
+                        return profile
+            except Exception as e:
+                print(f"Firestore read error (profile): {e}")
+        return None
+
+    async def save_assessment_blueprint(self, person_id: str, blueprint_id: str, blueprint_data: Dict[str, Any]):
+        async with self.get_person_lock(person_id):
+            self._ensure_person_bucket(person_id)
+            self._in_memory_persons[person_id]["blueprints"][blueprint_id] = blueprint_data
+            
+            if self._available:
+                try:
+                    await self.db.collection("persons").document(person_id).collection("blueprints").document(blueprint_id).set(blueprint_data)
+                except Exception as e:
+                    print(f"Firestore save error (blueprint): {e}")
+
+    async def get_assessment_blueprint(self, person_id: str, blueprint_id: str) -> Optional[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        if blueprint_id in self._in_memory_persons[person_id]["blueprints"]:
+            return self._in_memory_persons[person_id]["blueprints"][blueprint_id]
+            
+        if self._available:
+            try:
+                doc = await self.db.collection("persons").document(person_id).collection("blueprints").document(blueprint_id).get()
+                if doc.exists:
+                    data = doc.to_dict()
+                    self._in_memory_persons[person_id]["blueprints"][blueprint_id] = data
+                    return data
+            except Exception as e:
+                print(f"Firestore read error (blueprint): {e}")
+        return None
+
+    async def save_learner_baseline(self, person_id: str, baseline_data: Dict[str, Any]):
+        async with self.get_person_lock(person_id):
+            self._ensure_person_bucket(person_id)
+            self._in_memory_persons[person_id]["baselines"].append(baseline_data)
+            
+            if self._available:
+                try:
+                    # In a real app we might want to store baselines in a subcollection
+                    doc_ref = self.db.collection("persons").document(person_id).collection("baselines").document()
+                    await doc_ref.set(baseline_data)
+                except Exception as e:
+                    print(f"Firestore save error (baseline): {e}")
+
+    async def get_learner_baselines(self, person_id: str) -> List[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        # Combine in-memory and firestore (in memory is usually sufficient for our current sync pattern)
+        if not self._available:
+            return self._in_memory_persons[person_id]["baselines"]
+            
+        try:
+            docs = self.db.collection("persons").document(person_id).collection("baselines").stream()
+            baselines = []
+            async for doc in docs:
+                baselines.append(doc.to_dict())
+            return baselines if baselines else self._in_memory_persons[person_id]["baselines"]
+        except Exception as e:
+            print(f"Firestore read error (baselines): {e}")
+            return self._in_memory_persons[person_id]["baselines"]
 
     # --- Career Goal / Target Outcome ---
     async def save_career_goal(self, person_id: str, goal_data: Dict[str, Any]) -> None:
