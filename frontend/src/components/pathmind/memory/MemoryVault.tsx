@@ -119,7 +119,7 @@ export function MemoryVault() {
     setError(null);
     try {
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       // 1. Personal Memories
@@ -163,7 +163,7 @@ export function MemoryVault() {
     setSimulatingProactive(true);
     try {
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const params = new URLSearchParams({
@@ -195,7 +195,7 @@ export function MemoryVault() {
     setIsRecalling(true);
     try {
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch("/api/memory/query", {
@@ -225,7 +225,7 @@ export function MemoryVault() {
     if (!confirm("Are you sure you want to delete this memory record?")) return;
     try {
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`/api/memory/personal/${memoryId}`, {

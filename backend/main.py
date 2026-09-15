@@ -31,7 +31,13 @@ from backend.api.opportunity_routes import router as opportunity_router
 from backend.api.orchestrator_routes import router as orchestrator_router
 from backend.api.market_routes import router as market_router
 from backend.core.security import SecurityHeadersMiddleware, StructuredErrorMiddleware
+from backend.core.config import settings
+import logging
+import sys
 
+if not settings.GEMINI_API_KEY:
+    logging.critical("CRITICAL: GEMINI_API_KEY is missing. Production startup aborted.")
+    sys.exit(1)
 app = FastAPI(title="PATHMIND Production API")
 
 # Add Production Security Middleware

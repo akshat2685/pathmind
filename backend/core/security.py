@@ -39,9 +39,7 @@ def get_authenticated_person(
     if not raw_id and isinstance(x_person_id, str):
         raw_id = x_person_id.strip()
 
-    # 3. Default fallback for testing/local development
-    if not raw_id:
-        raw_id = "scholar-user"
+    # 3. Default fallback is REMOVED for production integrity (Prompt 33)
 
     # 4. Strict Validation
     if not validate_person_id_format(raw_id):

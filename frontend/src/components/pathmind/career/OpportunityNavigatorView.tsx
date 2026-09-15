@@ -114,7 +114,7 @@ export function OpportunityNavigatorView() {
       if (geoFilter !== "ALL") params.append("geography", geoFilter);
 
       const res = await fetch(`/api/opportunities/matched?${params.toString()}`, {
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) {
         const data = await res.json();
@@ -150,7 +150,7 @@ export function OpportunityNavigatorView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify({ spawn_actions_to_execution_engine: true })
       });
@@ -171,7 +171,7 @@ export function OpportunityNavigatorView() {
     setInterviewLoading(true);
     try {
       const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.id}/interview-prep`, {
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) {
         const data = await res.json();
