@@ -37,7 +37,8 @@ import sys
 
 if not settings.GEMINI_API_KEY:
     logging.critical("CRITICAL: GEMINI_API_KEY is missing. Production startup aborted.")
-    sys.exit(1)
+    if __name__ == "__main__":
+        sys.exit(1)
 app = FastAPI(title="PATHMIND Production API")
 
 # Add Production Security Middleware

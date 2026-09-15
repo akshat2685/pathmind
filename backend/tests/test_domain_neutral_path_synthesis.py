@@ -482,7 +482,8 @@ async def test_property_pairwise_core_requirement_and_stage_diversity(req_servic
 # STEP 21: COUNTERFACTUAL & CONSTRAINT TESTS
 # ==============================================================================
 
-def test_counterfactual_role_change_graph_comparison(trajectory_engine):
+@pytest.mark.asyncio
+async def test_counterfactual_path_goal_change(trajectory_engine):
     """
     Changing target role (SWE -> PM) computes:
     - shared assets (retained)
@@ -509,7 +510,7 @@ def test_counterfactual_role_change_graph_comparison(trajectory_engine):
         credential_options=[]
     )
 
-    res = trajectory_engine.generate_counterfactual_path(
+    res = await trajectory_engine.generate_counterfactual_path(
         base_path=base_swe,
         modification_type="GOAL_CHANGE",
         modification_prompt="Product Manager"

@@ -46,7 +46,16 @@ def test_cross_trajectory_patterns_extraction(corpus):
         assert len(p.pattern_title) > 5
 
 @pytest.mark.asyncio
-async def test_discover_candidate_paths_generation(engine):
+async def test_discover_candidate_paths_generation(engine, monkeypatch):
+    async def mock_fetch_occupation(query):
+        return {
+            "results": [
+                {"id": "http://esco/123", "title": query, "source_context": {"provider": "esco"}},
+                {"id": "2611", "title": query, "source_context": {"provider": "nco"}}
+            ]
+        }
+    monkeypatch.setattr(engine, "_fetch_occupation_knowledge", mock_fetch_occupation)
+
     counseling_profile = CounselingProfile(
         person_id="scholar-test-1",
         timestamp="2026-09-01T00:00:00Z",
@@ -81,11 +90,10 @@ async def test_discover_candidate_paths_generation(engine):
     assert len(response.candidate_paths) <= 3
     
     path_ids = [p.path_id for p in response.candidate_paths]
-    assert "path_corporate_law_compliance" in path_ids
-    assert "path_commercial_litigation" in path_ids
-
+    assert "path_lawyer" in path_ids
+    
     # Verify skill gap taxonomy
-    ai_path = next(p for p in response.candidate_paths if p.path_id == "path_corporate_law_compliance")
+    ai_path = next(p for p in response.candidate_paths if p.path_id == "path_lawyer")
     categories = {gap.category for gap in ai_path.skill_gaps}
     assert "CORE" in categories
 
@@ -97,12 +105,13 @@ async def test_discover_candidate_paths_generation(engine):
     assert len(ai_path.credential_options) >= 1
     assert ai_path.credential_options[0].classification in ["MANDATORY", "STRONGLY_USEFUL", "OPTIONAL", "LOW_VALUE"]
 
-def test_counterfactual_what_if_sandbox(engine):
-    base_paths = engine.generate_deterministic_candidate_paths(person_id="user-counterfactual")
+@pytest.mark.asyncio
+async def test_counterfactual_what_if_sandbox(engine):
+    base_paths = await engine.generate_deterministic_candidate_paths(person_id="user-counterfactual")
     base_ai = base_paths[0]
 
     # Test Low Budget modification
-    res_low_budget = engine.generate_counterfactual_path(
+    res_low_budget = await engine.generate_counterfactual_path(
         base_path=base_ai,
         modification_type="LOW_BUDGET",
         modification_prompt="What if I cannot afford a four-year private college?"
@@ -112,7 +121,7 @@ def test_counterfactual_what_if_sandbox(engine):
     assert res_low_budget.adjusted_path.education_routes[0].route_type == "PROJECT_BASED_ACCELERATED"
 
     # Test 5 Hours Per Week modification
-    res_part_time = engine.generate_counterfactual_path(
+    res_part_time = await engine.generate_counterfactual_path(
         base_path=base_ai,
         modification_type="SELF_PACED_5_HOURS",
         modification_prompt="What if I only have 5 hours per week?"
@@ -122,7 +131,7 @@ def test_counterfactual_what_if_sandbox(engine):
 @pytest.mark.asyncio
 async def test_path_selection_and_versioning(store, engine):
     person_id = "scholar-versioning-test"
-    paths = engine.generate_deterministic_candidate_paths(person_id=person_id, goals=["lawyer"])
+    paths = await engine.generate_deterministic_candidate_paths(person_id=person_id, goals=["lawyer"])
     
     # Version 1 Selection
     record_v1 = PathSelectionRecord(

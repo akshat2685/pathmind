@@ -261,13 +261,13 @@ export function AssessmentFlow() {
         .then(res => res.json())
         .then(data => {
           if (data && data.items && data.items.length > 0) {
-            const dynamicBattery = data.items.map((item: any) => ({
+            const dynamicBattery = data.items.map((item: { id: string, construct?: string, text: string, response_type?: "likert" | "open" | "task", scale?: { value: number, label: string }[], expected_capability?: string }) => ({
               id: item.id,
               section: "Domain-Specific Goal Assessment",
               construct: item.construct || "Domain Capability",
               text: item.text,
               responseType: item.response_type || "likert",
-              options: item.scale ? item.scale.map((s: any) => ({ value: s.value, label: s.label })) : undefined,
+              options: item.scale ? item.scale.map((s: { value: number, label: string }) => ({ value: s.value, label: s.label })) : undefined,
               expectedCapability: item.expected_capability
             }));
             setAssessmentBattery([...dynamicBattery, ...DEFAULT_ASSESSMENT_BATTERY]);

@@ -43,6 +43,7 @@ class JobOpportunitiesProvider(BaseOpportunityProvider):
         self._is_connected = False
         self._status_code = "UNKNOWN"
         self._opportunities = []
+        self._last_filters = None
 
     def get_provider_name(self) -> str:
         return "JobOpportunitiesAPI Provider"
@@ -60,9 +61,14 @@ class JobOpportunitiesProvider(BaseOpportunityProvider):
         geography: Optional[str] = None
     ) -> List[CanonicalOpportunity]:
         
-        if self._opportunities:
+        current_filters = (domain_filter, role_filter, geography)
+        if self._opportunities and self._last_filters == current_filters:
             now = datetime.now(timezone.utc).isoformat()
-            return [o for o in self._opportunities if o.deadline == "UNKNOWN" or o.deadline >= now]
+            valid = [o for o in self._opportunities if o.deadline == "UNKNOWN" or o.deadline >= now]
+            if valid:
+                return valid
+            else:
+                self._opportunities = []
         # Determine strict eligibility constraints via canonical goal domains
         query_params = {}
         # The public API doesn't document specific filters, so we just pass search and location
@@ -113,6 +119,7 @@ class JobOpportunitiesProvider(BaseOpportunityProvider):
                         opportunities = [o for o in opportunities if term in o.title.lower() or term in o.organization.lower()]
                         
                     self._opportunities = opportunities
+                    self._last_filters = current_filters
                     return opportunities
 
                 elif response.status_code in [401, 403]:

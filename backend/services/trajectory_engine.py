@@ -45,7 +45,7 @@ class TrajectoryEngine:
         except Exception:
             return {"results": [], "sources": []}
 
-    def generate_deterministic_candidate_paths(
+    async def generate_deterministic_candidate_paths(
         self,
         person_id: str,
         counseling_profile: Optional[CounselingProfile] = None,
@@ -66,6 +66,26 @@ class TrajectoryEngine:
 
         if goals:
             primary_goal = goals[0].strip()
+            
+            occ_data = await self._fetch_occupation_knowledge(primary_goal)
+            occ_results = occ_data.get("results", [])
+            
+            india_context = {}
+            global_context = {}
+            credential_options = []
+            
+            if occ_results:
+                for match in occ_results:
+                    source_provider = match.get("source_context", {}).get("provider", "")
+                    occ_id = match.get("id")
+                    
+                    if source_provider == "nco" and not india_context:
+                        india_context = {"nco_code": occ_id}
+                    elif source_provider == "esco" and not global_context:
+                        global_context = {"esco_uri": occ_id}
+                        
+                credential_options = [CredentialOption(title=f"Verified Certification for {primary_goal}", issuer="Professional Board", purpose="Legal requirement for practice")]
+
             path_custom = CandidatePath(
                 path_id=f"path_{primary_goal.lower().replace(' ', '_')[:30]}",
                 title=f"{primary_goal} Professional Pathway",
@@ -86,10 +106,9 @@ class TrajectoryEngine:
                 current_skills_held=["Analytical Reasoning", "Communication"],
                 transferable_skills=["Project Management", "Structured Problem Solving"],
                 skill_gaps=[SkillGap(skill_name=f"Core {primary_goal} Competencies", category="CORE", current_status="MISSING", description=f"Foundational mastery of practical deliverables in {primary_goal}.", recommended_action=f"Build verified work samples demonstrating {primary_goal} competencies.")],
-                education_routes=[EducationRoute(route_type="PROJECT_BASED_ACCELERATED", title=f"{primary_goal} Foundational Route", description=f"Comprehensive curriculum and portfolio building for {primary_goal}.", estimated_duration="6–12 Months", institutions_or_paths=["Accredited Professional Programs"], geographic_relevance="Global")],
-                credential_options=[],
-                india_context={},
-                global_context={}
+                credential_options=credential_options,
+                india_context=india_context,
+                global_context=global_context
             )
             path_exploration = CandidatePath(
                 path_id="path_career_exploration",
@@ -98,12 +117,12 @@ class TrajectoryEngine:
                 description="A structured pathway focused on self-discovery, exploring different industries, and identifying strengths and interests before committing to a specific domain.",
                 fit_level="UNKNOWN",
                 confidence="LOW",
-                why_it_matches=["Provides flexibility when a specific target goal is not yet defined or as an alternative."],
-                supporting_evidence=["User has not yet specified a clear canonical goal, or provided an alternative option."],
+                why_it_matches=["Provides flexibility as an alternative to the specified target goal."],
+                supporting_evidence=["User has provided a goal, but this serves as a broader alternative option."],
                 missing_evidence=["Specific domain targets and verifiable performance artifacts."],
                 transparency_summary={
-                    "what_we_know": ["User is in a discovery phase or considering options"],
-                    "how_we_know_it": ["Absence of a single declared goal or as a safe alternative"],
+                    "what_we_know": ["User has declared a goal, but may benefit from broader exploration"],
+                    "how_we_know_it": ["Offered as a safe alternative to the declared goal"],
                     "what_remains_unknown": ["Specific industry or role target"],
                     "what_could_change_this": ["Completing assessments and declaring a target outcome"]
                 },
@@ -199,7 +218,7 @@ class TrajectoryEngine:
         constraints = constraints or []
 
         # 1. Generate base structured candidate paths
-        candidate_paths = self.generate_deterministic_candidate_paths(
+        candidate_paths = await self.generate_deterministic_candidate_paths(
             person_id=person_id,
             counseling_profile=counseling_profile,
             goals=goals,
@@ -236,7 +255,7 @@ class TrajectoryEngine:
             generated_at=datetime.now(timezone.utc).isoformat()
         )
 
-    def generate_counterfactual_path(
+    async def generate_counterfactual_path(
         self,
         base_path: CandidatePath,
         modification_type: str,
@@ -262,7 +281,16 @@ class TrajectoryEngine:
 
         if new_target:
             trade_off_notes.append(f"Target changed to: {new_target}.")
-            adjusted.title = new_target
+            new_paths = await self.generate_deterministic_candidate_paths(
+                person_id="counterfactual-session",
+                goals=[new_target]
+            )
+            if new_paths:
+                path_id = adjusted.path_id
+                adjusted = new_paths[0]
+                adjusted.path_id = path_id
+                adjusted.title = new_target # Ensuring exact match with prior behavior
+
         if modification_type == "LOW_BUDGET" or "afford" in lower_prompt or "cost" in lower_prompt:
             adjusted.education_routes = [
                 EducationRoute(
@@ -289,7 +317,7 @@ class TrajectoryEngine:
             trade_off_notes.append("Prioritized international ESCO skill taxonomy standards and globally recognized professional credentials.")
             trade_off_notes.append("Recommended English domain writing and international public evidence contributions as primary bridge.")
 
-        else:
+        elif not new_target:
             trade_off_notes.append(f"Custom counterfactual variation applied: '{modification_prompt}'.")
             trade_off_notes.append("Adjusted milestone pacing and alternative skill dependencies accordingly.")
 

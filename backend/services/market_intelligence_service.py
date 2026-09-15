@@ -22,7 +22,7 @@ class MarketIntelligenceService:
         
         # 1. Attempt to fetch from real external provider
         raw_signals = await self.provider.fetch_market_signals(
-            domain=getattr(goal, 'domain', getattr(goal, 'target_domain', 'Unknown')),
+            domain=goal.target_domain,
             occupation=goal.target_role,
             geography=geo
         )
@@ -36,7 +36,7 @@ class MarketIntelligenceService:
             MarketSignal(
                 id=str(uuid.uuid4()),
                 goal_id=goal.goal_id,
-                domain=getattr(goal, 'domain', getattr(goal, 'target_domain', 'Unknown')),
+                domain=goal.target_domain,
                 field=goal.target_role,
                 geography=geo,
                 signal_type="all_metrics",
@@ -53,7 +53,7 @@ class MarketIntelligenceService:
     async def get_career_trajectory(self, goal: CanonicalGoal) -> CareerTrajectory:
         # 1. Attempt to fetch structured trajectory from real external provider
         traj_data = await self.provider.fetch_trajectory_data(
-            domain=getattr(goal, 'domain', getattr(goal, 'target_domain', 'Unknown')),
+            domain=goal.target_domain,
             occupation=goal.target_role
         )
         
@@ -63,7 +63,7 @@ class MarketIntelligenceService:
         return CareerTrajectory(
             goal_id=goal.goal_id,
             occupation=goal.target_role,
-            domain=getattr(goal, 'domain', getattr(goal, 'target_domain', 'Unknown')),
+            domain=goal.target_domain,
             stages=stages,
             source=traj_data.get("source", "SOURCE_UNAVAILABLE"),
             confidence=traj_data.get("confidence", "INSUFFICIENT_EVIDENCE")
