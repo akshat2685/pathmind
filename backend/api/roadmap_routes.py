@@ -41,7 +41,19 @@ async def generate_roadmap(
             memory_moment=memory_moment
         )
     except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+        return DisclosedRoadmapView(
+            roadmap_id="uninitialized",
+            person_id=person_id,
+            path_id="none",
+            version=0,
+            target_outcome="Not yet defined",
+            current_stage_id="none",
+            total_stages=0,
+            completed_stages=0,
+            overall_progress_percent=0.0,
+            stages=[],
+            personal_agent_note="Roadmap not initialized. Complete onboarding first."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate roadmap: {str(e)}")
 
@@ -60,7 +72,19 @@ async def get_current_roadmap_view(person_id: str = Depends(get_person_id)):
             memory_moment=memory_moment
         )
     except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
+        return DisclosedRoadmapView(
+            roadmap_id="uninitialized",
+            person_id=person_id,
+            path_id="none",
+            version=0,
+            target_outcome="Not yet defined",
+            current_stage_id="none",
+            total_stages=0,
+            completed_stages=0,
+            overall_progress_percent=0.0,
+            stages=[],
+            personal_agent_note="Roadmap not initialized. Complete onboarding first."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve current roadmap: {str(e)}")
 
@@ -144,7 +168,8 @@ async def get_all_versions(person_id: str = Depends(get_person_id)):
             return [roadmap.model_dump()]
         return versions
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve roadmap versions: {str(e)}")
+        print(f"Failed to retrieve roadmap versions: {str(e)}")
+        return []
 
 @router.get("/version/{version_num}", response_model=DisclosedRoadmapView)
 async def get_roadmap_version(

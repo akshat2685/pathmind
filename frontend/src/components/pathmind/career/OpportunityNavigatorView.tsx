@@ -12,8 +12,11 @@ import {
   Search,
   BookOpen,
   HelpCircle,
-  Check
+  Check,
+  Lock,
+  ChevronRight
 } from "lucide-react";
+import Link from "next/link";
 
 interface CanonicalOpportunity {
   id: string;
@@ -92,6 +95,7 @@ export function OpportunityNavigatorView() {
   const [matches, setMatches] = useState<OpportunityMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedMatch, setSelectedMatch] = useState<OpportunityMatch | null>(null);
+  const [roadmap, setRoadmap] = useState<{ completed_stages?: number } | null>(null);
 
   // Filters
   const [roleSearch, setRoleSearch] = useState("");
@@ -113,9 +117,19 @@ export function OpportunityNavigatorView() {
       if (roleSearch) params.append("role_filter", roleSearch);
       if (geoFilter !== "ALL") params.append("geography", geoFilter);
 
-      const res = await fetch(`/api/opportunities/matched?${params.toString()}`, {
-        headers: { "x-person-id": "" }
-      });
+      const personId = typeof window !== "undefined"
+        ? (localStorage.getItem("pathmind_canonical_id") || "scholar-user")
+        : "scholar-user";
+
+      const [res, resRoadmap] = await Promise.all([
+        fetch(`/api/opportunities/matched?${params.toString()}`, {
+          headers: { "X-Person-ID": personId }
+        }),
+        fetch(`/api/roadmap/current`, {
+          headers: { "X-Person-ID": personId }
+        })
+      ]);
+
       if (res.ok) {
         const data = await res.json();
         setMatches(data);
@@ -123,6 +137,10 @@ export function OpportunityNavigatorView() {
           const updated = data.find((m: OpportunityMatch) => m.opportunity.id === selectedMatch.opportunity.id);
           if (updated) setSelectedMatch(updated);
         }
+      }
+      if (resRoadmap.ok) {
+        const rmData = await resRoadmap.json();
+        setRoadmap(rmData);
       }
     } catch (err) {
       console.error("Failed to load matched opportunities:", err);
@@ -255,6 +273,25 @@ export function OpportunityNavigatorView() {
       </div>
 
       {/* Main Content: Grid + Detail Drawer */}
+      {roadmap && roadmap.completed_stages === 0 ? (
+        <div className="p-12 text-center bg-surface-container border border-outline rounded-3xl space-y-4">
+          <div className="w-16 h-16 rounded-full bg-surface-container-high border border-outline/50 flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Lock className="w-8 h-8 text-on-surface-variant/50" />
+          </div>
+          <h3 className="text-2xl font-bold text-on-surface">Opportunities Locked</h3>
+          <p className="text-on-surface-variant max-w-lg mx-auto">
+            PATHMIND Opportunity Navigator is restricted until you verify foundational readiness. Complete at least one roadmap milestone to unlock live opportunities.
+          </p>
+          <div className="pt-4 mt-4">
+            <Link
+              href="/journey"
+              className="inline-flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-bold bg-primary text-on-primary hover:opacity-95 transition-all shadow-lg"
+            >
+              Return to Active Roadmap <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Opportunity Cards */}
         <div className="lg:col-span-7 space-y-4">
@@ -538,6 +575,7 @@ export function OpportunityNavigatorView() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

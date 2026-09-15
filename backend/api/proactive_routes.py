@@ -31,7 +31,8 @@ async def get_interventions(person_id: str = Depends(get_person_id)):
     try:
         return await proactive_engine.get_active_interventions(person_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve interventions: {str(e)}")
+        print(f"Failed to retrieve interventions: {str(e)}")
+        return []
 
 @router.post("/interventions/{intervention_id}/act")
 async def act_on_intervention(

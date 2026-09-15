@@ -193,7 +193,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
+        ? (localStorage.getItem("pathmind_canonical_id") || "scholar-user")
         : "scholar-user";
 
       const roadmapUrl = versionNum 
@@ -246,7 +246,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
+        ? (localStorage.getItem("pathmind_canonical_id") || "scholar-user")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/roadmap/evidence/submit`, {
@@ -295,7 +295,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
+        ? (localStorage.getItem("pathmind_canonical_id") || "scholar-user")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/adaptation/constraint-change`, {
@@ -326,7 +326,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
+        ? (localStorage.getItem("pathmind_canonical_id") || "scholar-user")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/adaptation/goal-change`, {
@@ -359,7 +359,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
+        ? (localStorage.getItem("pathmind_canonical_id") || "scholar-user")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/adaptation/decide`, {
@@ -810,15 +810,26 @@ export function ProgressiveJourney() {
                       {stg.status}
                     </span>
                   </div>
-                  <h4 className="text-base font-bold text-on-surface">{stg.title}</h4>
-                  <p className="text-xs text-on-surface-variant">{stg.objective}</p>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {stg.skills.map((sk, idx) => (
-                      <span key={idx} className="text-[11px] px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant border border-outline/50 font-medium">
-                        {sk}
-                      </span>
-                    ))}
-                  </div>
+                  {isLocked ? (
+                    <div className="py-2">
+                      <h4 className="text-base font-bold text-on-surface-variant/50 flex items-center gap-2">
+                        <Lock className="w-4 h-4" /> Locked Stage
+                      </h4>
+                      <p className="text-xs text-on-surface-variant/40 mt-1">Complete current active milestones to reveal objectives.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <h4 className="text-base font-bold text-on-surface">{stg.title}</h4>
+                      <p className="text-xs text-on-surface-variant">{stg.objective}</p>
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {stg.skills.map((sk, idx) => (
+                          <span key={idx} className="text-[11px] px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant border border-outline/50 font-medium">
+                            {sk}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">

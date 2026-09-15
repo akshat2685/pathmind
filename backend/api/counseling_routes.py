@@ -161,7 +161,12 @@ async def counseling_chat(
 
         return reply
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Counseling chat failed: {str(e)}")
+        print(f"Counseling chat failed internally: {str(e)}")
+        return CounselingMessage(
+            role="counselor",
+            content="I am currently experiencing an issue processing your request. Let's try again in a moment or continue with your goals.",
+            timestamp=datetime.now(timezone.utc).isoformat()
+        )
 
 @router.get("/demo", response_model=CounselingProfile)
 async def get_demo_scenario():
