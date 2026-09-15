@@ -12,7 +12,6 @@ class MarketIntelligenceService:
     """
     def __init__(self):
         self.provider = RealisticMarketProviderAdapter()
-        self.gemini_available = bool(settings.GEMINI_API_KEY)
 
     async def get_market_signals(
         self,
@@ -58,12 +57,8 @@ class MarketIntelligenceService:
             occupation=goal.target_role
         )
         
-        # If provider doesn't have it, we use Gemini to synthesize a logical, domain-aware trajectory, 
-        # but mark it with medium/low confidence depending on evidence.
-        if traj_data.get("source") == "SOURCE_UNAVAILABLE" and self.gemini_available:
-            return await self._synthesize_trajectory_with_llm(goal)
-            
-        # If provider has it (or if Gemini isn't available), return base
+        # We do NOT fabricate missing trajectory data with Gemini anymore.
+        # We explicitly return SOURCE_UNAVAILABLE honestly if missing.
         stages = [TrajectoryStage(**s) for s in traj_data.get("stages", [])]
         return CareerTrajectory(
             goal_id=goal.goal_id,
@@ -73,59 +68,3 @@ class MarketIntelligenceService:
             source=traj_data.get("source", "SOURCE_UNAVAILABLE"),
             confidence=traj_data.get("confidence", "INSUFFICIENT_EVIDENCE")
         )
-
-    async def _synthesize_trajectory_with_llm(self, goal: CanonicalGoal) -> CareerTrajectory:
-        import json
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        
-        prompt = f"""You are the PATHMIND Career Intelligence Agent.
-Generate a realistic, evidence-based career trajectory for:
-Role: {goal.target_role}
-Domain: {goal.domain}
-
-Rules:
-1. Be strictly domain-aware. (e.g. Medicine requires licensing, Cricket requires trials/academy, Software requires projects/interviews).
-2. Do NOT force software stages onto non-software roles.
-3. Return ONLY a JSON object:
-{{
-    "stages": [
-        {{
-            "stage_name": "...",
-            "typical_entry_requirements": ["..."],
-            "common_next_steps": ["..."],
-            "alternative_transitions": ["..."]
-        }}
-    ],
-    "evidence": ["..."]
-}}
-"""
-        try:
-            import asyncio
-            response = await asyncio.to_thread(model.generate_content, prompt)
-            clean_text = response.text.strip()
-            if "```json" in clean_text:
-                clean_text = clean_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean_text:
-                clean_text = clean_text.split("```")[1].split("```")[0].strip()
-                
-            data = json.loads(clean_text)
-            stages = [TrajectoryStage(**s) for s in data.get("stages", [])]
-            return CareerTrajectory(
-                goal_id=goal.goal_id,
-                occupation=goal.target_role,
-                domain=goal.domain,
-                stages=stages,
-                evidence=data.get("evidence", []),
-                source="LLM Synthesis (Fallback)",
-                confidence="MEDIUM"
-            )
-        except Exception:
-            return CareerTrajectory(
-                goal_id=goal.goal_id,
-                occupation=goal.target_role,
-                domain=goal.domain,
-                source="SOURCE_UNAVAILABLE",
-                confidence="INSUFFICIENT_EVIDENCE"
-            )

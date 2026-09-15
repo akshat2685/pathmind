@@ -337,8 +337,8 @@ export function ProgressiveJourney() {
         },
         body: JSON.stringify({
           new_target_role: selectedGoal,
-          target_industry: "Applied AI & Engineering",
-          geography: "Global / India",
+          target_industry: "Professional Domain",
+          geography: "Global",
           target_timeline: "6–9 Months"
         })
       });

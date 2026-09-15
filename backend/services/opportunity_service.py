@@ -7,13 +7,13 @@ from backend.core.career_schemas import (
 )
 from backend.providers.opportunity_provider import (
     BaseOpportunityProvider,
-    RealAPIProviderAdapter
+    JobOpportunitiesProvider
 )
 from backend.services.career_agents import OpportunityAgent
 
 class OpportunityService:
     def __init__(self, provider: Optional[BaseOpportunityProvider] = None):
-        self.provider = provider or RealAPIProviderAdapter()
+        self.provider = provider or JobOpportunitiesProvider()
         self.agent = OpportunityAgent()
 
     def get_provider_status(self) -> Dict[str, Any]:

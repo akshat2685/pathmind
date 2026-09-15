@@ -13,7 +13,7 @@ from backend.core.opportunity_schemas import (
 from backend.core.career_schemas import CanonicalGoal
 from backend.providers.opportunity_provider import (
     BaseOpportunityProvider,
-    RealAPIProviderAdapter,
+    JobOpportunitiesProvider,
     deduplicate_opportunities
 )
 from backend.services.opportunity_reasoning_agent import OpportunityReasoningAgent
@@ -33,7 +33,7 @@ class OpportunityMatchingEngine:
         store: Optional[FirestoreStore] = None
     ):
         self.store = store or FirestoreStore()
-        self.provider = provider or RealAPIProviderAdapter()
+        self.provider = provider or JobOpportunitiesProvider()
         self.agent = agent or OpportunityReasoningAgent()
         
         if career_engine is None:

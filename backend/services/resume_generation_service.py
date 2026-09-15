@@ -159,3 +159,52 @@ class ResumeGenerationService:
         )
         
         return version
+
+    def export_pdf(self, resume_content: Dict[str, Any]) -> bytes:
+        from io import BytesIO
+        from reportlab.lib.pagesizes import letter
+        from reportlab.pdfgen import canvas
+        
+        buffer = BytesIO()
+        c = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+        
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(72, height - 72, "PATHMIND Resume")
+        
+        c.setFont("Helvetica", 12)
+        y = height - 100
+        
+        summary = resume_content.get("summary", "")
+        c.drawString(72, y, f"Summary: {summary}")
+        y -= 20
+        
+        y -= 20
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, y, "Skills")
+        c.setFont("Helvetica", 12)
+        y -= 20
+        skills = ", ".join(resume_content.get("skills", []))
+        c.drawString(72, y, skills[:100] + ("..." if len(skills)>100 else ""))
+        y -= 20
+        
+        y -= 20
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, y, "Experience")
+        c.setFont("Helvetica", 12)
+        for exp in resume_content.get("experience", []):
+            y -= 20
+            c.drawString(72, y, f"{exp.get('role')} at {exp.get('organization')}")
+            
+        y -= 20
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(72, y, "Projects")
+        c.setFont("Helvetica", 12)
+        for proj in resume_content.get("projects", []):
+            y -= 20
+            c.drawString(72, y, f"{proj.get('title')} ({', '.join(proj.get('technologies', []))})")
+            
+        c.showPage()
+        c.save()
+        
+        return buffer.getvalue()

@@ -8,6 +8,13 @@ from backend.core.opportunity_schemas import (
 )
 from backend.core.config import settings
 
+# In a real environment, adk tools are passed to Gemini
+try:
+    from backend.tools.opportunity_tools import search_opportunities_tool
+    HAS_OPP_TOOLS = True
+except ImportError:
+    HAS_OPP_TOOLS = False
+
 class OpportunityReasoningAgent:
     """
     Google ADK & Gemini Reasoning Agent for Opportunity Preparation.
@@ -57,7 +64,8 @@ Keep it strictly domain-agnostic (don't assume software engineering unless the t
 Respond ONLY with JSON:
 {{"required_actions": [{{"title": "...", "description": "...", "action_type": "...", "priority": "..."}}]}}
 """
-                response = model.generate_content(prompt)
+                tools = [search_opportunities_tool] if HAS_OPP_TOOLS else None
+                response = model.generate_content(prompt, tools=tools)
                 clean_text = response.text.strip()
                 if "```json" in clean_text:
                     clean_text = clean_text.split("```json")[1].split("```")[0].strip()
@@ -119,7 +127,8 @@ Generate 3 competency questions, 2 project defense questions, and 2 gap reinforc
 Respond ONLY with JSON:
 {{"technical_competency_questions": ["..."], "project_defense_questions": ["..."], "gap_reinforcement_focus": ["..."]}}
 """
-                response = model.generate_content(prompt)
+                tools = [search_opportunities_tool] if HAS_OPP_TOOLS else None
+                response = model.generate_content(prompt, tools=tools)
                 clean_text = response.text.strip()
                 if "```json" in clean_text:
                     clean_text = clean_text.split("```json")[1].split("```")[0].strip()
