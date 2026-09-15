@@ -22,7 +22,8 @@ import {
   Info,
   Calendar,
   Zap,
-  FolderGit2
+  FolderGit2,
+  Lock
 } from "lucide-react";
 
 type TabType = "REQUIREMENTS" | "GAPS" | "TRANSFERABLE" | "CREDENTIALS" | "EXPERIENCE" | "OPPORTUNITIES" | "RESUME" | "CHECKPOINTS";
@@ -218,6 +219,7 @@ export function CareerLaunchpad() {
   const [report, setReport] = useState<CareerReadinessReportData | null>(null);
   const [checkpoints, setCheckpoints] = useState<CareerCheckpointData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [roadmap, setRoadmap] = useState<{ completed_stages?: number } | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("REQUIREMENTS");
   const [isRecordingCheckpoint, setIsRecordingCheckpoint] = useState(false);
   const [checkpointSuccess, setCheckpointSuccess] = useState(false);
@@ -231,11 +233,14 @@ export function CareerLaunchpad() {
         ? (localStorage.getItem("pathmind_user_identity") || "college_student")
         : "college_student";
 
-      const [resReport, resCheckpoints] = await Promise.all([
+      const [resReport, resCheckpoints, resRoadmap] = await Promise.all([
         fetch(`${baseUrl}/api/career/readiness?current_state=${encodeURIComponent(stateVal)}`, {
           headers: { "X-Person-ID": personId }
         }),
         fetch(`${baseUrl}/api/career/checkpoints`, {
+          headers: { "X-Person-ID": personId }
+        }),
+        fetch(`${baseUrl}/api/roadmap/current`, {
           headers: { "X-Person-ID": personId }
         })
       ]);
@@ -247,6 +252,10 @@ export function CareerLaunchpad() {
       if (resCheckpoints.ok) {
         const chkData = await resCheckpoints.json();
         setCheckpoints(chkData);
+      }
+      if (resRoadmap.ok) {
+        const rmData = await resRoadmap.json();
+        setRoadmap(rmData);
       }
     } catch (err) {
       console.error(err);
@@ -353,7 +362,27 @@ export function CareerLaunchpad() {
         </div>
       </div>
 
-      {/* Top Intelligence Grid: Target Outcome, Qualitative Readiness & Accountability */}
+      {roadmap && roadmap.completed_stages === 0 ? (
+        <div className="p-12 text-center bg-surface-container border border-outline rounded-3xl space-y-4">
+          <div className="w-16 h-16 rounded-full bg-surface-container-high border border-outline/50 flex items-center justify-center mx-auto mb-6 shadow-sm">
+            <Lock className="w-8 h-8 text-on-surface-variant/50" />
+          </div>
+          <h3 className="text-2xl font-bold text-on-surface">Career Readiness Locked</h3>
+          <p className="text-on-surface-variant max-w-lg mx-auto">
+            You must verify and complete at least one foundational roadmap phase before PATHMIND activates downstream career capabilities and resume synthesis.
+          </p>
+          <div className="pt-4 mt-4">
+            <Link
+              href="/journey"
+              className="inline-flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-bold bg-primary text-on-primary hover:opacity-95 transition-all shadow-lg"
+            >
+              Return to Active Roadmap <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Top Intelligence Grid: Target Outcome, Qualitative Readiness & Accountability */}
       {report && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 1. Target Outcome */}
@@ -1071,6 +1100,8 @@ export function CareerLaunchpad() {
           <h3 className="text-base font-bold text-on-surface">Unable to load live career readiness</h3>
           <p className="text-xs text-on-surface-variant">Please verify that the backend services are reachable.</p>
         </div>
+      )}
+      </>
       )}
     </div>
   );
