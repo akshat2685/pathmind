@@ -238,7 +238,9 @@ class RoadmapEngine:
         target_outcome: str,
         target_domain: Optional[str] = None,
         constraints: Optional[Dict[str, Any]] = None,
-        path_id: Optional[str] = None
+        path_id: Optional[str] = None,
+        profile: Optional[Dict[str, Any]] = None,
+        baselines: Optional[List[Dict[str, Any]]] = None
     ) -> Roadmap:
         """
         Generalized Roadmap Synthesis Pipeline:
@@ -265,10 +267,19 @@ class RoadmapEngine:
         if self.gemini_available and self.model:
             try:
                 import json
+                baseline_str = json.dumps(baselines) if baselines else "No baseline established yet."
+                profile_str = json.dumps(profile) if profile else "No comprehensive profile available."
+                
                 prompt = f"""You are the PATHMIND Roadmap Engine.
 Synthesize a rigorous, multi-phase learning roadmap for the target outcome: '{target_outcome}'.
 Domain: '{target_domain or 'General'}'
 Constraints: {json.dumps(actual_constraints)}
+
+CRITICAL CONTEXT (LEARNER PROFILE & BASELINE):
+Profile: {profile_str}
+Baseline Assessment Results: {baseline_str}
+
+Use the Baseline to ADAPT the roadmap. If they already demonstrated capability in an area, SKIP basic stages for that area. Focus heavily on their 'weak_areas' and 'unknown_areas' identified in the baseline. The roadmap MUST be stage-appropriate.
 
 Your response MUST be valid JSON matching this schema structure exactly:
 {{
@@ -478,6 +489,9 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
         active_dict = await self.store.get_active_roadmap(person_id)
         if active_dict:
             return Roadmap(**active_dict)
+            
+        profile = await self.store.get_person_profile(person_id)
+        baselines = await self.store.get_learner_baselines(person_id)
 
         # 1. Check if user has a stored goal
         stored_goal = await self.store.get_goal(person_id)
@@ -487,7 +501,9 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
                 target_outcome=stored_goal["target_outcome"],
                 target_domain=stored_goal.get("target_domain"),
                 constraints=stored_goal.get("constraints") or {},
-                path_id=path_id or f"path_{stored_goal.get('target_outcome', '').lower().replace(' ', '_')}"
+                path_id=path_id or f"path_{stored_goal.get('target_outcome', '').lower().replace(' ', '_')}",
+                profile=profile,
+                baselines=baselines
             )
             await self.store.save_roadmap(person_id, new_roadmap.model_dump(mode="json"))
             return new_roadmap
@@ -497,7 +513,9 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
             new_roadmap = await self.synthesize_personalized_roadmap(
                 person_id=person_id,
                 target_outcome=target_outcome,
-                path_id=path_id or f"path_{target_outcome.lower().replace(' ', '_')}"
+                path_id=path_id or f"path_{target_outcome.lower().replace(' ', '_')}",
+                profile=profile,
+                baselines=baselines
             )
             await self.store.save_roadmap(person_id, new_roadmap.model_dump(mode="json"))
             return new_roadmap

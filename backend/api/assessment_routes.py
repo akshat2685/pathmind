@@ -24,9 +24,7 @@ async def list_assessments():
     return engine.get_all_assessments()
 
 class GenerateAssessmentRequest(BaseModel):
-    goal: str
-    domain: Optional[str] = "General"
-    core_skills: Optional[List[str]] = None
+    blueprint_id: str
 
 @router.post("/dynamic/generate", response_model=AssessmentDefinition)
 async def generate_dynamic_assessment(
@@ -34,11 +32,14 @@ async def generate_dynamic_assessment(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        assessment = goal_engine.generate_goal_assessment(
-            goal=req.goal,
-            domain=req.domain,
-            core_skills=req.core_skills
-        )
+        blueprint_data = await store.get_assessment_blueprint(person_id, req.blueprint_id)
+        if not blueprint_data:
+            raise ValueError("Blueprint not found. Please complete onboarding first.")
+            
+        from backend.core.assessment_schemas import AssessmentBlueprint
+        blueprint = AssessmentBlueprint(**blueprint_data)
+        
+        assessment = goal_engine.generate_goal_assessment(blueprint)
         return assessment
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -70,18 +71,32 @@ async def save_assessment_draft(
     await store.save_assessment_draft(person_id, assessment_id, draft.model_dump(mode="json"))
     return draft
 
+class SubmitAssessmentRequest(BaseModel):
+    blueprint_id: str
+    responses: List[AssessmentResponse]
+
 @router.post("/{assessment_id}/submit", response_model=AssessmentResult)
 async def submit_assessment(
     assessment_id: str,
-    responses: List[AssessmentResponse],
+    req: SubmitAssessmentRequest,
     person_id: str = Depends(get_person_id)
 ):
     try:
-        result = engine.process_submission(person_id, assessment_id, responses)
+        result = engine.process_submission(person_id, assessment_id, req.responses)
         
-        # Persist result securely scoped to person_id
+        # Persist raw result securely scoped to person_id
         await store.save_assessment_result(person_id, result.model_dump(mode="json"))
         
+        # Fetch Blueprint to evaluate Baseline
+        blueprint_data = await store.get_assessment_blueprint(person_id, req.blueprint_id)
+        if blueprint_data:
+            from backend.core.assessment_schemas import AssessmentBlueprint
+            blueprint = AssessmentBlueprint(**blueprint_data)
+            baseline = goal_engine.evaluate_assessment_baseline(blueprint, result)
+            await store.save_learner_baseline(person_id, baseline.model_dump(mode="json"))
+        else:
+            print(f"Warning: Blueprint {req.blueprint_id} not found for baseline evaluation.")
+            
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

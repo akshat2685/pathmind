@@ -15,13 +15,26 @@ interface Pathway {
   locked_phases: number;
 }
 
+interface AssessmentItem {
+  id: string;
+  text: string;
+  scale?: { value: number; label: string }[];
+}
+
+interface AssessmentDefinition {
+  id: string;
+  name: string;
+  items: AssessmentItem[];
+}
+
 interface Message {
   id: string;
   role: "agent" | "learner";
   text: string;
-  type?: "text" | "options" | "evidence_upload" | "assessment_bridge" | "pathways";
+  type?: "text" | "options" | "evidence_upload" | "assessment_bridge" | "assessment_form" | "pathways";
   options?: string[];
   pathways?: Pathway[];
+  assessmentData?: AssessmentDefinition;
 }
 
 export function AgentOnboardingFlow() {
@@ -42,9 +55,13 @@ export function AgentOnboardingFlow() {
   // Stored state
   const [_learnerName, setLearnerName] = useState("");
   const [learnerAspiration, setLearnerAspiration] = useState("");
-  const [_learnerStage, setLearnerStage] = useState("");
+  const [learnerStage, setLearnerStage] = useState("");
   const [_evidenceProvided, setEvidenceProvided] = useState("");
-  const [_selectedPath, setSelectedPath] = useState("");
+  
+  // Assessment State
+  const [currentBlueprintId, setCurrentBlueprintId] = useState("");
+  const [assessmentResponses, setAssessmentResponses] = useState<Record<string, number>>({});
+  const [isSubmittingAssessment, setIsSubmittingAssessment] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,21 +69,21 @@ export function AgentOnboardingFlow() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isTyping]);
+  }, [messages, isTyping, assessmentResponses]);
 
-  const addAgentMessage = (text: string, type: Message["type"] = "text", options?: string[], pathways?: Pathway[]) => {
+  const addAgentMessage = (text: string, type: Message["type"] = "text", options?: string[], pathways?: Pathway[], assessmentData?: AssessmentDefinition) => {
     setIsTyping(true);
     setTimeout(() => {
       setMessages((prev) => [
         ...prev,
-        { id: `msg_${Date.now()}`, role: "agent", text, type, options, pathways }
+        { id: `msg_${Date.now()}`, role: "agent", text, type, options, pathways, assessmentData }
       ]);
       setIsTyping(false);
     }, 800);
   };
 
   const handleSend = async (text: string = inputText) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isTyping) return;
     
     const userMsg: Message = { id: `msg_${Date.now()}`, role: "learner", text };
     setMessages((prev) => [...prev, userMsg]);
@@ -74,7 +91,6 @@ export function AgentOnboardingFlow() {
 
     if (step === "NAME") {
       setLearnerName(text);
-      // Generate stable canonical identity
       const canonicalId = text.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Math.random().toString(36).substring(2, 8);
       if (typeof window !== "undefined") {
         localStorage.setItem("pathmind_user_name", text);
@@ -119,58 +135,103 @@ export function AgentOnboardingFlow() {
     else if (step === "EVIDENCE") {
       setEvidenceProvided(text);
       setStep("ASSESSMENT");
-      addAgentMessage(
-        "Thank you. Based on your aspiration and evidence, I've selected a specific assessment to determine your baseline capability and readiness before synthesizing a path.",
-        "assessment_bridge"
-      );
+      setIsTyping(true);
       
-      // Simulate assessment completion and moving to synthesis
-      setTimeout(() => {
-        setStep("SYNTHESIS");
-        addAgentMessage(
-          "I've synthesized the evidence and your assessment results. Here are the pathways I recommend for you.",
-          "pathways",
-          [],
-          [
-            {
-              id: "path_1",
-              title: `${learnerAspiration} Professional Pathway`,
-              target: learnerAspiration,
-              confidence: "HIGH",
-              why: "Directly aligns with your stated goal and matches your current learner stage.",
-              locked_phases: 5
-            },
-            {
-              id: "path_2",
-              title: "Foundational Bridge Pathway",
-              target: `Foundations for ${learnerAspiration}`,
-              confidence: "MEDIUM",
-              why: "Recommended if you want to fortify core prerequisites before advancing.",
-              locked_phases: 3
-            }
-          ]
-        );
-      }, 3500);
+      try {
+        const canonicalId = localStorage.getItem("pathmind_canonical_id") || "scholar-user";
+        const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+        
+        // 1. Submit Profile to get Blueprint
+        const profileRes = await fetch(`${API_BASE}/api/onboarding/profile`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Person-ID": canonicalId },
+          body: JSON.stringify({
+            learner_stage: learnerStage,
+            aspiration: learnerAspiration,
+            evidence_summary: text
+          })
+        });
+        
+        if (!profileRes.ok) throw new Error("Failed to generate blueprint");
+        const blueprint = await profileRes.json();
+        setCurrentBlueprintId(blueprint.id);
+        
+        addAgentMessage(`Based on your stage as a ${learnerStage}, I am designing a targeted assessment to evaluate your ${blueprint.difficulty_level} capability in ${blueprint.dimensions.join(", ")}.`);
+
+        // 2. Generate Dynamic Assessment based on Blueprint
+        const assessRes = await fetch(`${API_BASE}/api/assessments/dynamic/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Person-ID": canonicalId },
+          body: JSON.stringify({ blueprint_id: blueprint.id })
+        });
+        
+        if (!assessRes.ok) throw new Error("Failed to generate assessment");
+        const assessmentDef = await assessRes.json();
+
+        setTimeout(() => {
+          setIsTyping(false);
+          addAgentMessage(
+            `I have generated your dynamic assessment for "${learnerAspiration}". Please answer these questions to establish your baseline.`,
+            "assessment_form",
+            [],
+            undefined,
+            assessmentDef
+          );
+        }, 1500);
+
+      } catch (e) {
+        console.error(e);
+        setIsTyping(false);
+        addAgentMessage("I encountered an error generating your assessment. Please try again.");
+      }
     }
   };
 
-  const handlePathwaySelect = (path: Pathway) => {
-    setSelectedPath(path.id);
-    addAgentMessage(`Excellent choice. Let's begin the ${path.title}. I am initializing your progressive roadmap now.`);
-    
-    // Setup and redirect
-    setTimeout(() => {
+  const handleSubmitAssessment = async (assessmentId: string) => {
+    setIsSubmittingAssessment(true);
+    try {
       const canonicalId = localStorage.getItem("pathmind_canonical_id") || "scholar-user";
-      fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com"}/api/roadmap/generate?target_outcome=${encodeURIComponent(path.target)}`, {
+      const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      
+      const responses = Object.entries(assessmentResponses).map(([itemId, value]) => ({
+        item_id: itemId,
+        response_value: value
+      }));
+
+      // Submit Assessment & Evaluate Baseline
+      const submitRes = await fetch(`${API_BASE}/api/assessments/${assessmentId}/submit`, {
         method: "POST",
-        headers: { "X-Person-ID": canonicalId }
-      }).then(() => {
-        router.push("/journey");
-      }).catch((e) => {
-        console.error(e);
-        router.push("/journey"); // fail gracefully to local state if needed
+        headers: { "Content-Type": "application/json", "X-Person-ID": canonicalId },
+        body: JSON.stringify({
+          blueprint_id: currentBlueprintId,
+          responses: responses
+        })
       });
-    }, 2000);
+
+      if (!submitRes.ok) throw new Error("Failed to submit assessment");
+
+      setStep("SYNTHESIS");
+      addAgentMessage("Assessment complete! I am now synthesizing your personalized roadmap based on your baseline capabilities...");
+      
+      // Generate Roadmap
+      setTimeout(() => {
+        fetch(`${API_BASE}/api/roadmap/generate?target_outcome=${encodeURIComponent(learnerAspiration)}`, {
+          method: "POST",
+          headers: { "X-Person-ID": canonicalId }
+        }).then(() => {
+          router.push("/journey");
+        }).catch((e) => {
+          console.error(e);
+          router.push("/journey");
+        });
+      }, 2000);
+      
+    } catch (e) {
+      console.error(e);
+      addAgentMessage("Failed to process assessment results.");
+    } finally {
+      setIsSubmittingAssessment(false);
+    }
   };
 
   return (
@@ -218,28 +279,47 @@ export function AgentOnboardingFlow() {
                       </div>
                     )}
 
-                    {msg.type === "pathways" && msg.pathways && (
-                      <div className="flex flex-col gap-3 mt-2 w-full min-w-[280px] md:min-w-[400px]">
-                        {msg.pathways.map((path) => (
-                          <div key={path.id} className="p-5 rounded-2xl bg-surface border border-outline shadow-sm flex flex-col gap-3">
-                            <div className="flex justify-between items-start">
-                              <h3 className="font-bold text-on-surface text-base">{path.title}</h3>
-                              <span className="text-[10px] px-2 py-1 bg-emerald-950 text-emerald-300 rounded-full border border-emerald-800">
-                                {path.confidence} CONFIDENCE
-                              </span>
+                    {msg.type === "assessment_form" && msg.assessmentData && (
+                      <div className="mt-4 p-5 rounded-2xl bg-surface border border-outline shadow-sm flex flex-col gap-6 w-full min-w-[280px] md:min-w-[500px]">
+                        <h3 className="font-bold text-on-surface text-lg border-b border-outline pb-2">
+                          {msg.assessmentData.name}
+                        </h3>
+                        <div className="space-y-6">
+                          {msg.assessmentData.items.map((item, idx) => (
+                            <div key={item.id} className="space-y-3">
+                              <p className="text-sm text-on-surface font-medium">{idx + 1}. {item.text}</p>
+                              {item.scale ? (
+                                <div className="grid grid-cols-5 gap-2">
+                                  {item.scale.map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      onClick={() => setAssessmentResponses(prev => ({ ...prev, [item.id]: opt.value }))}
+                                      className={`py-2 px-1 text-center rounded-lg text-[10px] font-semibold border transition-all ${
+                                        assessmentResponses[item.id] === opt.value
+                                          ? "bg-primary text-on-primary border-primary"
+                                          : "bg-surface-container-low text-on-surface-variant border-outline hover:border-primary/50"
+                                      }`}
+                                    >
+                                      {opt.value}
+                                    </button>
+                                  ))}
+                                  <div className="col-span-5 flex justify-between text-[9px] text-on-surface-variant uppercase tracking-wider px-1">
+                                    <span>{item.scale[0].label}</span>
+                                    <span>{item.scale[item.scale.length - 1].label}</span>
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
-                            <p className="text-xs text-on-surface-variant leading-relaxed">{path.why}</p>
-                            <div className="text-[11px] text-on-surface-variant font-medium">
-                              Phase 1 Unlocked • {path.locked_phases} Subsequent Phases Locked
-                            </div>
-                            <button
-                              onClick={() => handlePathwaySelect(path)}
-                              className="mt-2 w-full py-2.5 rounded-xl bg-primary text-on-primary text-xs font-bold hover:opacity-95 transition-all"
-                            >
-                              Select Pathway
-                            </button>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                        <button
+                          disabled={isSubmittingAssessment || Object.keys(assessmentResponses).length !== msg.assessmentData.items.length}
+                          onClick={() => handleSubmitAssessment(msg.assessmentData!.id)}
+                          className="mt-4 w-full py-3 rounded-xl bg-primary text-on-primary text-sm font-bold hover:opacity-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {isSubmittingAssessment && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Submit Assessment
+                        </button>
                       </div>
                     )}
                   </div>
@@ -262,42 +342,37 @@ export function AgentOnboardingFlow() {
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} className="h-4" />
         </div>
       </main>
 
-      {/* Input Area */}
-      <div className="fixed bottom-0 left-0 w-full bg-gradient-to-t from-surface via-surface to-transparent pt-10 pb-6 px-4 md:px-0 pointer-events-none">
-        <div className="max-w-2xl mx-auto w-full pointer-events-auto">
-          {step === "ASSESSMENT" ? (
-            <div className="p-4 rounded-2xl bg-surface-container border border-outline shadow-lg flex items-center justify-center gap-3">
-              <Loader2 className="w-5 h-5 text-primary animate-spin" />
-              <span className="text-sm font-medium text-on-surface">Agent is running selected diagnostic assessments...</span>
-            </div>
-          ) : step === "SYNTHESIS" ? (
-             <></>
-          ) : (
-            <form 
-              onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-              className="relative flex items-center bg-surface-container-low border border-outline rounded-2xl shadow-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 transition-all"
-            >
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={step === "EVIDENCE" ? "Paste GitHub URL, portfolio link, or describe experience..." : "Type your response..."}
-                className="flex-1 bg-transparent px-6 py-4 text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-none"
-                disabled={isTyping}
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim() || isTyping}
-                className="p-3 mr-2 rounded-xl bg-primary text-on-primary disabled:opacity-50 hover:opacity-95 transition-opacity"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-          )}
+      <div className="fixed bottom-0 w-full bg-surface/80 backdrop-blur-md border-t border-outline/30 p-4">
+        <div className="max-w-3xl mx-auto flex gap-3 relative">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            disabled={isTyping || step === "ASSESSMENT" || step === "SYNTHESIS"}
+            placeholder={
+              step === "ASSESSMENT" ? "Please complete the assessment above..." :
+              step === "SYNTHESIS" ? "Synthesizing your roadmap..." :
+              "Type your message..."
+            }
+            className="flex-1 bg-surface-container-lowest border border-outline rounded-2xl px-6 py-4 text-on-surface placeholder:text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
+          />
+          <button
+            onClick={() => handleSend()}
+            disabled={!inputText.trim() || isTyping || step === "ASSESSMENT" || step === "SYNTHESIS"}
+            className="w-14 h-14 bg-primary text-on-primary rounded-2xl flex items-center justify-center hover:opacity-95 transition-opacity shadow-sm disabled:opacity-50"
+          >
+            <Send className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ from backend.api.evidence_routes import router as evidence_router
 from backend.api.context_routes import router as context_router
 from backend.api.proactive_routes import router as proactive_router
 from backend.api.trust_routes import router as trust_router
+from backend.api.onboarding_routes import router as onboarding_router
 from backend.api.longitudinal_routes import router as longitudinal_router
 from backend.api.artifact_routes import router as artifact_router
 from backend.api.execution_routes import router as execution_router
@@ -80,6 +81,7 @@ app.include_router(evidence_router)
 app.include_router(context_router)
 app.include_router(proactive_router)
 app.include_router(trust_router)
+app.include_router(onboarding_router)
 app.include_router(longitudinal_router)
 app.include_router(artifact_router)
 app.include_router(execution_router)
