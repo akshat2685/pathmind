@@ -259,9 +259,6 @@ class RoadmapEngine:
             scaled_weeks = max(1, round(total_hours / weekly_hours))
             return "1 Week" if scaled_weeks == 1 else f"{scaled_weeks} Weeks"
 
-        # 0. EXPLICIT AI/ML GOALS (Retained for tests and specific goals)
-        if "ai specialist" in lower or "machine learning" in lower or "ai engineer" in lower:
-            return self.generate_ai_ml_roadmap(person_id, path_id or "path_applied_ai_ml_systems")
 
         # 1. Dynamic Gemini Generation
         if self.gemini_available and self.model:

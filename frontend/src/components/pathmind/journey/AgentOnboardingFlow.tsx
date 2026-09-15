@@ -119,17 +119,7 @@ export function AgentOnboardingFlow() {
       setLearnerStage(text);
       setStep("EVIDENCE");
       
-      let evidencePrompt = "Please share any links, portfolio items, or describe any relevant experience you have.";
-      
-      const aspLower = learnerAspiration.toLowerCase();
-      if (aspLower.includes("football") || aspLower.includes("athlete") || aspLower.includes("sport")) {
-        evidencePrompt = "For a physical/performance goal like this, I need evidence of performance. Please share a link to your match statistics, a highlight video, or competition record.";
-      } else if (aspLower.includes("law") || aspLower.includes("lawyer")) {
-        evidencePrompt = "Please share any academic background in law, research papers, relevant competitions, or internships.";
-      } else if (aspLower.includes("software") || aspLower.includes("engineer") || aspLower.includes("developer") || aspLower.includes("ai")) {
-        evidencePrompt = "Please share your GitHub profile, links to live projects, or technical portfolio.";
-      }
-
+      const evidencePrompt = "Please share any links, portfolio items, or describe any relevant experience you have to support your aspiration.";
       addAgentMessage(evidencePrompt, "evidence_upload");
     }
     else if (step === "EVIDENCE") {
