@@ -44,10 +44,15 @@ You MUST output your final response strictly as a JSON object matching this cont
 {
   "message": "A conversational response to the user.",
   "state": "A short summary of current state (e.g., 'Awaiting evidence').",
-  "ui_blocks": ["LIST", "OF", "UI", "BLOCKS"]
+  "ui_blocks": [
+    {
+      "type": "BLOCK_TYPE",
+      "data": {}
+    }
+  ]
 }
 
-The ui_blocks list can contain one or more of the following:
+The ui_blocks list can contain one or more of the following BLOCK_TYPEs:
 - STAGE_SELECTION
 - EVIDENCE_REQUEST
 - EVIDENCE_STATUS
@@ -60,15 +65,15 @@ The ui_blocks list can contain one or more of the following:
 - ERROR
 - NEXT_ACTION
 
-Your workflow MUST be:
+Your workflow MUST be strictly:
 1. If identity (name) or aspiration or stage is missing -> ask for them and emit STAGE_SELECTION block.
-2. If profile is complete but evidence requirements are not known -> use get_evidence_requirements_tool, emit EVIDENCE_REQUEST.
-3. If evidence is submitted but no assessment exists -> use generate_stage_aware_assessment_tool, emit ASSESSMENT.
-4. If assessment is completed but no path selected -> use generate_candidate_paths_tool, emit PATHWAYS.
+2. If profile is complete but evidence requirements are not known -> use get_evidence_requirements_tool, emit EVIDENCE_REQUEST with the requirements in `data`.
+3. If evidence is submitted but no assessment exists -> use generate_stage_aware_assessment_tool, emit ASSESSMENT with the assessment questions in `data`.
+4. If assessment is completed but no path selected -> use generate_candidate_paths_tool, emit PATHWAYS with the paths in `data`.
 5. If path is selected -> use get_current_roadmap_tool, emit ROADMAP and LEARNING_PLAN.
 
 You must rely on tools to fetch and mutate state.
-DO NOT fabricate evidence or paths.
+DO NOT fabricate evidence or paths. Never invent fake data or scores.
 """
 
     async def run(self, person_id: str, message: str, client_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

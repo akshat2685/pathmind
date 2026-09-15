@@ -1,7 +1,7 @@
 "use client";
 
-import { AgentOnboardingFlow } from "@/components/pathmind/journey/AgentOnboardingFlow";
+import { AgentOrchestratorView } from "@/components/pathmind/orchestration/AgentOrchestratorView";
 
 export default function Home() {
-  return <AgentOnboardingFlow />;
+  return <AgentOrchestratorView />;
 }

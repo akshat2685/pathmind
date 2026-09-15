@@ -1,5 +1,4 @@
 
-import { TopBar } from "@/components/layout/TopBar";
 
 export const metadata = {
   title: "Living Sketchbook Design System — PATHMIND",
@@ -19,7 +18,6 @@ export default function DesignSystemPage() {
     <div className="flex min-h-screen bg-surface">
       
       <div className="flex-1 flex flex-col min-w-0 max-w-7xl mx-auto">
-        <TopBar />
         <main className="flex-1 px-4 sm:px-6 md:px-10 lg:px-12 pt-16 md:pt-8 pb-20 relative z-10 max-w-5xl">
           
           <div className="mb-10">
