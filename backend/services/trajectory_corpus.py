@@ -4,130 +4,130 @@ from backend.core.trajectory_schemas import TrajectoryCase, TrajectoryPattern
 # --- Attributed Trajectory Corpus (Explicitly Marked Provenance) ---
 CORPUS_TRAJECTORIES: List[TrajectoryCase] = [
     TrajectoryCase(
-        trajectory_id="traj_ai_stem_01",
-        title="Class 12 STEM to Applied AI & Systems Specialist",
-        archetype="High School Math/CS -> Project Specialization -> AI Systems Engineer",
+        trajectory_id="traj_sports_01",
+        title="Amateur to Professional Athlete",
+        archetype="Youth League -> Competitive Academy -> Professional",
         source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
-            "education": "Class 12 CBSE (Math, CS, Physics)",
-            "starting_skills": ["Python Basics", "Algebra", "Arduino / Robotics Club"],
-            "constraints": ["Balancing board exam prep with coding time", "Uncertain about degree vs specialization"]
+            "education": "High School",
+            "starting_skills": ["Basic Athletics", "Team Collaboration"],
+            "constraints": ["Time constraints due to schooling", "Geographic access to premium academies"]
         },
         learning_milestones=[
-            "Phase 1: Rigorous Python OOP, Data Structures, and Multivariate Calculus foundations",
-            "Phase 2: Scikit-learn classical ML & data pipeline engineering",
-            "Phase 3: Deep Learning (PyTorch) + Distributed Training & Model Optimization (ONNX, TensorRT)",
-            "Phase 4: Open-source LLM inference serving & latency benchmarking portfolio"
+            "Phase 1: Foundational physical conditioning and technical skill refinement",
+            "Phase 2: Competitive league participation and tactical awareness",
+            "Phase 3: Specialized coaching, advanced analytics, and mental conditioning",
+            "Phase 4: Professional trials and contract negotiation"
         ],
         major_transitions=[
-            "Transitioned from simple script writing to structured open-source repository architectures",
-            "Chose applied software engineering path over purely theoretical mathematics"
+            "Transitioned from casual participation to structured daily training",
+            "Selected for regional representative squad"
         ],
         obstacles_and_failures=[
-            "Initially struggled with matrix calculus in gradient descent; overcame via visual geometric intuition courses",
-            "Had 2 hackathon project submissions crash due to unoptimized memory; motivated mastering memory profiling"
+            "Faced mid-season injury requiring 3 months of guided rehabilitation",
+            "Initial rejection from premier academy built resilience and improved focus"
         ],
-        outcome_role="Applied AI/ML Systems Engineer",
-        similarity_rationale="Matches high investigative interest, math/CS academic strengths, and early robotics/hackathon experience.",
-        important_differences="This trajectory pursued a standard 4-year B.Tech CS degree alongside extracurricular project development."
+        outcome_role="Professional Athlete",
+        similarity_rationale="Matches high physical capability, dedication, and competitive drive.",
+        important_differences="This trajectory requires intense physical maintenance and early specialization."
     ),
     TrajectoryCase(
-        trajectory_id="traj_robotics_embedded_02",
-        title="Hardware Tinkerer to Autonomous Robotics Systems Engineer",
-        archetype="Robotics Club Builder -> Embedded C++/ROS2 -> Robotics Perception Engineer",
+        trajectory_id="traj_tech_02",
+        title="Student to Software Engineer",
+        archetype="Self-Taught -> Portfolio Builder -> Software Engineer",
         source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
-            "education": "High School / Early Undergrad",
-            "starting_skills": ["C++ / Arduino", "Microcontrollers", "Basic Mechanics"],
-            "constraints": ["Limited access to industrial hardware labs", "Self-funded prototyping"]
+            "education": "Undergraduate",
+            "starting_skills": ["Basic Math", "Logical Reasoning"],
+            "constraints": ["Self-funded learning", "No prior industry network"]
         },
         learning_milestones=[
-            "Phase 1: Modern C++ (C++17/20), Linux systems, and Real-Time Operating Systems (RTOS)",
-            "Phase 2: Kinematics, SLAM algorithms, and Sensor Fusion (IMU, LiDAR, OpenCV)",
-            "Phase 3: ROS 2 (Robot Operating System) navigation stack & Gazebo simulation",
-            "Phase 4: Embedded edge deployment on NVIDIA Jetson / ARM architectures"
+            "Phase 1: Foundational programming logic and data structures",
+            "Phase 2: Building standalone applications and version control",
+            "Phase 3: Systems design, databases, and deployment",
+            "Phase 4: Open-source contributions and technical interviews"
         ],
         major_transitions=[
-            "Moved from simple microcontroller scripts to asynchronous ROS2 node graph architectures",
-            "Shifted from hobby robotics to rigorous simulated physics benchmarking in Gazebo"
+            "Shifted from tutorial consumption to building original projects",
+            "Secured first technical internship"
         ],
         obstacles_and_failures=[
-            "Faced sensor noise drift in early differential drive robots; learned Kalman filtering through iterative trial",
-            "Failed first robotics technical interview on C++ memory management; spent 2 months mastering pointers and concurrency"
+            "Struggled initially with system architecture concepts; overcame via mentorship",
+            "Failed early technical screens; used feedback to focus on algorithmic efficiency"
         ],
-        outcome_role="Autonomous Robotics & Embedded Systems Engineer",
-        similarity_rationale="Matches high Realistic + Investigative Holland traits and hands-on hardware project artifacts.",
-        important_differences="Requires dedicated focus on low-level C++ and hardware simulation tools."
+        outcome_role="Software Engineer",
+        similarity_rationale="Matches analytical problem-solving and structured conventional interests.",
+        important_differences="Focuses heavily on digital artifact creation and abstract logic."
     ),
     TrajectoryCase(
-        trajectory_id="traj_cloud_backend_03",
-        title="Web Developer to Distributed Cloud Infrastructure Architect",
-        archetype="Fullstack Developer -> Systems & Networking -> Distributed Backend Architect",
+        trajectory_id="traj_design_03",
+        title="Hobbyist to Professional Designer",
+        archetype="Self-Taught Creator -> Portfolio Curation -> Lead Designer",
         source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
-            "education": "Undergraduate CS / Self-Directed",
-            "starting_skills": ["JavaScript / Python", "SQL", "Web Applications"],
-            "constraints": ["Self-paced learning while working on small freelance gigs"]
+            "education": "Self-Directed",
+            "starting_skills": ["Visual Aesthetics", "Basic Tooling"],
+            "constraints": ["Building client base from scratch"]
         },
         learning_milestones=[
-            "Phase 1: Networking protocols (TCP/IP, HTTP/2, gRPC), OS concurrency, and Linux internals",
-            "Phase 2: Database indexing, ACID guarantees, sharding, and distributed caching (Redis)",
-            "Phase 3: Event-driven streaming (Apache Kafka, RabbitMQ) and microservices orchestration (Docker, K8s)",
-            "Phase 4: High-availability distributed consensus (Raft, Paxos) and cloud infrastructure as code (Terraform)"
+            "Phase 1: Mastering design principles (typography, color theory, layout)",
+            "Phase 2: Tool proficiency and developing a distinct stylistic voice",
+            "Phase 3: Client communication, brief interpretation, and iterative feedback",
+            "Phase 4: Establishing an agency or securing a senior in-house role"
         ],
         major_transitions=[
-            "Pivoted from building single-server web apps to designing multi-region resilient backend architectures",
-            "Prioritized database internals and telemetry over visual frontend design"
+            "Moved from speculative redesigns to commissioned commercial work",
+            "Developed a formalized design system methodology"
         ],
         obstacles_and_failures=[
-            "Encountered race conditions in early multi-threaded code; mastered distributed locking mechanisms",
-            "Over-engineered early projects with microservices prematurely; learned the value of modular monoliths"
+            "Early portfolio lacked cohesive narrative; restructured to show end-to-end process",
+            "Underpriced initial freelance contracts; learned negotiation and value pricing"
         ],
-        outcome_role="Distributed Cloud & Systems Architect",
-        similarity_rationale="Matches strong logical problem-solving and structured conventional data governance interests.",
-        important_differences="Focuses heavily on backend infrastructure, high throughput, and system reliability over model training."
+        outcome_role="Design Lead",
+        similarity_rationale="Matches high creative traits and visual communication skills.",
+        important_differences="Heavily dependent on subjective portfolio quality and client relationship management."
     ),
     TrajectoryCase(
-        trajectory_id="traj_mech_to_data_04",
-        title="Mechanical Engineering to Data & Computational Engineer",
-        archetype="Non-CS Engineering -> Transferable Math/Physics -> Data Systems Engineer",
+        trajectory_id="traj_law_04",
+        title="Student to Legal Professional",
+        archetype="Academic Foundations -> Clerkship -> Practicing Attorney",
         source_type="ATTRIBUTED_CASE_STUDY",
         starting_conditions={
-            "education": "B.Tech Mechanical Engineering",
-            "starting_skills": ["MATLAB", "Linear Algebra", "Thermodynamics / CAD"],
-            "constraints": ["Zero formal computer science coursework", "Need to transition without second degree"]
+            "education": "Pre-Law / Humanities",
+            "starting_skills": ["Critical Reading", "Argumentation", "Research"],
+            "constraints": ["High educational costs", "Rigorous competitive exams"]
         },
         learning_milestones=[
-            "Phase 1: Python programming, data structures, algorithms, and Git version control",
-            "Phase 2: SQL, data warehousing, and ETL pipeline orchestration (Airflow, DBT)",
-            "Phase 3: Big data processing (PySpark, BigQuery) and cloud data infrastructure",
-            "Phase 4: Domain-specific industrial IoT data analytics and predictive maintenance pipelines"
+            "Phase 1: Advanced reading comprehension and formal logic",
+            "Phase 2: Law school admissions and foundational jurisprudence",
+            "Phase 3: Internships, moot court, and specialized legal writing",
+            "Phase 4: Bar examination and associate placement"
         ],
         major_transitions=[
-            "Leveraged mathematical modeling background to rapidly master analytical data transformations",
-            "Built a portfolio of industrial sensor telemetry pipelines to prove software capability"
+            "Adapted from generalized academic writing to strict legal drafting",
+            "Transitioned from simulated moot courts to actual case assistance"
         ],
         obstacles_and_failures=[
-            "Initially rejected from generic frontend roles; succeeded when targeting industrial data and IoT niches",
-            "Faced imposter syndrome regarding algorithms; focused on practical distributed data pipeline execution"
+            "Overwhelmed by initial case law volume; developed specialized summarization techniques",
+            "Initial difficulty in oral argumentation overcome through dedicated practice"
         ],
-        outcome_role="Data Systems & Industrial IoT Engineer",
-        similarity_rationale="Demonstrates how transferable engineering analysis and mathematics transfer into modern software.",
-        important_differences="Applies to candidates transitioning with existing engineering or analytical backgrounds."
+        outcome_role="Practicing Attorney",
+        similarity_rationale="Matches strong verbal, analytical, and structured argumentation skills.",
+        important_differences="Requires adherence to strict regulatory environments and formal credentialing."
     )
 ]
 
 CORPUS_PATTERNS: List[TrajectoryPattern] = [
     TrajectoryPattern(
-        pattern_title="Foundational Programming & Math Precedes Deep Model Training",
-        description="Across 85% of successful engineering transitions into applied AI, candidates established robust software engineering (data structures, clean code) and linear algebra foundations before specializing in deep neural architectures.",
+        pattern_title="Foundational Mastery Precedes Specialization",
+        description="Across all domains, successful professionals establish a robust mastery of foundational principles before attempting advanced specialization.",
         evidence_trajectories_count=4,
-        evidence_summary="Trajectories in our corpus consistently demonstrated that candidates with strong baseline engineering adapted 3x faster to production ML tooling.",
+        evidence_summary="Trajectories consistently demonstrated that candidates with strong fundamentals adapted faster to complex domain challenges.",
         confidence="HIGH"
     ),
     TrajectoryPattern(
-        pattern_title="Observable Project Portfolios Outweigh Standalone Course Certificates",
-        description="Hiring managers and mentors evaluated candidates primarily on verifiable GitHub repositories, live demo systems, and technical documentation rather than passive course completion certificates.",
+        pattern_title="Observable Portfolios and Verified Performance Outweigh Passive Credentials",
+        description="Evaluators evaluate candidates primarily on verifiable artifacts (portfolios, match records, project repositories, case studies) rather than standalone course certificates.",
         evidence_trajectories_count=4,
         evidence_summary="All 4 attributed case studies secured roles through demonstrable project artifacts (SLAM robots, ML apps, distributed backend pipelines).",
         confidence="HIGH"

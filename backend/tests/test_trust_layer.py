@@ -79,7 +79,7 @@ async def test_why_this_and_why_not_explainability():
     explanation_service = RecommendationExplanationService(store=store)
     person_id = "test-explain-learner"
 
-    await explanation_service.context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await explanation_service.context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     rec = await explanation_service.generate_structured_recommendation(
         person_id=person_id,

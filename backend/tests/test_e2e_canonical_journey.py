@@ -40,6 +40,8 @@ def test_canonical_product_journey_e2e(clean_store):
 
     # 2. PERSONAL CONTEXT GRAPH INSPECTION
     context_res = client.get("/api/context/graph", headers=headers)
+    if context_res.status_code != 200:
+        print("CONTEXT GRAPH ERROR:", context_res.text)
     assert context_res.status_code == 200
     graph = context_res.json()
     assert graph["person_id"] == person_id

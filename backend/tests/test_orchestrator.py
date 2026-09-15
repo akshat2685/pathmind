@@ -92,7 +92,42 @@ def test_context_package_sanitization_prompt_injection(orchestrator):
     assert "[neutralized]" in sanitized
 
 @pytest.mark.asyncio
-async def test_deterministic_state_authority_action_proposals(orchestrator):
+async def test_deterministic_state_authority_action_proposals(orchestrator, monkeypatch):
+    from backend.core.opportunity_schemas import OpportunityMatch, CanonicalOpportunity
+    async def mock_match_opportunities(*args, **kwargs):
+        return [OpportunityMatch(
+            opportunity_id="mock_1",
+            goal_id="goal_1",
+            opportunity=CanonicalOpportunity(
+                opportunity_id="mock_1",
+                provider="Mock",
+                provider_record_id="mock_1",
+                type="INTERNSHIP",
+                title="Linux Foundation AI internship",
+                organization="Linux Foundation",
+                description="Mock",
+                location="Global",
+                remote_status="REMOTE",
+                eligibility="All",
+                requirements=[],
+                preferred_requirements=[],
+                skills=[],
+                education_requirements=[],
+                experience_requirements=[],
+                credential_requirements=[],
+                compensation="Paid",
+                deadline="2099-12-31",
+                application_url="",
+                source_url="",
+                status="ACTIVE",
+                verification_status="VERIFIED"
+            ),
+            fit_status="HIGH",
+            readiness_status="PARTIALLY_READY",
+            feasibility_status="HIGH",
+            confidence="HIGH"
+        )]
+    monkeypatch.setattr(orchestrator.opportunity_engine, "match_opportunities_for_person", mock_match_opportunities)
     person_id = "scholar-authority-test"
     req = OrchestrationRequest(
         intent="Should I apply for the Linux Foundation AI internship?",

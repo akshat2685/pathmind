@@ -52,19 +52,6 @@ class CanonicalAction(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-class OpportunityApplicationTracker(BaseModel):
-    application_id: str = Field(default_factory=lambda: f"app_{int(datetime.now(timezone.utc).timestamp()*1000)}_{uuid.uuid4().hex[:6]}")
-    person_id: str
-    opportunity_id: str
-    opportunity_title: str
-    organization: str
-    status: str = "SAVED"  # DISCOVERED, SAVED, PREPARING, APPLIED, INTERVIEWING, OFFER, REJECTED, WITHDRAWN, EXPIRED
-    tailored_resume_id: Optional[str] = None
-    notes: Optional[str] = None
-    applied_at: Optional[str] = None
-    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-    model_config = ConfigDict(populate_by_name=True)
 
 class DailyExecutionPlan(BaseModel):
     person_id: str
@@ -125,8 +112,5 @@ class PauseExecutionRequest(BaseModel):
 
 class TrackApplicationRequest(BaseModel):
     opportunity_id: str
-    opportunity_title: str
-    organization: str
     status: str = "SAVED"
     notes: Optional[str] = None
-    applied_at: Optional[str] = None

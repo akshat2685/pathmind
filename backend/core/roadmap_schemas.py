@@ -137,6 +137,38 @@ class LongitudinalMemory(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+class MisconceptionRecord(BaseModel):
+    concept: str
+    misconception: str
+    evidence_ids: List[str] = Field(default_factory=list)
+    first_seen: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    last_seen: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    occurrence_count: int = 1
+    resolved: bool = False
+    resolution_evidence_id: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class StrategyEffectiveness(BaseModel):
+    strategy: str
+    attempts: int = 1
+    successful_outcomes: int = 0
+    confidence: str = "MEDIUM"  # HIGH, MEDIUM, LOW
+    last_applied_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    model_config = ConfigDict(populate_by_name=True)
+
+class RejectedRecommendation(BaseModel):
+    recommendation_id: str = Field(default_factory=lambda: f"rej_{int(datetime.now(timezone.utc).timestamp()*1000)}")
+    person_id: str
+    action: str
+    scope: str
+    reason: Optional[str] = None
+    rejected_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    qualifying_evidence_count_at_rejection: int = 0
+
+    model_config = ConfigDict(populate_by_name=True)
+
 class PersonalAgentModel(BaseModel):
     person_id: str
     version: int = 1
@@ -147,10 +179,13 @@ class PersonalAgentModel(BaseModel):
     })
     strengths: List[str] = Field(default_factory=list)
     weaknesses: List[str] = Field(default_factory=list)
-    recurring_misconceptions: List[str] = Field(default_factory=list)
-    successful_interventions: List[str] = Field(default_factory=list)
-    unsuccessful_interventions: List[str] = Field(default_factory=list)
-    pace: str = "NORMAL"  # ACCELERATED, NORMAL, REINFORCED
+    demonstrated_capabilities: List[str] = Field(default_factory=list)
+    developing_capabilities: List[str] = Field(default_factory=list)
+    recurring_misconceptions: List[MisconceptionRecord] = Field(default_factory=list)
+    regression_risks: List[str] = Field(default_factory=list)
+    strategy_effectiveness: Dict[str, StrategyEffectiveness] = Field(default_factory=dict)
+    observed_pace: str = "UNKNOWN"  # AHEAD, ON_TRACK, BEHIND, UNKNOWN
+    rejected_recommendations: List[RejectedRecommendation] = Field(default_factory=list)
     skill_evidence: Dict[str, str] = Field(default_factory=dict)
     longitudinal_memories: List[LongitudinalMemory] = Field(default_factory=list)
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

@@ -117,7 +117,7 @@ interface AccountabilityData {
   next_checkpoint: string;
 }
 
-interface VerifiedOpportunityData {
+interface CanonicalOpportunityData {
   opportunity_id: string;
   title: string;
   organization: string;
@@ -134,13 +134,6 @@ interface VerifiedOpportunityData {
   missing_requirements: string[];
   eligibility_blockers: string[];
   pre_application_advice: string;
-  market_context?: {
-    salary_range?: string;
-    employment_outlook: string;
-    geography: string;
-    data_period: string;
-    source: string;
-  } | null;
 }
 
 interface TailoredResumeData {
@@ -212,7 +205,7 @@ interface CareerReadinessReportData {
   experience_gaps: ExperienceGapData[];
   evidence_portfolio?: EvidencePortfolioData | null;
   accountability: AccountabilityData;
-  matched_opportunities: VerifiedOpportunityData[];
+  matched_opportunities: CanonicalOpportunityData[];
   tailored_resume_preview?: TailoredResumeData | null;
   error_state?: string | null;
 }
@@ -222,17 +215,19 @@ export function CareerLaunchpad() {
   const [checkpoints, setCheckpoints] = useState<CareerCheckpointData[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("REQUIREMENTS");
-  const [personState, setPersonState] = useState<string>("college_student");
   const [isRecordingCheckpoint, setIsRecordingCheckpoint] = useState(false);
   const [checkpointSuccess, setCheckpointSuccess] = useState(false);
 
-  const fetchReadiness = useCallback(async (stateVal = personState) => {
+  const fetchReadiness = useCallback(async () => {
     setLoading(true);
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
         : "scholar-user";
+      const stateVal = typeof window !== "undefined"
+        ? (localStorage.getItem("pathmind_user_identity") || "college_student")
+        : "college_student";
 
       const [resReport, resCheckpoints] = await Promise.all([
         fetch(`${baseUrl}/api/career/readiness?current_state=${encodeURIComponent(stateVal)}`, {
@@ -256,16 +251,13 @@ export function CareerLaunchpad() {
     } finally {
       setLoading(false);
     }
-  }, [personState]);
+  }, []);
 
   useEffect(() => {
-    fetchReadiness(personState);
-  }, [fetchReadiness, personState]);
+    fetchReadiness();
+  }, [fetchReadiness]);
 
-  const handleStateChange = (newState: string) => {
-    setPersonState(newState);
-    fetchReadiness(newState);
-  };
+
 
   const handleRecordCheckpoint = async () => {
     setIsRecordingCheckpoint(true);
@@ -357,23 +349,7 @@ export function CareerLaunchpad() {
             </p>
           </div>
 
-          {/* Persona / State Selector */}
-          <div className="flex flex-col gap-2 bg-surface/80 p-4 rounded-2xl border border-outline backdrop-blur-md min-w-[280px]">
-            <label className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-primary" /> Active Career State
-            </label>
-            <select
-              value={personState}
-              onChange={(e) => handleStateChange(e.target.value)}
-              className="bg-surface-container border border-outline text-on-surface rounded-xl px-3.5 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer"
-            >
-              <option value="college_student">🎓 College / STEM Student (Class 12 / B.Tech)</option>
-              <option value="mechanical_engineer">⚙️ Mechanical Engineer (Career Switcher)</option>
-              <option value="frontend_developer">💻 Frontend Developer (AI Switcher)</option>
-              <option value="working_professional">👔 Working Professional (Promotion / Growth)</option>
-              <option value="graduate">🎓 Recent Graduate (First Job Search)</option>
-            </select>
-          </div>
+
         </div>
       </div>
 
@@ -927,13 +903,6 @@ export function CareerLaunchpad() {
                           )}
                         </div>
                       </div>
-
-                      {opp.market_context && (
-                        <div className="p-3 rounded-xl bg-surface-container text-xs text-on-surface-variant flex flex-wrap items-center justify-between gap-2 border border-outline/40">
-                          <span>Compensation / Outlook: <strong className="text-on-surface">{opp.market_context.salary_range}</strong> ({opp.market_context.employment_outlook})</span>
-                          <span className="text-[11px] text-on-surface-variant/70">Source: {opp.market_context.source}</span>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

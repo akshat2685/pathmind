@@ -1,5 +1,43 @@
 from typing import List, Dict, Any, Tuple, Optional
-from backend.core.career_schemas import UniversalCareerProfile, TailoredResume
+from backend.core.career_schemas import UniversalCareerProfile, TailoredResume, CanonicalGoal
+from backend.core.resume_schemas import ResumeVersion
+
+class GoalAlignmentValidator:
+    """
+    Ensures that the target role generated on the resume strictly aligns with the user's CanonicalGoal.
+    """
+    def validate_alignment(self, target_role: str, goal: CanonicalGoal) -> bool:
+        if not target_role or not goal:
+            return False
+        
+        domain = goal.domain.lower()
+        role = target_role.lower()
+        
+        if domain != "unknown" and domain not in role and role not in domain:
+            # Special exceptions can be added here
+            if domain == "software engineering" and "engineer" in role:
+                return True
+            if domain == "medicine" and ("doctor" in role or "medical" in role):
+                return True
+            if domain == "law" and ("lawyer" in role or "legal" in role or "attorney" in role):
+                return True
+            
+            # If the domain is strict and not found in the role, fail alignment
+            # e.g., "AI Engineer Resume" for "Professional Cricketer"
+            
+            # Simple keyword matching to catch egregious mismatches
+            software_keywords = ["software", "ai", "machine learning", "python", "developer", "backend", "frontend"]
+            cricket_keywords = ["cricket", "batsman", "bowler", "athlete"]
+            law_keywords = ["lawyer", "attorney", "legal", "counsel"]
+            
+            # If target role is software, but goal domain is cricket
+            if any(kw in role for kw in software_keywords) and any(kw in domain for kw in cricket_keywords):
+                return False
+                
+            if any(kw in role for kw in software_keywords) and any(kw in domain for kw in law_keywords):
+                return False
+                
+        return True
 
 class ResumeFactValidator:
     """
@@ -11,6 +49,9 @@ class ResumeFactValidator:
     4. Skills and technologies must be grounded in verified profile skills or project tech stacks.
     5. Fails safely or strips ungrounded items.
     """
+
+    def __init__(self):
+        self.goal_validator = GoalAlignmentValidator()
 
     def validate_and_sanitize(
         self,

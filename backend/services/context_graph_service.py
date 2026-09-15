@@ -11,7 +11,7 @@ from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.memory_engine import MemoryEngine
 from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.mastery_engine import MasteryEngine
-from backend.providers.opportunity_provider import VerifiedOpenOpportunityProvider
+from backend.providers.opportunity_provider import RealAPIProviderAdapter
 
 from backend.services.proactive_memory_service import ProactiveMemoryService
 
@@ -34,7 +34,7 @@ class ContextGraphService:
         self.memory_engine = memory_engine or MemoryEngine()
         self.readiness_engine = readiness_engine or CareerReadinessEngine()
         self.mastery_engine = mastery_engine or MasteryEngine()
-        self.opp_provider = VerifiedOpenOpportunityProvider()
+        self.opp_provider = RealAPIProviderAdapter()
         self.proactive_memory = ProactiveMemoryService(self.store)
 
     async def assemble_context_graph(self, person_id: str) -> PersonalContextGraph:

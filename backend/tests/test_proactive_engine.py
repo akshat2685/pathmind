@@ -65,7 +65,7 @@ async def test_repeated_evidence_failures_trigger_reinforcement():
     person_id = "test-fail-pattern"
 
     # Initialize roadmap
-    await engine.context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await engine.context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     # Save 2 failed attempts
     await store.save_evaluation_attempt(person_id, {
@@ -132,7 +132,7 @@ async def test_notification_preferences_suppress_disabled_categories():
     engine = ProactiveInterventionEngine(store=store)
     person_id = "test-prefs-learner"
 
-    await engine.context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await engine.context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     # Save preferences with reinforcement disabled
     await store.save_notification_preferences(person_id, {

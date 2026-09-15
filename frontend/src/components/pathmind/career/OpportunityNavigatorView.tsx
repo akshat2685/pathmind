@@ -16,38 +16,50 @@ import {
 } from "lucide-react";
 
 interface CanonicalOpportunity {
-  opportunity_id: string;
-  provider: string;
-  provider_record_id: string;
-  type: string;
+  id: string;
   title: string;
   organization: string;
+  opportunity_type: string;
+  domain: string;
+  field: string;
+  target_roles: string[];
   description: string;
   location: string;
+  geography: string;
   remote_status: string;
   eligibility: string;
   requirements: string[];
-  preferred_requirements: string[];
-  skills: string[];
-  compensation?: string | null;
-  deadline?: string | null;
-  application_url: string;
+  credentials: string[];
+  experience_requirements: string[];
+  deadline: string;
+  start_date: string;
+  source: string;
+  source_id: string;
   source_url: string;
-  status: string;
+  retrieved_at: string;
+  source_version: string;
+  freshness_status: string;
   verification_status: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
 }
 
-interface OpportunityMatchResult {
+interface OpportunityMatch {
+  opportunity_id: string;
+  goal_id: string;
+  match_reasons: string[];
+  requirement_matches: string[];
+  requirement_gaps: string[];
+  eligibility_status: string;
+  fit_status: string;
+  readiness_status: string;
+  feasibility_status: string;
+  confidence: string;
+  uncertainty: string[];
+  evidence: string[];
+  generated_at: string;
   opportunity: CanonicalOpportunity;
-  fit_state: string;
-  readiness_state: string;
-  matched_requirements: string[];
-  gaps: string[];
-  unknowns: string[];
-  why_it_matters: string;
-  next_step: string;
-  decision_recommendation: string;
-  tradeoffs: string[];
 }
 
 interface PrepAction {
@@ -77,9 +89,9 @@ interface InterviewPrep {
 }
 
 export function OpportunityNavigatorView() {
-  const [matches, setMatches] = useState<OpportunityMatchResult[]>([]);
+  const [matches, setMatches] = useState<OpportunityMatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMatch, setSelectedMatch] = useState<OpportunityMatchResult | null>(null);
+  const [selectedMatch, setSelectedMatch] = useState<OpportunityMatch | null>(null);
 
   // Filters
   const [roleSearch, setRoleSearch] = useState("");
@@ -108,7 +120,7 @@ export function OpportunityNavigatorView() {
         const data = await res.json();
         setMatches(data);
         if (selectedMatch) {
-          const updated = data.find((m: OpportunityMatchResult) => m.opportunity.opportunity_id === selectedMatch.opportunity.opportunity_id);
+          const updated = data.find((m: OpportunityMatch) => m.opportunity.id === selectedMatch.opportunity.id);
           if (updated) setSelectedMatch(updated);
         }
       }
@@ -123,7 +135,7 @@ export function OpportunityNavigatorView() {
     fetchMatches();
   }, [fetchMatches]);
 
-  const handleSelectOpportunity = (match: OpportunityMatchResult) => {
+  const handleSelectOpportunity = (match: OpportunityMatch) => {
     setSelectedMatch(match);
     setPrepPlan(null);
     setPlanSpawned(false);
@@ -134,7 +146,7 @@ export function OpportunityNavigatorView() {
     if (!selectedMatch) return;
     setPrepLoading(true);
     try {
-      const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.opportunity_id}/preparation-plan`, {
+      const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.id}/preparation-plan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -158,7 +170,7 @@ export function OpportunityNavigatorView() {
     if (!selectedMatch) return;
     setInterviewLoading(true);
     try {
-      const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.opportunity_id}/interview-prep`, {
+      const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.id}/interview-prep`, {
         headers: { "x-person-id": "scholar-user" }
       });
       if (res.ok) {
@@ -175,7 +187,7 @@ export function OpportunityNavigatorView() {
   // Filter local items by type
   const filteredMatches = matches.filter((m) => {
     if (typeFilter === "ALL") return true;
-    return m.opportunity.type.toUpperCase() === typeFilter.toUpperCase();
+    return m.opportunity.opportunity_type.toUpperCase() === typeFilter.toUpperCase();
   });
 
   return (
@@ -252,10 +264,10 @@ export function OpportunityNavigatorView() {
             </div>
           ) : filteredMatches.length > 0 ? (
             filteredMatches.map((m) => {
-              const isSelected = selectedMatch?.opportunity.opportunity_id === m.opportunity.opportunity_id;
+              const isSelected = selectedMatch?.opportunity.id === m.opportunity.id;
               return (
                 <div
-                  key={m.opportunity.opportunity_id}
+                  key={m.opportunity.id}
                   onClick={() => handleSelectOpportunity(m)}
                   className={`p-5 rounded-xl border transition-all cursor-pointer ${
                     isSelected
@@ -266,7 +278,7 @@ export function OpportunityNavigatorView() {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="space-y-0.5">
                       <span className="text-[10px] font-mono uppercase tracking-wider text-stone-500">
-                        {m.opportunity.organization} • {m.opportunity.provider}
+                        {m.opportunity.opportunity_type} • {m.opportunity.organization}
                       </span>
                       <h3 className="text-lg font-serif text-stone-900 tracking-tight">
                         {m.opportunity.title}
@@ -275,16 +287,16 @@ export function OpportunityNavigatorView() {
 
                     <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                        m.fit_state === "STRONG_MATCH"
+                        m.fit_status === "STRONG_MATCH"
                           ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                          : m.fit_state === "GOOD_MATCH"
+                          : m.fit_status === "GOOD_MATCH"
                           ? "bg-blue-50 text-blue-800 border-blue-200"
                           : "bg-amber-50 text-amber-800 border-amber-200"
                       }`}>
-                        {m.fit_state.replace("_", " ")}
+                        {m.fit_status.replace("_", " ")}
                       </span>
                       <span className="text-[9px] font-mono text-stone-500 uppercase">
-                        Readiness: {m.readiness_state.replace("_", " ")}
+                        Readiness: {m.readiness_status.replace("_", " ")}
                       </span>
                     </div>
                   </div>
@@ -294,13 +306,13 @@ export function OpportunityNavigatorView() {
                   </p>
 
                   <div className="flex flex-wrap items-center gap-2 mb-3">
-                    {m.matched_requirements.slice(0, 3).map((mr, i) => (
+                    {m.requirement_matches.slice(0, 3).map((mr, i) => (
                       <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200/60 flex items-center gap-1">
                         <Check className="w-2.5 h-2.5" />
                         <span>{mr.split(" (")[0]}</span>
                       </span>
                     ))}
-                    {m.gaps.slice(0, 2).map((g, i) => (
+                    {m.requirement_gaps.slice(0, 2).map((g, i) => (
                       <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-100 text-stone-600 border border-stone-200">
                         Missing: {g}
                       </span>
@@ -338,10 +350,10 @@ export function OpportunityNavigatorView() {
               <div className="space-y-1.5 border-b border-stone-100 pb-4">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-mono uppercase text-stone-500">
-                    {selectedMatch.opportunity.type} • {selectedMatch.opportunity.provider}
+                    {selectedMatch.opportunity.opportunity_type} • {selectedMatch.opportunity.organization}
                   </span>
                   <a
-                    href={selectedMatch.opportunity.application_url}
+                    href={selectedMatch.opportunity.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center space-x-1 text-xs font-mono text-stone-800 hover:text-stone-950 underline"
@@ -356,11 +368,6 @@ export function OpportunityNavigatorView() {
                 <p className="text-xs font-mono text-stone-600">
                   {selectedMatch.opportunity.organization} • {selectedMatch.opportunity.location}
                 </p>
-                {selectedMatch.opportunity.compensation && (
-                  <span className="inline-block text-[11px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 mt-1">
-                    {selectedMatch.opportunity.compensation}
-                  </span>
-                )}
               </div>
 
               {/* Why This Matches You */}
@@ -369,7 +376,7 @@ export function OpportunityNavigatorView() {
                   Why This Opportunity Matches
                 </span>
                 <p className="text-stone-700 font-sans leading-relaxed bg-stone-50 p-3 rounded border border-stone-200/60">
-                  {selectedMatch.why_it_matters}
+                  {selectedMatch.match_reasons.join(" ")}
                 </p>
               </div>
 
@@ -381,21 +388,21 @@ export function OpportunityNavigatorView() {
 
                 <div className="space-y-1.5">
                   <span className="font-mono text-[11px] text-emerald-800 font-medium block">
-                    ✓ Matched Capabilities ({selectedMatch.matched_requirements.length})
+                    ✓ Matched Capabilities ({selectedMatch.requirement_matches.length})
                   </span>
-                  {selectedMatch.matched_requirements.map((mr, i) => (
+                  {selectedMatch.requirement_matches.map((mr, i) => (
                     <div key={i} className="text-stone-700 pl-2 border-l-2 border-emerald-500 font-sans py-0.5">
                       {mr}
                     </div>
                   ))}
                 </div>
 
-                {selectedMatch.gaps.length > 0 && (
+                {selectedMatch.requirement_gaps.length > 0 && (
                   <div className="space-y-1.5 pt-2">
                     <span className="font-mono text-[11px] text-rose-800 font-medium block">
-                      ⚠ Gaps to Prove ({selectedMatch.gaps.length})
+                      ⚠ Gaps to Prove ({selectedMatch.requirement_gaps.length})
                     </span>
-                    {selectedMatch.gaps.map((g, i) => (
+                    {selectedMatch.requirement_gaps.map((g, i) => (
                       <div key={i} className="text-stone-700 pl-2 border-l-2 border-rose-400 font-sans py-0.5">
                         {g}
                       </div>
@@ -403,13 +410,13 @@ export function OpportunityNavigatorView() {
                   </div>
                 )}
 
-                {selectedMatch.unknowns.length > 0 && (
+                {selectedMatch.uncertainty.length > 0 && (
                   <div className="space-y-1.5 pt-2">
                     <div className="flex items-center space-x-1 text-stone-500 font-mono text-[11px]">
                       <HelpCircle className="w-3 h-3 text-stone-400" />
                       <span>Profile Information Gaps (Not Penalized as Failure)</span>
                     </div>
-                    {selectedMatch.unknowns.map((u, i) => (
+                    {selectedMatch.uncertainty.map((u, i) => (
                       <div key={i} className="text-stone-600 pl-2 border-l-2 border-stone-300 font-sans py-0.5 italic">
                         {u}
                       </div>
@@ -425,19 +432,19 @@ export function OpportunityNavigatorView() {
                     Decision Advisor
                   </span>
                   <span className={`font-mono text-[11px] px-2 py-0.5 rounded border ${
-                    selectedMatch.decision_recommendation === "RECOMMEND_APPLYING"
+                    selectedMatch.feasibility_status === "HIGH"
                       ? "bg-emerald-100 text-emerald-900 border-emerald-300"
                       : "bg-amber-100 text-amber-900 border-amber-300"
                   }`}>
-                    {selectedMatch.decision_recommendation.replace("_", " ")}
+                    {selectedMatch.feasibility_status.replace("_", " ")}
                   </span>
                 </div>
                 <p className="font-sans text-stone-600 leading-normal">
-                  Next Step: {selectedMatch.next_step}
+                  Next Step: {selectedMatch.eligibility_status}
                 </p>
-                {selectedMatch.tradeoffs.length > 0 && (
+                {selectedMatch.evidence.length > 0 && (
                   <ul className="list-disc pl-4 space-y-1 text-stone-600 pt-1">
-                    {selectedMatch.tradeoffs.map((t, i) => (
+                    {selectedMatch.evidence.map((t, i) => (
                       <li key={i}>{t}</li>
                     ))}
                   </ul>

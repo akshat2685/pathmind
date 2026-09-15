@@ -29,6 +29,7 @@ from backend.api.artifact_routes import router as artifact_router
 from backend.api.execution_routes import router as execution_router
 from backend.api.opportunity_routes import router as opportunity_router
 from backend.api.orchestrator_routes import router as orchestrator_router
+from backend.api.market_routes import router as market_router
 from backend.core.security import SecurityHeadersMiddleware, StructuredErrorMiddleware
 
 app = FastAPI(title="PATHMIND Production API")
@@ -77,6 +78,7 @@ app.include_router(artifact_router)
 app.include_router(execution_router)
 app.include_router(opportunity_router)
 app.include_router(orchestrator_router)
+app.include_router(market_router)
 
 @app.get("/health/live")
 async def health_live():

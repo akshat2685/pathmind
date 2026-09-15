@@ -14,7 +14,7 @@ async def test_personal_context_graph_assembly():
     person_id = "test-context-learner-1"
 
     # Initialize underlying roadmap & mastery
-    await context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     graph = await context_service.assemble_context_graph(person_id)
 
@@ -36,7 +36,7 @@ async def test_task_context_relevance_filtering():
     context_service = ContextGraphService(store=store)
     person_id = "test-context-filter"
 
-    await context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     pkg = await context_service.extract_task_context_package(person_id, task_type="NEXT_ACTION")
 
@@ -61,7 +61,7 @@ async def test_command_center_six_answers_generation():
     decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-context-cc"
 
-    await context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     overview = await decision_service.get_command_center_overview(person_id)
 
@@ -84,7 +84,7 @@ async def test_decision_recording_and_outcome_learning():
     decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-decision-learner"
 
-    await context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     # 1. Record Decision
     decision = await decision_service.record_user_decision(
@@ -125,7 +125,7 @@ async def test_next_action_adapts_to_mastery_risk():
     decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-risk-next-action"
 
-    await context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     # Flag a skill at risk
     await context_service.mastery_engine.record_mastery_regression(

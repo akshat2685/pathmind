@@ -22,7 +22,7 @@ export function validateMeaningfulText(text: string, minWords = 3, minLength = 1
   if (words.length < minWords) {
     return { 
       isValid: false, 
-      message: `Please provide a descriptive goal with at least ${minWords} words (e.g., "Master machine learning foundations and build scalable backend systems").` 
+      message: `Please provide a descriptive goal with at least ${minWords} words (e.g., "Become a professional chef and open a restaurant").` 
     };
   }
 

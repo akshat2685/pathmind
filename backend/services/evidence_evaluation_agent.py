@@ -67,7 +67,7 @@ class EvidenceEvaluationAgent:
                 inferred.append("Successfully generalized foundational concepts to a novel domain context without rote repetition.")
                 mastery_state = "TRANSFER"
             else:
-                mastery_state = "DEMONSTRATED_MASTERY" if has_tests else "APPLICATION"
+                mastery_state = "DEMONSTRATED" if has_tests else "APPLICATION"
             recommendations.append(f"Prerequisite satisfied. Ready for downstream progression from {stage_title}.")
         elif verification_quality == "MODERATE":
             inferred.append(f"Demonstrates working understanding of {stage_title}, with minor test coverage gaps.")
@@ -76,7 +76,7 @@ class EvidenceEvaluationAgent:
         else:
             inferred.append("Artifact exhibits missing test suites or incomplete method bodies.")
             misconceptions.append("Insufficient boundary-case assertions for stream parsing.")
-            mastery_state = "NEEDS_REINFORCEMENT"
+            mastery_state = "DEVELOPING"
             recommendations.append("Review error-handling and write at least 2 unit tests with pytest.")
 
         # Gemini LLM Enhancement for reasoning synthesis

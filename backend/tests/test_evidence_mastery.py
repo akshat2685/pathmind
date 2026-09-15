@@ -17,7 +17,7 @@ async def test_evidence_submission_and_quality_verification():
     person_id = "test-learner-evidence-1"
 
     # Initialize roadmap
-    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     code_payload = {
         "code": """
@@ -67,7 +67,7 @@ async def test_locked_stage_rejects_premature_submission():
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-lock"
 
-    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     with pytest.raises(PermissionError) as exc_info:
         await mastery_engine.submit_and_evaluate_evidence(
@@ -90,7 +90,7 @@ async def test_insufficient_evidence_triggers_reinforcement():
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-reinforce"
 
-    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     attempt = await mastery_engine.submit_and_evaluate_evidence(
         person_id=person_id,
@@ -102,7 +102,7 @@ async def test_insufficient_evidence_triggers_reinforcement():
     )
 
     assert attempt.status == "REINFORCE"
-    assert attempt.evaluation_detail.mastery_state_achieved == "NEEDS_REINFORCEMENT"
+    assert attempt.evaluation_detail.mastery_state_achieved == "DEVELOPING"
 
 @pytest.mark.asyncio
 async def test_mastery_regression_flagged_without_erasing_history():
@@ -119,7 +119,7 @@ async def test_mastery_regression_flagged_without_erasing_history():
         reason="Observed runtime memory leaks during multi-threading benchmark."
     )
 
-    assert profile.mastery_state == "MASTERY_AT_RISK"
+    assert profile.mastery_state == "REGRESSION_RISK"
     assert profile.is_regression_risk is True
     assert "memory leaks" in profile.regression_reason
 
@@ -132,7 +132,7 @@ async def test_transfer_validation_across_novel_domains():
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-transfer"
 
-    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     transfer_code = {
         "code": """

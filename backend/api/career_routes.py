@@ -8,20 +8,20 @@ from backend.core.career_schemas import (
     CareerRequirementGraph,
     CareerReadinessReport,
     AccountabilityStatus,
-    VerifiedOpportunity,
     VerifiedCredential,
     TailoredResume,
     CareerCheckpoint
 )
+from backend.core.opportunity_schemas import CanonicalOpportunity
 from backend.services.career_readiness_engine import CareerReadinessEngine
-from backend.services.opportunity_service import OpportunityService
+from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
 from backend.services.store import FirestoreStore
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/career", tags=["Career Intelligence & Execution Layer"])
 engine = CareerReadinessEngine()
-opp_service = OpportunityService()
+opp_service = OpportunityMatchingEngine(career_engine=engine)
 store = FirestoreStore()
 get_person_id = get_authenticated_person
 
@@ -155,27 +155,29 @@ async def get_career_checkpoints(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch checkpoints: {str(e)}")
 
-@router.get("/opportunities", response_model=List[VerifiedOpportunity])
+@router.get("/opportunities", response_model=List[CanonicalOpportunity])
 async def get_matched_opportunities(
-    target_role: Optional[str] = Query("Machine Learning Engineer"),
+    target_role: Optional[str] = Query(None),
     geography: Optional[str] = Query(None),
     person_id: str = Depends(get_person_id)
 ):
     try:
-        profile = await engine.get_or_create_canonical_profile(person_id)
-        return await opp_service.match_opportunities_for_person(
-            profile=profile,
-            target_role=target_role or "Machine Learning Engineer"
+        # Instead of matching via the legacy opp_service which we deleted,
+        # we will use the matching_engine.get_all_opportunities method directly
+        # or rely on /api/opportunities/matched to do matching
+        return await opp_service.get_all_opportunities(
+            role_filter=target_role,
+            geography=geography
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch opportunities: {str(e)}")
 
 @router.get("/credentials", response_model=List[VerifiedCredential])
 async def get_credentials_strategy(
-    target_role: Optional[str] = Query("Machine Learning Engineer")
+    target_role: Optional[str] = Query(None)
 ):
     try:
-        return engine.credential_agent.evaluate_credentials(target_role or "Machine Learning Engineer")
+        return engine.credential_agent.evaluate_credentials(target_role or "General Professional")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch credentials strategy: {str(e)}")
 

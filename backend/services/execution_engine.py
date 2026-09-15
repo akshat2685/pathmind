@@ -7,10 +7,10 @@ from backend.core.execution_schemas import (
     RescheduleEvent,
     DailyExecutionPlan,
     AccountabilityIntervention,
-    OpportunityApplicationTracker,
     CompleteActionRequest,
     CreateActionRequest
 )
+from backend.core.opportunity_schemas import ApplicationRecord
 from backend.services.execution_intelligence_agent import ExecutionIntelligenceAgent
 from backend.services.store import FirestoreStore
 from backend.services.roadmap_engine import RoadmapEngine
@@ -410,30 +410,21 @@ class ExecutionEngine:
         self,
         person_id: str,
         opp_id: str,
-        opp_title: str,
-        organization: str,
         status: str,
         notes: Optional[str] = None
-    ) -> OpportunityApplicationTracker:
+    ) -> ApplicationRecord:
         existing = await self.store.get_opportunity_applications(person_id)
         tracker = next((t for t in existing if t.get("opportunity_id") == opp_id), None)
 
         if tracker:
-            tracker_obj = OpportunityApplicationTracker(**tracker)
+            tracker_obj = ApplicationRecord(**tracker)
             tracker_obj.status = status
-            tracker_obj.notes = notes or tracker_obj.notes
             tracker_obj.updated_at = datetime.now(timezone.utc).isoformat()
-            if status == "APPLIED" and not tracker_obj.applied_at:
-                tracker_obj.applied_at = datetime.now(timezone.utc).isoformat()
         else:
-            tracker_obj = OpportunityApplicationTracker(
-                person_id=person_id,
+            tracker_obj = ApplicationRecord(
+                user_id=person_id,
                 opportunity_id=opp_id,
-                opportunity_title=opp_title,
-                organization=organization,
-                status=status,
-                notes=notes,
-                applied_at=datetime.now(timezone.utc).isoformat() if status == "APPLIED" else None
+                status=status
             )
 
         await self.store.save_opportunity_application(person_id, tracker_obj.model_dump())

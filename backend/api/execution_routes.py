@@ -5,7 +5,6 @@ from backend.core.execution_schemas import (
     CanonicalAction,
     DailyExecutionPlan,
     AccountabilityIntervention,
-    OpportunityApplicationTracker,
     CreateActionRequest,
     RescheduleActionRequest,
     BlockActionRequest,
@@ -13,6 +12,7 @@ from backend.core.execution_schemas import (
     PauseExecutionRequest,
     TrackApplicationRequest
 )
+from backend.core.opportunity_schemas import ApplicationRecord
 from backend.services.execution_engine import ExecutionEngine
 
 from backend.core.security import get_authenticated_person
@@ -137,15 +137,15 @@ async def get_accountability(person_id: str = Depends(get_person_id)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get accountability status: {str(e)}")
 
-@router.get("/applications", response_model=List[OpportunityApplicationTracker])
+@router.get("/applications", response_model=List[ApplicationRecord])
 async def list_applications(person_id: str = Depends(get_person_id)):
     try:
         raw = await execution_engine.store.get_opportunity_applications(person_id)
-        return [OpportunityApplicationTracker(**a) for a in raw]
+        return [ApplicationRecord(**a) for a in raw]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list applications: {str(e)}")
 
-@router.post("/applications", response_model=OpportunityApplicationTracker)
+@router.post("/applications", response_model=ApplicationRecord)
 async def track_application(
     req: TrackApplicationRequest,
     person_id: str = Depends(get_person_id)
@@ -154,8 +154,6 @@ async def track_application(
         return await execution_engine.track_opportunity_application(
             person_id=person_id,
             opp_id=req.opportunity_id,
-            opp_title=req.opportunity_title,
-            organization=req.organization,
             status=req.status,
             notes=req.notes
         )

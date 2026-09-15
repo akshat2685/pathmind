@@ -70,27 +70,65 @@ class UniversalCareerProfile(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-class TargetOutcome(BaseModel):
+class CanonicalGoal(BaseModel):
     """
-    Structured target definition for career aspirations.
+    Structured, zero-bias canonical goal definition for any domain.
+    Backwards-compatible with old TargetOutcome fields (goal_id, goal_type, target_industry).
     """
-    goal_id: str
+    # Primary ID — accepts both 'id' and old 'goal_id'
+    id: str = Field(default_factory=lambda: f"goal_{int(datetime.now(timezone.utc).timestamp())}")
+    goal_id: Optional[str] = None  # Old alias, mapped to id
     person_id: str
-    goal_type: str = "career"  # career, internship, certification, promotion, graduate_program, career_transition, entrepreneurship, research
-    target_role: Optional[str] = None
-    target_industry: Optional[str] = None
-    geography: str = "India & Global"
-    target_timeline: Optional[str] = None
-    priority: str = "HIGH"  # HIGH, MEDIUM, LOW
-    version: int = 1
+
+    # New zero-bias fields
+    raw_statement: str = ""
+    normalized_statement: str = ""
+    domain: str = "Unknown"
+    field: str = "Unknown"
+    target_role: str = "Unknown"
+    target_outcome: str = "Unknown"
+    geography: str = "Global"
+    target_level: Optional[str] = None
+    target_context: Optional[str] = None
+    timeline: Optional[str] = None
     constraints: Dict[str, Any] = Field(default_factory=dict)
+    confidence: str = "HIGH"
+    evidence: List[str] = Field(default_factory=list)
+    provenance: str = "USER_DECLARED"
+
+    # Old TargetOutcome fields for backwards compatibility
+    goal_type: str = "career"
+    target_industry: Optional[str] = None
+    target_timeline: Optional[str] = None
+    priority: str = "HIGH"
+    version: int = 1
+
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     model_config = ConfigDict(populate_by_name=True)
 
-# Alias for backwards compatibility
-CareerGoal = TargetOutcome
+    def model_post_init(self, __context):
+        """Sync old and new field names."""
+        # If goal_id was provided but id was not explicitly set, sync them
+        if self.goal_id and self.id.startswith("goal_"):
+            self.id = self.goal_id
+        elif not self.goal_id:
+            self.goal_id = self.id
+        # If target_industry was set but domain is still Unknown, sync
+        if self.target_industry and self.domain == "Unknown":
+            self.domain = self.target_industry
+        if self.domain != "Unknown" and not self.target_industry:
+            self.target_industry = self.domain
+        # If target_role was set but target_outcome is still Unknown, sync
+        if self.target_role != "Unknown" and self.target_outcome == "Unknown":
+            self.target_outcome = self.target_role
+        if self.target_outcome != "Unknown" and self.target_role == "Unknown":
+            self.target_role = self.target_outcome
+
+# Alias for backwards compatibility across existing routes
+TargetOutcome = CanonicalGoal
+CareerGoal = CanonicalGoal
 
 class RequirementNode(BaseModel):
     requirement_id: Optional[str] = None

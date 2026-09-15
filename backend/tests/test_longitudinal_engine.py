@@ -109,7 +109,7 @@ async def test_temporal_queries_with_grounded_provenance():
     person_id = "test-temporal-query-learner"
 
     # 1. Initialize roadmap & capability
-    await agent.context_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await agent.context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     await store.save_skill_mastery_profile(person_id, "Python", {
         "skill_name": "Python",
         "mastery_state": "APPLICATION",

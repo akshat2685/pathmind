@@ -13,9 +13,9 @@ export default function Home() {
 
   const suggestions = [
     "Machine Learning & Generative AI",
-    "Distributed Cloud Architectures",
-    "Human-Computer Interaction",
-    "Data Systems & Analytics",
+    "Corporate Law & Litigation",
+    "Sustainable Fashion Design",
+    "Professional Sports & Athletics",
   ];
 
   const handleEmbark = (e: React.FormEvent) => {

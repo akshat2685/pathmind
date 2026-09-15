@@ -8,7 +8,9 @@ from backend.core.adaptation_schemas import (
     AdaptationAuditRecord,
     ContinuousIntelligenceState,
     PauseResumeAnalysis,
-    ConflictDetectionResult
+    ConflictDetectionResult,
+    LearningSignal,
+    MicroAdaptationRecord
 )
 from backend.services.state_change_service import StateChangeService
 from backend.services.impact_analysis_service import ImpactAnalysisService
@@ -51,6 +53,9 @@ class AdaptationService:
         pause_status = await self.state_change_service.analyze_pause_and_resume(person_id)
         conflict_status = await self.state_change_service.detect_evidence_conflict(person_id, "Python")
 
+        active_micro_adaptations_raw = await self.store.get_active_micro_adaptations(person_id)
+        active_micros = [MicroAdaptationRecord(**m) for m in active_micro_adaptations_raw] if hasattr(self.store, 'get_active_micro_adaptations') else []
+
         plan_stability = "STABLE"
         if pending:
             plan_stability = "PENDING_REVIEW"
@@ -63,8 +68,48 @@ class AdaptationService:
             pending_adaptations=pending,
             recent_audits=audits[:10],
             pause_status=pause_status,
-            conflict_status=conflict_status
+            conflict_status=conflict_status,
+            active_micro_adaptations=active_micros
         )
+
+    async def handle_learning_signal_adaptation(self, person_id: str, signal: LearningSignal, stage_id: str) -> Optional[MicroAdaptationRecord]:
+        """
+        Creates a Micro-Adaptation for non-structural changes like reinforcement or explanation shifts.
+        Does NOT bump major roadmap version.
+        """
+        if signal.impact_scope not in ["MISSION_ONLY", "STAGE"]:
+            return None
+        
+        # Determine micro-adaptation action based on signal type
+        if signal.type == "MISCONCEPTION_DETECTED":
+            action = "INJECT_REINFORCEMENT"
+            what = f"Reinforcement practice added for {signal.subject}"
+            why = "Detected observable misconception requires targeted resolution before advancing."
+        elif signal.type in ["MASTERY_FAILED", "REPEATED_STRUGGLE"]:
+            action = "EXPLANATION_STYLE"
+            what = f"Explanation style adjusted for {signal.subject}"
+            why = "Repeated struggle indicates current instructional approach is sub-optimal."
+        else:
+            return None
+            
+        # Check if suppressed
+        is_suppressed = await self.personal_agent.is_recommendation_suppressed(person_id, action, signal.impact_scope)
+        if is_suppressed:
+            return None
+            
+        record = MicroAdaptationRecord(
+            person_id=person_id,
+            stage_id=stage_id,
+            adaptation_type=action,
+            what_changed=what,
+            why=why,
+            supporting_evidence_ids=signal.evidence_ids
+        )
+        
+        if hasattr(self.store, 'save_micro_adaptation'):
+            await self.store.save_micro_adaptation(person_id, record.model_dump())
+            
+        return record
 
     async def handle_goal_change(
         self,

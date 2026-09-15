@@ -26,7 +26,7 @@ class StructuredEvaluationDetail(BaseModel):
     observed: List[str] = Field(default_factory=list)
     inferred: List[str] = Field(default_factory=list)
     recommendation: List[str] = Field(default_factory=list)
-    mastery_state_achieved: str = "APPLICATION"  # NOT_STARTED, EXPOSED, UNDERSTANDING, APPLICATION, TRANSFER, PROVISIONAL_MASTERY, DEMONSTRATED_MASTERY, MASTERY_AT_RISK, NEEDS_REINFORCEMENT, INSUFFICIENT_EVIDENCE
+    mastery_state_achieved: str = "APPLICATION"  # NOT_ASSESSED, INTRODUCED, DEVELOPING, DEMONSTRATED, TRANSFER, APPLICATION, REGRESSION_RISK
     observable_misconceptions: List[str] = Field(default_factory=list)
     transfer_validated: bool = False
     evidence_quality_awarded: str = "STRONG"
@@ -60,15 +60,25 @@ class EvidenceDispute(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+class MasteryStateTransition(BaseModel):
+    from_state: str
+    to_state: str
+    trigger_evidence_id: str
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    rationale: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
 class SkillMasteryProfile(BaseModel):
     skill_name: str
     category: str = "Technical Competency"
-    mastery_state: str = "NOT_STARTED"  # NOT_STARTED, EXPOSED, UNDERSTANDING, APPLICATION, TRANSFER, PROVISIONAL_MASTERY, DEMONSTRATED_MASTERY, MASTERY_AT_RISK, NEEDS_REINFORCEMENT, INSUFFICIENT_EVIDENCE
+    mastery_state: str = "NOT_ASSESSED"  # NOT_ASSESSED, INTRODUCED, DEVELOPING, DEMONSTRATED, TRANSFER, APPLICATION, REGRESSION_RISK
     evidence_count: int = 0
     primary_evidence_id: Optional[str] = None
     last_verified_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     is_regression_risk: bool = False
     regression_reason: Optional[str] = None
+    transition_history: List[MasteryStateTransition] = Field(default_factory=list)
 
     model_config = ConfigDict(populate_by_name=True)
 

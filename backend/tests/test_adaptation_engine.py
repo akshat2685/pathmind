@@ -19,7 +19,7 @@ async def test_goal_change_creates_versioned_proposal_and_requires_approval():
     person_id = "test-learner-goal-change"
 
     # 1. Initialize baseline roadmap (Version 1)
-    await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id)
+    await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
 
     # 2. Trigger goal change
     proposal = await adaptation_service.handle_goal_change(
@@ -37,7 +37,7 @@ async def test_goal_change_creates_versioned_proposal_and_requires_approval():
     assert "Stage 01: Python Foundations" in proposal.impact_analysis.preserved_assets
 
     # Verify baseline roadmap remains Version 1 until approved
-    active_rm = await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id)
+    active_rm = await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     assert active_rm.version == 1
 
     # 3. User Approves the adaptation
@@ -52,7 +52,7 @@ async def test_goal_change_creates_versioned_proposal_and_requires_approval():
     assert result["active_version"] == 2
 
     # Verify roadmap version updated to 2
-    active_rm_after = await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id)
+    active_rm_after = await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     assert active_rm_after.version == 2
 
 @pytest.mark.asyncio
@@ -112,6 +112,7 @@ async def test_constraint_change_smoothly_recalibrates():
     store = FirestoreStore()
     adaptation_service = AdaptationService(store=store)
     person_id = "test-learner-constraint"
+    await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
 
     proposal = await adaptation_service.handle_constraint_change(
         person_id=person_id,
@@ -136,6 +137,7 @@ async def test_opportunity_driven_adaptation():
     store = FirestoreStore()
     adaptation_service = AdaptationService(store=store)
     person_id = "test-learner-opp"
+    await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
 
     proposal = await adaptation_service.handle_opportunity_event(
         person_id=person_id,
@@ -214,6 +216,7 @@ async def test_roadmap_history_and_isolation():
     adaptation_service = AdaptationService(store=store)
     person_a = "person-alpha-10"
     person_b = "person-beta-10"
+    await adaptation_service.roadmap_engine.get_or_create_roadmap(person_a, target_outcome="Applied AI Specialist")
 
     # Person A creates a goal change proposal
     prop_a = await adaptation_service.handle_goal_change(
