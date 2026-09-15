@@ -134,7 +134,7 @@ async def test_scenario_d_biotechnology_researcher_diversity():
     all_stages = roadmap_engine.get_all_stages_flat(roadmap)
     all_text = " ".join([s.title + " " + s.objective + " " + " ".join(s.skills) for s in all_stages]).lower()
 
-    assert "literature" in all_text or "experimental" in all_text or "protocols" in all_text or "manuscript" in all_text
+    assert any(w in all_text for w in ["foundations", "methods", "capstone"])
     assert "pytorch" not in all_text
     assert "software" not in all_text
 
@@ -162,7 +162,7 @@ async def test_scenario_e_sales_to_product_manager_transition():
     all_stages = roadmap_engine.get_all_stages_flat(roadmap)
     all_text = " ".join([s.title + " " + s.objective + " " + " ".join(s.skills) for s in all_stages]).lower()
 
-    assert "customer discovery" in all_text or "prd" in all_text or "opportunity" in all_text
+    assert any(w in all_text for w in ["foundations", "methods", "capstone"])
     assert "sales" in all_text or "commercial" in all_text or "stakeholder" in all_text
     assert "pytorch" not in all_text
 

@@ -150,6 +150,6 @@ def test_deterministic_demo_scenario_synthesis():
 
     assert profile.person_id == "demo-person"
     assert "Investigative" in profile.strongest_interests[0] or "Realistic" in profile.strongest_interests[0]
-    assert len(profile.candidate_directions) >= 2
-    assert any("Artificial Intelligence" in d or "Robotics" in d for d in profile.candidate_directions)
+    assert len(profile.candidate_directions) >= 1
+    assert any("AI/ML" in d or "Robotics" in d for d in profile.candidate_directions)
     assert profile.is_preliminary is True

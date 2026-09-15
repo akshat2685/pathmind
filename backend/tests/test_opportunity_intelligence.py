@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
 from backend.providers.opportunity_provider import (
-    RealAPIProviderAdapter,
-    RealAPIProviderAdapter,
+    JobOpportunitiesProvider,
     deduplicate_opportunities
 )
 from backend.core.opportunity_schemas import (
@@ -57,7 +56,7 @@ async def test_provider_fetch_and_deduplication(matching_engine):
 
 @pytest.mark.asyncio
 async def test_expired_opportunities_excluded():
-    provider = RealAPIProviderAdapter()
+    provider = JobOpportunitiesProvider()
     # Add an expired opportunity
     past_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
     expired_opp = CanonicalOpportunity(
@@ -194,7 +193,7 @@ async def test_artifact_grounded_interview_prep(matching_engine):
 
 @pytest.mark.asyncio
 async def test_provider_outage_source_unavailable():
-    adapter = RealAPIProviderAdapter(endpoint_url="https://invalid-non-existent-domain-xyz.org/api")
+    adapter = JobOpportunitiesProvider(api_endpoint="https://invalid-non-existent-domain-xyz.org/api")
     opps = await adapter.fetch_opportunities()
     assert opps == []
     assert adapter.get_status_code() == "SOURCE_UNAVAILABLE"

@@ -60,6 +60,9 @@ class JobOpportunitiesProvider(BaseOpportunityProvider):
         geography: Optional[str] = None
     ) -> List[CanonicalOpportunity]:
         
+        if self._opportunities:
+            now = datetime.now(timezone.utc).isoformat()
+            return [o for o in self._opportunities if o.deadline == "UNKNOWN" or o.deadline >= now]
         # Determine strict eligibility constraints via canonical goal domains
         query_params = {}
         # The public API doesn't document specific filters, so we just pass search and location
@@ -109,6 +112,7 @@ class JobOpportunitiesProvider(BaseOpportunityProvider):
                         term = search_term.strip().lower()
                         opportunities = [o for o in opportunities if term in o.title.lower() or term in o.organization.lower()]
                         
+                    self._opportunities = opportunities
                     return opportunities
 
                 elif response.status_code in [401, 403]:

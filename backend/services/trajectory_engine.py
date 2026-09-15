@@ -66,7 +66,7 @@ class TrajectoryEngine:
 
         if goals:
             primary_goal = goals[0].strip()
-            path_custom = CandidatePath(            path_custom = CandidatePath(
+            path_custom = CandidatePath(
                 path_id=f"path_{primary_goal.lower().replace(' ', '_')[:30]}",
                 title=f"{primary_goal} Professional Pathway",
                 domain=f"{primary_goal} Practice",
@@ -91,7 +91,48 @@ class TrajectoryEngine:
                 india_context={},
                 global_context={}
             )
-            return [path_custom]
+            path_exploration = CandidatePath(
+                path_id="path_career_exploration",
+                title="Career Exploration & Discovery",
+                domain="Exploration",
+                description="A structured pathway focused on self-discovery, exploring different industries, and identifying strengths and interests before committing to a specific domain.",
+                fit_level="UNKNOWN",
+                confidence="LOW",
+                why_it_matches=["Provides flexibility when a specific target goal is not yet defined or as an alternative."],
+                supporting_evidence=["User has not yet specified a clear canonical goal, or provided an alternative option."],
+                missing_evidence=["Specific domain targets and verifiable performance artifacts."],
+                transparency_summary={
+                    "what_we_know": ["User is in a discovery phase or considering options"],
+                    "how_we_know_it": ["Absence of a single declared goal or as a safe alternative"],
+                    "what_remains_unknown": ["Specific industry or role target"],
+                    "what_could_change_this": ["Completing assessments and declaring a target outcome"]
+                },
+                required_skills=["Self-Reflection", "Research", "Adaptability"],
+                current_skills_held=[],
+                transferable_skills=["Curiosity"],
+                skill_gaps=[],
+                education_routes=[
+                    EducationRoute(
+                        route_type="PROJECT_BASED_ACCELERATED",
+                        title="Broad Exploratory Learning",
+                        description="Take introductory courses across multiple fields to gauge interest.",
+                        estimated_duration="3-6 Months",
+                        institutions_or_paths=["Online Platforms", "Career Fairs", "Informational Interviews"],
+                        geographic_relevance="Global"
+                    )
+                ],
+                credential_options=[],
+                india_context={},
+                global_context={},
+                experience_requirements=["Participation in exploratory projects or shadow programs"],
+                advantages=["Maintains optionality.", "Reduces the risk of committing to the wrong path early."],
+                disadvantages=["Delays specialized skill acquisition."],
+                risks=["Analysis paralysis if exploration continues indefinitely."],
+                alternatives=[],
+                similar_trajectories=[],
+                source_references=[]
+            )
+            return [path_custom, path_exploration]
 
         # Fallback if no specific goal is identified: Generic Exploration Path
         path_exploration = CandidatePath(
@@ -219,7 +260,10 @@ class TrajectoryEngine:
             
         # Optional: Use LLM to extract target from prompt if possible, but for deterministic fallback, rely on explicit type.
 
-        if new_target:        elif modification_type == "LOW_BUDGET" or "afford" in lower_prompt or "cost" in lower_prompt:
+        if new_target:
+            trade_off_notes.append(f"Target changed to: {new_target}.")
+            adjusted.title = new_target
+        if modification_type == "LOW_BUDGET" or "afford" in lower_prompt or "cost" in lower_prompt:
             adjusted.education_routes = [
                 EducationRoute(
                     route_type="PROJECT_BASED_ACCELERATED",
