@@ -140,7 +140,7 @@ export function ExecutionMissionView() {
 
   const fetchData = useCallback(async () => {
     try {
-      const headers = { "x-person-id": "scholar-user" };
+      const headers = { "x-person-id": "" };
       const [planRes, actionsRes, accRes, appRes] = await Promise.all([
         fetch("/api/execution/daily", { headers }),
         fetch("/api/execution/actions", { headers }),
@@ -168,7 +168,7 @@ export function ExecutionMissionView() {
     try {
       const res = await fetch(`/api/execution/actions/${actionId}/start`, {
         method: "POST",
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) fetchData();
       else {
@@ -188,7 +188,7 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify(completeForm)
       });
@@ -209,7 +209,7 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify(rescheduleForm)
       });
@@ -230,7 +230,7 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify(blockForm)
       });
@@ -247,7 +247,7 @@ export function ExecutionMissionView() {
     try {
       const res = await fetch(`/api/execution/actions/${actionId}/resolve-blocker`, {
         method: "POST",
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) fetchData();
     } catch (err) {
@@ -264,7 +264,7 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify(body)
       });
@@ -281,7 +281,7 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify(createForm)
       });
@@ -302,7 +302,7 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify(appForm)
       });

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
+from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from backend.core.assessment_schemas import (
     AssessmentDefinition,
@@ -7,10 +8,12 @@ from backend.core.assessment_schemas import (
     AssessmentDraft
 )
 from backend.services.assessment import AssessmentEngine
+from backend.services.goal_assessment_service import GoalAssessmentService
 from backend.services.store import FirestoreStore
 
 router = APIRouter(prefix="/api/assessments", tags=["Assessments"])
 engine = AssessmentEngine()
+goal_engine = GoalAssessmentService()
 store = FirestoreStore()
 
 from backend.core.security import get_authenticated_person
@@ -19,6 +22,28 @@ get_person_id = get_authenticated_person
 @router.get("/", response_model=List[AssessmentDefinition])
 async def list_assessments():
     return engine.get_all_assessments()
+
+class GenerateAssessmentRequest(BaseModel):
+    goal: str
+    domain: Optional[str] = "General"
+    core_skills: Optional[List[str]] = None
+
+@router.post("/dynamic/generate", response_model=AssessmentDefinition)
+async def generate_dynamic_assessment(
+    req: GenerateAssessmentRequest,
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        assessment = goal_engine.generate_goal_assessment(
+            goal=req.goal,
+            domain=req.domain,
+            core_skills=req.core_skills
+        )
+        return assessment
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate assessment: {str(e)}")
 
 @router.get("/{assessment_id}", response_model=AssessmentDefinition)
 async def get_assessment(assessment_id: str):

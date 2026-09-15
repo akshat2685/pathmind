@@ -78,12 +78,13 @@ def test_canonical_trust_schemas_and_provenance():
     assert decision.confidence == "MEDIUM"
 
 
-def test_trajectory_fit_vs_confidence_decoupling():
+@pytest.mark.asyncio
+async def test_trajectory_fit_vs_confidence_decoupling():
     """Ensures fit is decoupled from confidence and no arbitrary decimal scores are fabricated."""
     engine = TrajectoryEngine()
     
     # Non-technical path: Law
-    paths_law = engine.generate_deterministic_candidate_paths(
+    paths_law = await engine.generate_deterministic_candidate_paths(
         person_id="test_user",
         goals=["Corporate Law and Legal Advisory"],
         constraints=[]
@@ -99,7 +100,7 @@ def test_trajectory_fit_vs_confidence_decoupling():
     assert "what_could_change_this" in law_path.transparency_summary
 
     # Technical path: Applied AI
-    paths_ai = engine.generate_deterministic_candidate_paths(
+    paths_ai = await engine.generate_deterministic_candidate_paths(
         person_id="test_user",
         goals=["Applied AI Engineer and Machine Learning Systems"],
         constraints=[]

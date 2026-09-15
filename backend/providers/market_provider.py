@@ -18,36 +18,9 @@ class RealisticMarketProviderAdapter:
         geography: str
     ) -> List[MarketSignal]:
         
-        signals = []
-        
         # If we have no API keys, we explicitly declare source unavailable.
-        if not self.bls_api_key and not self.onet_api_key:
-            # We return a single signal indicating failure, or just empty.
-            # To be helpful to the UI, we might return an empty list.
-            # But the service will wrap it in a proper response.
-            return []
-
-        # (Theoretical implementation of real API calls)
-        # e.g., httpx.get("https://api.bls.gov/...", headers={"Authorization": self.bls_api_key})
-        import uuid
-        signals.append(
-            MarketSignal(
-                id=str(uuid.uuid4()),
-                goal_id="unknown",
-                domain=domain,
-                field=occupation,
-                geography=geography,
-                signal_type="demand",
-                metric="job_postings",
-                value="HIGH",
-                period="CURRENT",
-                source="BLS/ONET",
-                confidence="HIGH",
-                freshness_status="CURRENT",
-                notes="Simulated provider response"
-            )
-        )
-        return signals
+        # We return an empty list, and the MarketIntelligenceService will handle SOURCE_UNAVAILABLE.
+        return []
 
     async def fetch_trajectory_data(
         self,
@@ -57,15 +30,6 @@ class RealisticMarketProviderAdapter:
         """
         Retrieves career trajectory patterns from official sources.
         """
-        if not self.onet_api_key:
-            return {
-                "source": "SOURCE_UNAVAILABLE",
-                "confidence": "INSUFFICIENT_EVIDENCE",
-                "stages": []
-            }
-        
-        # Theoretical ONET API call for career pathways
-        # When no ONET data is retrieved, return unavailable state instead of empty high-confidence trajectory
         return {
             "source": "SOURCE_UNAVAILABLE",
             "confidence": "INSUFFICIENT_EVIDENCE",

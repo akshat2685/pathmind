@@ -97,7 +97,7 @@ async def counterfactual_exploration(
         if not base_path:
             raise HTTPException(status_code=404, detail="Base candidate path not found")
 
-        response = engine.generate_counterfactual_path(
+        response = await engine.generate_counterfactual_path(
             base_path=base_path,
             modification_type=req.modification_type,
             modification_prompt=req.modification_prompt

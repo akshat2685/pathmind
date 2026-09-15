@@ -46,27 +46,21 @@ async def test_trajectory_is_domain_aware(monkeypatch):
     
     # If Gemini is not available, we just mock the LLM call to return a valid domain-aware response
     # to avoid failing the test suite in CI.
-    async def mock_synthesize(goal):
-        from backend.core.market_schemas import CareerTrajectory, TrajectoryStage
-        if "Cricket" in goal.target_domain:
-            return CareerTrajectory(
-                goal_id=goal.goal_id,
-                occupation=goal.target_role,
-                domain=goal.target_domain,
-                stages=[TrajectoryStage(stage_name="Club Level", typical_entry_requirements=["Academy Selection"])],
-                source="Mocked Synthesis",
-                confidence="MEDIUM"
-            )
-        return CareerTrajectory(
-            goal_id=goal.goal_id,
-            occupation=goal.target_role,
-            domain=goal.target_domain,
-            stages=[],
-            source="Mocked",
-            confidence="MEDIUM"
-        )
+    # Since LLM synthesis was removed for domain neutrality, we mock the provider explicitly
+    async def mock_fetch_trajectory_data(domain, occupation):
+        if "Cricket" in domain:
+            return {
+                "stages": [{"stage_name": "Club Level", "typical_entry_requirements": ["Academy Selection"]}],
+                "source": "Mocked Synthesis",
+                "confidence": "MEDIUM"
+            }
+        return {
+            "stages": [],
+            "source": "Mocked",
+            "confidence": "MEDIUM"
+        }
         
-    monkeypatch.setattr(service, "_synthesize_trajectory_with_llm", mock_synthesize)
+    monkeypatch.setattr(service.provider, "fetch_trajectory_data", mock_fetch_trajectory_data)
     
     goal_cricket = CanonicalGoal(
         goal_id="g2",

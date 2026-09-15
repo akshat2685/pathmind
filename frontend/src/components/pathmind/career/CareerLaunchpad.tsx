@@ -10,7 +10,6 @@ import {
   Briefcase,
   FileText,
   Clock,
-  Compass,
   CheckCircle2,
   AlertTriangle,
   ExternalLink,
@@ -209,6 +208,11 @@ interface CareerReadinessReportData {
   tailored_resume_preview?: TailoredResumeData | null;
   error_state?: string | null;
 }
+const getPersonId = (): string => {
+  if (typeof window === "undefined") return "scholar-user";
+  const name = localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-");
+  return name || "scholar-user";
+};
 
 export function CareerLaunchpad() {
   const [report, setReport] = useState<CareerReadinessReportData | null>(null);
@@ -222,9 +226,7 @@ export function CareerLaunchpad() {
     setLoading(true);
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
-        : "scholar-user";
+      const personId = getPersonId();
       const stateVal = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_identity") || "college_student")
         : "college_student";
@@ -264,9 +266,7 @@ export function CareerLaunchpad() {
     setCheckpointSuccess(false);
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
-        : "scholar-user";
+      const personId = getPersonId();
 
       const res = await fetch(`${baseUrl}/api/career/checkpoint`, {
         method: "POST",

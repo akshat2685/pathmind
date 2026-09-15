@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, Response
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from backend.core.career_schemas import (
@@ -198,6 +198,35 @@ async def tailor_resume_for_role(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate tailored resume: {str(e)}")
+
+@router.post("/resume/export")
+async def export_resume_pdf(
+    payload: Dict[str, Any],
+    person_id: str = Depends(get_person_id)
+):
+    try:
+        profile = await engine.get_or_create_canonical_profile(person_id)
+        target_role = payload.get("target_role") or payload.get("target_outcome")
+        if not target_role:
+            stored_goal = await store.get_goal(person_id)
+            target_role = (stored_goal or {}).get("target_outcome") or "Professional Role"
+        
+        # We need the ResumeGenerationService to call export_pdf
+        from backend.services.resume_generation_service import ResumeGenerationService
+        generator = ResumeGenerationService()
+        
+        # Get the tailored resume content
+        goal = await engine.get_or_create_career_goal(person_id)
+        version = generator.generate_fact_grounded_resume(
+            profile=profile,
+            goal=goal
+        )
+        
+        pdf_bytes = generator.export_pdf(version.content)
+        
+        return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=resume.pdf"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to export tailored resume: {str(e)}")
 
 @router.post("/accountability/check-in", response_model=AccountabilityStatus)
 async def accountability_check_in(

@@ -72,7 +72,7 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = String(profile.person_id || "scholar-user");
+      const personId = String(profile.person_id || "");
 
       const res = await fetch(`${baseUrl}/api/counseling/chat`, {
         method: "POST",

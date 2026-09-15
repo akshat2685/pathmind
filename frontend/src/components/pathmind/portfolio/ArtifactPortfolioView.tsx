@@ -172,7 +172,7 @@ export function ArtifactPortfolioView() {
   const fetchArtifacts = useCallback(async () => {
     try {
       const res = await fetch("/api/artifacts", {
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) {
         const data = await res.json();
@@ -191,7 +191,7 @@ export function ArtifactPortfolioView() {
   const fetchLearningGuide = useCallback(async () => {
     try {
       const res = await fetch("/api/artifacts/learning-guide/stage_backend_foundation?stage_title=Python%20%26%20Backend%20Systems", {
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) {
         const data = await res.json();
@@ -216,7 +216,7 @@ export function ArtifactPortfolioView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify({
           title: ingestForm.title || undefined,
@@ -251,7 +251,7 @@ export function ArtifactPortfolioView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify({
           stage_id: learningGuide?.stage_id || "stage_backend_foundation",
@@ -280,7 +280,7 @@ export function ArtifactPortfolioView() {
     try {
       const res = await fetch(`/api/artifacts/${artifactId}/defense/start`, {
         method: "POST",
-        headers: { "x-person-id": "scholar-user" }
+        headers: { "x-person-id": "" }
       });
       if (res.ok) {
         const session = await res.json();
@@ -306,7 +306,7 @@ export function ArtifactPortfolioView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify({
           session_id: defenseSession.session_id,
@@ -335,7 +335,7 @@ export function ArtifactPortfolioView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": "scholar-user"
+          "x-person-id": ""
         },
         body: JSON.stringify({ claim_text: claimQuery })
       });

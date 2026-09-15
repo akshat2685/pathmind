@@ -193,7 +193,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const roadmapUrl = versionNum 
@@ -246,7 +246,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/roadmap/evidence/submit`, {
@@ -295,7 +295,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/adaptation/constraint-change`, {
@@ -326,7 +326,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/adaptation/goal-change`, {
@@ -337,8 +337,8 @@ export function ProgressiveJourney() {
         },
         body: JSON.stringify({
           new_target_role: selectedGoal,
-          target_industry: "Applied AI & Engineering",
-          geography: "Global / India",
+          target_industry: "Professional Domain",
+          geography: "Global",
           target_timeline: "6–9 Months"
         })
       });
@@ -359,7 +359,7 @@ export function ProgressiveJourney() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/adaptation/decide`, {

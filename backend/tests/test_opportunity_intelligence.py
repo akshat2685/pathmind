@@ -1,12 +1,12 @@
 import pytest
 from datetime import datetime, timezone, timedelta
 from fastapi.testclient import TestClient
-
+from unittest.mock import patch
+import httpx
 from backend.main import app
 from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
 from backend.providers.opportunity_provider import (
-    RealAPIProviderAdapter,
-    RealAPIProviderAdapter,
+    JobOpportunitiesProvider,
     deduplicate_opportunities
 )
 from backend.core.opportunity_schemas import (
@@ -29,13 +29,19 @@ def matching_engine(clean_store):
     engine.provider._opportunities = [
         CanonicalOpportunity(
             id=f"opp_{i}",
-            provider="Mock", provider_record_id=f"opp_{i}", type="JOB",
+            source="Mock", source_id=f"opp_{i}", type="JOB",
             title="Applied Machine Learning AI Engineer" if i == 0 else f"Mock Role {i}", organization="Mock Org", description="Mock Desc", 
             location="Remote", eligibility="Open", requirements=["Python", "AI"],
             deadline="2030-01-01T00:00:00Z", application_url="https://example.com",
             source_url="https://example.com", status="ACTIVE", verification_status="VERIFIED"
         ) for i in range(4)
     ]
+    engine.provider._last_filters = (None, None, None)
+    
+    # Mock fetch_opportunities directly to avoid real network calls on cache miss
+    from unittest.mock import AsyncMock
+    engine.provider.fetch_opportunities = AsyncMock(return_value=engine.provider._opportunities)
+    
     return engine
 
 @pytest.mark.asyncio
@@ -48,7 +54,7 @@ async def test_provider_fetch_and_deduplication(matching_engine):
         assert o.verification_status == "VERIFIED"
         assert o.application_url.startswith("https://")
         assert len(o.requirements) > 0
-        assert o.provider is not None
+        assert o.source is not None
 
     # Test deduplication
     duplicated = opps + [opps[0]]
@@ -57,12 +63,12 @@ async def test_provider_fetch_and_deduplication(matching_engine):
 
 @pytest.mark.asyncio
 async def test_expired_opportunities_excluded():
-    provider = RealAPIProviderAdapter()
+    provider = JobOpportunitiesProvider()
     # Add an expired opportunity
     past_date = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
     expired_opp = CanonicalOpportunity(
-        provider="Expired Provider",
-        provider_record_id="exp_01",
+        source="Expired Provider",
+        source_id="exp_01",
         type="INTERNSHIP",
         title="Expired Summer Internship",
         organization="Past Organization",
@@ -76,9 +82,10 @@ async def test_expired_opportunities_excluded():
         status="ACTIVE"
     )
     provider._opportunities.append(expired_opp)
+    provider._last_filters = (None, None, None)
 
     active_opps = await provider.fetch_opportunities()
-    assert not any(o.provider_record_id == "exp_01" for o in active_opps)
+    assert not any(o.source_id == "exp_01" for o in active_opps)
 
 @pytest.mark.asyncio
 async def test_explainable_match_result(matching_engine):
@@ -193,8 +200,12 @@ async def test_artifact_grounded_interview_prep(matching_engine):
     assert len(prep.gap_reinforcement_focus) >= 1
 
 @pytest.mark.asyncio
-async def test_provider_outage_source_unavailable():
-    adapter = RealAPIProviderAdapter(endpoint_url="https://invalid-non-existent-domain-xyz.org/api")
+@patch("httpx.AsyncClient")
+async def test_provider_outage_source_unavailable(mock_client_cls):
+    mock_client = mock_client_cls.return_value.__aenter__.return_value
+    mock_client.get.side_effect = httpx.RequestError("Connection timeout")
+    
+    adapter = JobOpportunitiesProvider(api_endpoint="https://invalid-non-existent-domain-xyz.org/api")
     opps = await adapter.fetch_opportunities()
     assert opps == []
     assert adapter.get_status_code() == "SOURCE_UNAVAILABLE"

@@ -91,7 +91,7 @@ export function OrchestrationHubView() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       // 1. Fetch Agents Registry
@@ -143,7 +143,7 @@ export function OrchestrationHubView() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/orchestrate`, {
@@ -175,7 +175,7 @@ export function OrchestrationHubView() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/orchestrate/proposals/${proposalId}/approve`, {
@@ -196,7 +196,7 @@ export function OrchestrationHubView() {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "scholar-user")
+        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
       const res = await fetch(`${baseUrl}/api/orchestrate/proposals/${proposalId}/reject`, {

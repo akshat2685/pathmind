@@ -25,7 +25,7 @@ const LIKERT_SCALE = [
 ];
 
 // Unified Standard Assessment Battery (RIASEC 12 Items + SCCT 6 Items + Observable Tasks 5 Items)
-const ASSESSMENT_BATTERY: AssessmentItemDef[] = [
+const DEFAULT_ASSESSMENT_BATTERY: AssessmentItemDef[] = [
   // --- RIASEC: Realistic (R) ---
   {
     id: "r1",
@@ -219,7 +219,9 @@ const ASSESSMENT_BATTERY: AssessmentItemDef[] = [
 ];
 
 export function AssessmentFlow() {
-  const [currentIdx, setCurrentIdx] = useState(-1);
+
+  const [assessmentBattery, setAssessmentBattery] = useState<AssessmentItemDef[]>(DEFAULT_ASSESSMENT_BATTERY);
+  const [isLoadingAssessment, setIsLoadingAssessment] = useState(false);  const [currentIdx, setCurrentIdx] = useState(-1);
   const [responses, setResponses] = useState<Record<string, string | number>>({});
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
@@ -245,7 +247,35 @@ export function AssessmentFlow() {
       
       setUserName(localStorage.getItem("pathmind_user_name") || "");
       setUserIdentity(localStorage.getItem("pathmind_user_identity") || "");
-      setUserGoal(localStorage.getItem("pathmind_user_goal") || "");
+      const savedGoal = localStorage.getItem("pathmind_user_goal") || "";
+      setUserGoal(savedGoal);
+
+      // Fetch dynamic assessment if goal exists
+      if (savedGoal) {
+        setIsLoadingAssessment(true);
+        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com"}/api/assessments/dynamic/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ goal: savedGoal })
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.items && data.items.length > 0) {
+            const dynamicBattery = data.items.map((item: { id: string, construct?: string, text: string, response_type?: "likert" | "open" | "task", scale?: { value: number, label: string }[], expected_capability?: string }) => ({
+              id: item.id,
+              section: "Domain-Specific Goal Assessment",
+              construct: item.construct || "Domain Capability",
+              text: item.text,
+              responseType: item.response_type || "likert",
+              options: item.scale ? item.scale.map((s: { value: number, label: string }) => ({ value: s.value, label: s.label })) : undefined,
+              expectedCapability: item.expected_capability
+            }));
+            setAssessmentBattery([...dynamicBattery, ...DEFAULT_ASSESSMENT_BATTERY]);
+          }
+        })
+        .catch(err => console.error("Dynamic assessment failed:", err))
+        .finally(() => setIsLoadingAssessment(false));
+      }
 
       // Check for saved assessment draft
       try {
@@ -319,21 +349,28 @@ export function AssessmentFlow() {
   const handleStart = () => setCurrentIdx(0);
 
   const handleAnswer = async (value: string | number) => {
-    const q = ASSESSMENT_BATTERY[currentIdx];
+    const q = assessmentBattery[currentIdx];
     const newResponses = { ...responses, [q.id]: value };
     setResponses(newResponses);
     saveDraft(newResponses);
 
-    if (currentIdx < ASSESSMENT_BATTERY.length - 1) {
+    if (currentIdx < assessmentBattery.length - 1) {
       setCurrentIdx(currentIdx + 1);
     } else {
-      setCurrentIdx(ASSESSMENT_BATTERY.length);
+      setCurrentIdx(assessmentBattery.length);
       setIsSynthesizing(true);
       
       try {
         const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
         const personId = userName ? userName.toLowerCase().replace(/\s+/g, "-") : "scholar-user";
         
+        // Extract dynamic items
+        const dynamicItems = assessmentBattery.filter(q => q.id.startsWith('dyn_'));
+        const dynamicResp = dynamicItems.map(q => ({
+          item_id: q.id,
+          response_value: newResponses[q.id] || ""
+        }));
+
         // 1. Build RIASEC Result
         const riasecKeys = ["r1", "r2", "i1", "i2", "a1", "a2", "s1", "s2", "e1", "e2", "c1", "c2"];
         const riasecResp = riasecKeys.map(k => ({
@@ -378,6 +415,10 @@ export function AssessmentFlow() {
               {
                 assessment_id: "learning_v1",
                 raw_responses: learningResp
+              },
+              {
+                assessment_id: "dynamic_v1",
+                raw_responses: dynamicResp
               }
             ]
           })
@@ -517,32 +558,33 @@ export function AssessmentFlow() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button 
                 onClick={handleStart} 
-                className="px-8 py-3.5 min-h-[48px] rounded-2xl bg-primary text-white font-bold text-base shadow-md hover:bg-primary/90 flex items-center gap-3 cursor-pointer w-full sm:w-auto justify-center transition-all hover:-translate-y-0.5"
+                disabled={isLoadingAssessment}
+                className={`px-8 py-3.5 min-h-[48px] rounded-2xl text-white font-bold text-base shadow-md flex items-center gap-3 w-full sm:w-auto justify-center transition-all ${isLoadingAssessment ? "bg-primary/50 cursor-not-allowed" : "bg-primary hover:bg-primary/90 cursor-pointer hover:-translate-y-0.5"}`}
               >
-                <span>Begin Assessment ({ASSESSMENT_BATTERY.length} Steps)</span>
+                <span>{isLoadingAssessment ? "Generating Tailored Assessment..." : `Begin Assessment (${assessmentBattery.length} Steps)`}</span>
                 <span className="material-symbols-outlined text-lg">east</span>
               </button>
             </div>
           </div>
         )}
 
-        {currentIdx >= 0 && currentIdx < ASSESSMENT_BATTERY.length && (
+        {currentIdx >= 0 && currentIdx < assessmentBattery.length && (
           <QuestionCard
-            key={ASSESSMENT_BATTERY[currentIdx].id}
-            sectionName={ASSESSMENT_BATTERY[currentIdx].section}
-            questionText={ASSESSMENT_BATTERY[currentIdx].text}
-            responseType={ASSESSMENT_BATTERY[currentIdx].responseType}
-            options={ASSESSMENT_BATTERY[currentIdx].options}
-            currentValue={responses[ASSESSMENT_BATTERY[currentIdx].id]}
-            expectedCapability={ASSESSMENT_BATTERY[currentIdx].expectedCapability}
+            key={assessmentBattery[currentIdx].id}
+            sectionName={assessmentBattery[currentIdx].section}
+            questionText={assessmentBattery[currentIdx].text}
+            responseType={assessmentBattery[currentIdx].responseType}
+            options={assessmentBattery[currentIdx].options}
+            currentValue={responses[assessmentBattery[currentIdx].id]}
+            expectedCapability={assessmentBattery[currentIdx].expectedCapability}
             progress={currentIdx + 1}
-            total={ASSESSMENT_BATTERY.length}
+            total={assessmentBattery.length}
             onAnswer={handleAnswer}
             onBack={currentIdx > 0 ? handleBack : undefined}
           />
         )}
 
-        {currentIdx === ASSESSMENT_BATTERY.length && isSynthesizing && (
+        {currentIdx === assessmentBattery.length && isSynthesizing && (
           <div key="synthesizing" className="text-center flex flex-col items-center py-16">
             <div className="w-16 h-16 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center mb-4">
               <span className="material-symbols-outlined text-3xl text-primary animate-spin">
@@ -554,7 +596,7 @@ export function AssessmentFlow() {
           </div>
         )}
 
-        {currentIdx === ASSESSMENT_BATTERY.length && !isSynthesizing && profile && (
+        {currentIdx === assessmentBattery.length && !isSynthesizing && profile && (
           <CounselingDashboard key="dashboard" profile={profile} />
         )}
       </AnimatePresence>

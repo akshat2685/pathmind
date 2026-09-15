@@ -28,9 +28,14 @@ class FirestoreStore:
                 if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.path.exists(os.path.expanduser("~/.config/gcloud/application_default_credentials.json")) or os.environ.get("FIRESTORE_EMULATOR_HOST"):
                     self.db = firestore.AsyncClient(project=settings.FIRESTORE_PROJECT_ID or "demo-project")
                     self._available = True
-            except Exception:
+            except Exception as e:
+                if os.environ.get("RUNTIME_ENV") == "production":
+                    raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
                 self.db = None
                 self._available = False
+        
+        if os.environ.get("RUNTIME_ENV") == "production" and not self._available:
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
 
     async def check_health(self) -> str:
         if not self._available:
@@ -40,7 +45,9 @@ class FirestoreStore:
             async for _ in collections:
                 break
             return "CONNECTED"
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return "SOURCE_UNAVAILABLE"
 
     def _ensure_person_bucket(self, person_id: str):
@@ -105,7 +112,9 @@ class FirestoreStore:
             doc = await asyncio.wait_for(doc_ref.get(), timeout=2.0)
             if doc.exists:
                 return doc.to_dict()
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_cache.get(key)
         return self._in_memory_cache.get(key)
 
@@ -117,7 +126,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('knowledge_cache').document(key)
             await asyncio.wait_for(doc_ref.set(data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     # --- Assessment Submissions ---
@@ -130,7 +141,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('assessments').document()
             await asyncio.wait_for(doc_ref.set(result_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_assessment_results(self, person_id: str) -> List[Dict[str, Any]]:
@@ -144,7 +157,9 @@ class FirestoreStore:
             if results:
                 return results
             return self._in_memory_persons.get(person_id, {}).get("assessments", [])
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("assessments", [])
 
     # --- Assessment Drafts (Pause / Resume) ---
@@ -157,7 +172,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('drafts').document(assessment_id)
             await asyncio.wait_for(doc_ref.set(draft_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_assessment_draft(self, person_id: str, assessment_id: str) -> Optional[Dict[str, Any]]:
@@ -169,7 +186,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons.get(person_id, {}).get("drafts", {}).get(assessment_id)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("drafts", {}).get(assessment_id)
 
     # --- Counseling Profile Persistence ---
@@ -182,7 +201,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('counseling').document('active_profile')
             await asyncio.wait_for(doc_ref.set(profile_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_counseling_profile(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -194,7 +215,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons.get(person_id, {}).get("profile")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("profile")
 
     # --- Structured Personal Memory Vault ---
@@ -212,7 +235,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('vault_memories').document(mem_id)
             await asyncio.wait_for(doc_ref.set(memory_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_personal_memories(
@@ -232,7 +257,9 @@ class FirestoreStore:
                     loaded.append(doc.to_dict())
                 if loaded:
                     mems = loaded
-            except Exception:
+            except Exception as e:
+                if os.environ.get("RUNTIME_ENV") == "production":
+                    raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
                 pass
 
         if memory_type and memory_type != "ALL":
@@ -256,7 +283,9 @@ class FirestoreStore:
             doc_ref = self.db.collection('persons').document(person_id).collection('vault_memories').document(memory_id)
             await asyncio.wait_for(doc_ref.delete(), timeout=2.0)
             return True
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return True
 
     # --- Shared Generalized Learning Patterns ---
@@ -273,7 +302,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('shared_learning_patterns').document(pat_id)
             await asyncio.wait_for(doc_ref.set(pattern_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_shared_patterns(self) -> List[Dict[str, Any]]:
@@ -287,7 +318,9 @@ class FirestoreStore:
             if results:
                 return results
             return self._in_memory_shared_patterns
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_shared_patterns
 
     # --- Career Path Selection & Versioning ---
@@ -307,7 +340,9 @@ class FirestoreStore:
             active_ref = self.db.collection('persons').document(person_id).collection('career_path').document('active_path')
             await asyncio.wait_for(active_ref.set(selection_data), timeout=2.0)
             return version
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return version
 
     async def get_active_selected_path(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -319,7 +354,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons.get(person_id, {}).get("active_path")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("active_path")
 
     async def get_path_selection_history(self, person_id: str) -> List[Dict[str, Any]]:
@@ -333,7 +370,9 @@ class FirestoreStore:
             if history:
                 return sorted(history, key=lambda x: x.get("version", 1))
             return self._in_memory_persons.get(person_id, {}).get("path_history", [])
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("path_history", [])
 
     # --- Roadmap Persistence & Versioning ---
@@ -353,7 +392,9 @@ class FirestoreStore:
             active_ref = self.db.collection('persons').document(person_id).collection('roadmap_state').document('active')
             await asyncio.wait_for(active_ref.set(roadmap_data), timeout=2.0)
             return version
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return version
 
     async def get_active_roadmap(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -365,7 +406,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons.get(person_id, {}).get("active_roadmap")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("active_roadmap")
 
     async def update_active_roadmap(self, person_id: str, roadmap_data: Dict[str, Any]) -> None:
@@ -377,7 +420,9 @@ class FirestoreStore:
         try:
             active_ref = self.db.collection('persons').document(person_id).collection('roadmap_state').document('active')
             await asyncio.wait_for(active_ref.set(roadmap_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_roadmap_history(self, person_id: str) -> List[Dict[str, Any]]:
@@ -391,7 +436,9 @@ class FirestoreStore:
             if history:
                 return sorted(history, key=lambda x: x.get("version", 1))
             return self._in_memory_persons.get(person_id, {}).get("roadmaps", [])
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons.get(person_id, {}).get("roadmaps", [])
 
     # --- Evidence Submissions & Evaluations ---
@@ -404,7 +451,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('evidence_submissions').document(submission.get("submission_id", "sub"))
             await asyncio.wait_for(doc_ref.set(submission), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def save_evaluation_result(self, person_id: str, evaluation: Dict[str, Any]) -> None:
@@ -416,7 +465,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('evaluations').document(evaluation.get("submission_id", "eval"))
             await asyncio.wait_for(doc_ref.set(evaluation), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_stage_submissions(self, person_id: str, stage_id: str) -> List[Dict[str, Any]]:
@@ -434,7 +485,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('learning_events').document(event.get("event_id", "evt"))
             await asyncio.wait_for(doc_ref.set(event), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_learning_events(self, person_id: str) -> List[Dict[str, Any]]:
@@ -449,7 +502,9 @@ class FirestoreStore:
             if events:
                 return sorted(events, key=lambda x: x.get("timestamp", ""))
             return self._in_memory_persons[person_id]["learning_events"]
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id]["learning_events"]
 
     async def save_personal_agent_model(self, person_id: str, model_data: Dict[str, Any]) -> int:
@@ -468,7 +523,9 @@ class FirestoreStore:
             active_ref = self.db.collection('persons').document(person_id).collection('agent_model').document('active')
             await asyncio.wait_for(active_ref.set(model_data), timeout=2.0)
             return version
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return version
 
     async def get_personal_agent_model(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -481,7 +538,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons[person_id].get("active_personal_agent_model")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id].get("active_personal_agent_model")
 
     # --- Canonical Universal Career Profile (Prompt 09) ---
@@ -494,7 +553,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('career').document('canonical_profile')
             await asyncio.wait_for(doc_ref.set(profile_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_career_profile(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -507,7 +568,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons[person_id].get("career_profile")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id].get("career_profile")
 
     async def get_profile(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -526,7 +589,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('career_goals').document('active_goal')
             await asyncio.wait_for(doc_ref.set(goal_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_career_goal(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -539,7 +604,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons[person_id].get("career_goal")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id].get("career_goal")
 
     async def save_goal(self, person_id: str, goal_data: Dict[str, Any]) -> None:
@@ -559,7 +626,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('readiness_reports').document('active_report')
             await asyncio.wait_for(doc_ref.set(report_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_readiness_report(self, person_id: str) -> Optional[Dict[str, Any]]:
@@ -572,7 +641,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return self._in_memory_persons[person_id].get("active_readiness_report")
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id].get("active_readiness_report")
 
     async def get_readiness_history(self, person_id: str) -> List[Dict[str, Any]]:
@@ -590,7 +661,9 @@ class FirestoreStore:
             chk_id = checkpoint_data.get("checkpoint_id", "chk")
             doc_ref = self.db.collection('persons').document(person_id).collection('checkpoints').document(chk_id)
             await asyncio.wait_for(doc_ref.set(checkpoint_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_career_checkpoints(self, person_id: str) -> List[Dict[str, Any]]:
@@ -605,7 +678,9 @@ class FirestoreStore:
             if chks:
                 return sorted(chks, key=lambda x: x.get("timestamp", ""))
             return self._in_memory_persons[person_id]["career_checkpoints"]
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id]["career_checkpoints"]
 
     # --- Tailored Resumes ---
@@ -619,7 +694,9 @@ class FirestoreStore:
             res_id = resume_data.get("resume_id", "res")
             doc_ref = self.db.collection('persons').document(person_id).collection('tailored_resumes').document(res_id)
             await asyncio.wait_for(doc_ref.set(resume_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_tailored_resumes(self, person_id: str) -> List[Dict[str, Any]]:
@@ -634,7 +711,9 @@ class FirestoreStore:
             if resumes:
                 return resumes
             return self._in_memory_persons[person_id]["tailored_resumes"]
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id]["tailored_resumes"]
 
     # --- Adaptive Replanning & Audit Trail ---
@@ -651,7 +730,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('micro_adaptations').document(micro_data.get("micro_adaptation_id", f"micro_{int(datetime.now(timezone.utc).timestamp()*1000)}"))
             await asyncio.wait_for(doc_ref.set(micro_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_active_micro_adaptations(self, person_id: str) -> List[Dict[str, Any]]:
@@ -666,7 +747,9 @@ class FirestoreStore:
             if micros:
                 return sorted(micros, key=lambda x: x.get("created_at", ""), reverse=True)
             return [m for m in self._in_memory_persons[person_id]["micro_adaptations"] if m.get("active", True)]
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return [m for m in self._in_memory_persons[person_id]["micro_adaptations"] if m.get("active", True)]
 
     async def save_proposed_adaptation(self, person_id: str, adaptation_data: Dict[str, Any]) -> None:
@@ -679,7 +762,9 @@ class FirestoreStore:
             adapt_id = adaptation_data.get("adaptation_id", "adapt")
             doc_ref = self.db.collection('persons').document(person_id).collection('proposed_adaptations').document(adapt_id)
             await asyncio.wait_for(doc_ref.set(adaptation_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_proposed_adaptation(self, person_id: str, adaptation_id: str) -> Optional[Dict[str, Any]]:
@@ -696,7 +781,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return None
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return None
 
     async def get_pending_adaptations(self, person_id: str) -> List[Dict[str, Any]]:
@@ -715,7 +802,9 @@ class FirestoreStore:
             if results:
                 return results
             return in_mem
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return in_mem
 
     async def update_adaptation_status(self, person_id: str, adaptation_id: str, status: str) -> bool:
@@ -736,7 +825,9 @@ class FirestoreStore:
                 "resolved_at": datetime.now(timezone.utc).isoformat()
             }), timeout=2.0)
             return True
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return found
 
     async def save_adaptation_audit(self, person_id: str, audit_data: Dict[str, Any]) -> None:
@@ -749,7 +840,9 @@ class FirestoreStore:
             audit_id = audit_data.get("audit_id", "audit")
             doc_ref = self.db.collection('persons').document(person_id).collection('adaptation_audits').document(audit_id)
             await asyncio.wait_for(doc_ref.set(audit_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_adaptation_audits(self, person_id: str) -> List[Dict[str, Any]]:
@@ -764,7 +857,9 @@ class FirestoreStore:
             if audits:
                 return sorted(audits, key=lambda x: x.get("timestamp", ""), reverse=True)
             return sorted(self._in_memory_persons[person_id]["adaptation_audits"], key=lambda x: x.get("timestamp", ""), reverse=True)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return sorted(self._in_memory_persons[person_id]["adaptation_audits"], key=lambda x: x.get("timestamp", ""), reverse=True)
 
     async def get_all_roadmap_versions(self, person_id: str) -> List[Dict[str, Any]]:
@@ -789,7 +884,9 @@ class FirestoreStore:
             ev_id = evidence_data.get("evidence_id", "ev")
             doc_ref = self.db.collection('persons').document(person_id).collection('canonical_evidence').document(ev_id)
             await asyncio.wait_for(doc_ref.set(evidence_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_canonical_evidence(self, person_id: str, evidence_id: str) -> Optional[Dict[str, Any]]:
@@ -805,7 +902,9 @@ class FirestoreStore:
             if doc.exists:
                 return doc.to_dict()
             return None
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return None
 
     async def get_all_person_evidence(self, person_id: str) -> List[Dict[str, Any]]:
@@ -820,7 +919,9 @@ class FirestoreStore:
             if items:
                 return items
             return self._in_memory_persons[person_id]["canonical_evidence"]
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return self._in_memory_persons[person_id]["canonical_evidence"]
 
     async def save_evaluation_attempt(self, person_id: str, attempt_data: Dict[str, Any]) -> None:
@@ -833,7 +934,9 @@ class FirestoreStore:
             att_id = attempt_data.get("attempt_id", "att")
             doc_ref = self.db.collection('persons').document(person_id).collection('evaluation_attempts').document(att_id)
             await asyncio.wait_for(doc_ref.set(attempt_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_evaluation_attempts(self, person_id: str, stage_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -853,7 +956,9 @@ class FirestoreStore:
             disp_id = dispute_data.get("dispute_id", "disp")
             doc_ref = self.db.collection('persons').document(person_id).collection('evidence_disputes').document(disp_id)
             await asyncio.wait_for(doc_ref.set(dispute_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_evidence_disputes(self, person_id: str) -> List[Dict[str, Any]]:
@@ -895,7 +1000,9 @@ class FirestoreStore:
             dec_id = decision_data.get("decision_id", "dec")
             doc_ref = self.db.collection('persons').document(person_id).collection('decision_records').document(dec_id)
             await asyncio.wait_for(doc_ref.set(decision_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_decision_records(self, person_id: str) -> List[Dict[str, Any]]:
@@ -910,7 +1017,9 @@ class FirestoreStore:
             if items:
                 return sorted(items, key=lambda x: x.get("timestamp", ""), reverse=True)
             return sorted(self._in_memory_persons[person_id]["decision_records"], key=lambda x: x.get("timestamp", ""), reverse=True)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             return sorted(self._in_memory_persons[person_id]["decision_records"], key=lambda x: x.get("timestamp", ""), reverse=True)
 
     async def get_decision_record_by_id(self, person_id: str, decision_id: str) -> Optional[Dict[str, Any]]:
@@ -954,7 +1063,9 @@ class FirestoreStore:
             evt_id = event_data.get("event_id", "evt")
             doc_ref = self.db.collection('persons').document(person_id).collection('event_records').document(evt_id)
             await asyncio.wait_for(doc_ref.set(event_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_event_records(self, person_id: str, event_type: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -974,7 +1085,9 @@ class FirestoreStore:
             intv_id = intervention_data.get("intervention_id", "intv")
             doc_ref = self.db.collection('persons').document(person_id).collection('interventions').document(intv_id)
             await asyncio.wait_for(doc_ref.set(intervention_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_interventions(self, person_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1018,7 +1131,9 @@ class FirestoreStore:
             rec_id = rec_data.get("recommendation_id", "rec")
             doc_ref = self.db.collection('persons').document(person_id).collection('structured_recommendations').document(rec_id)
             await asyncio.wait_for(doc_ref.set(rec_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_structured_recommendations(self, person_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1073,7 +1188,9 @@ class FirestoreStore:
             ins_id = insight_data.get("insight_id", "ins")
             doc_ref = self.db.collection('persons').document(person_id).collection('progress_insights').document(ins_id)
             await asyncio.wait_for(doc_ref.set(insight_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_progress_insights(self, person_id: str, status: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -1168,7 +1285,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('canonical_artifacts').document(art_id)
             await asyncio.wait_for(doc_ref.set(artifact_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_canonical_artifact(self, person_id: str, artifact_id: str) -> Optional[Dict[str, Any]]:
@@ -1183,7 +1302,9 @@ class FirestoreStore:
             doc = await asyncio.wait_for(doc_ref.get(), timeout=2.0)
             if doc.exists:
                 return doc.to_dict()
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
         return None
 
@@ -1282,7 +1403,9 @@ class FirestoreStore:
         try:
             doc_ref = self.db.collection('persons').document(person_id).collection('canonical_actions').document(act_id)
             await asyncio.wait_for(doc_ref.set(action_data), timeout=2.0)
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
     async def get_action(self, person_id: str, action_id: str) -> Optional[Dict[str, Any]]:
@@ -1297,7 +1420,9 @@ class FirestoreStore:
             doc = await asyncio.wait_for(doc_ref.get(), timeout=2.0)
             if doc.exists:
                 return doc.to_dict()
-        except Exception:
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
         return None
 
