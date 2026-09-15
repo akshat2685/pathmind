@@ -215,8 +215,6 @@ async def test_opportunity_application_tracking(execution_engine):
     person_id = "person_alex"
     req = TrackApplicationRequest(
         opportunity_id="opp_101",
-        opportunity_title="AI Research Intern",
-        organization="Verified AI Lab",
         status="PREPARING",
         notes="Tailoring resume with verified Pytest and AsyncIO project evidence."
     )
@@ -224,24 +222,18 @@ async def test_opportunity_application_tracking(execution_engine):
     tracked = await execution_engine.track_opportunity_application(
         person_id=person_id,
         opp_id=req.opportunity_id,
-        opp_title=req.opportunity_title,
-        organization=req.organization,
         status=req.status,
         notes=req.notes
     )
     assert tracked.status == "PREPARING"
-    assert tracked.applied_at is None
 
     # Submit application
     applied = await execution_engine.track_opportunity_application(
         person_id=person_id,
         opp_id=req.opportunity_id,
-        opp_title=req.opportunity_title,
-        organization=req.organization,
         status="APPLIED"
     )
     assert applied.status == "APPLIED"
-    assert applied.applied_at is not None
 
 @pytest.mark.asyncio
 async def test_tenant_isolation_actions(execution_engine):

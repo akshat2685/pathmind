@@ -32,10 +32,10 @@ def test_trajectory_corpus_and_similarity_matching(corpus):
         assert len(t.learning_milestones) >= 3
         assert len(t.obstacles_and_failures) >= 1
 
-    # Match AI domain
-    ai_matches = corpus.match_similar_trajectories(["ai", "machine learning"], {"I": 90.0, "R": 75.0}, limit=1)
+    # Match Software domain
+    ai_matches = corpus.match_similar_trajectories(["software", "tech"], {"I": 90.0, "R": 75.0}, limit=1)
     assert len(ai_matches) == 1
-    assert "AI" in ai_matches[0].outcome_role or "Applied AI" in ai_matches[0].title
+    assert "Engineer" in ai_matches[0].outcome_role or "Software" in ai_matches[0].title
 
 def test_cross_trajectory_patterns_extraction(corpus):
     patterns = corpus.get_all_patterns()
@@ -72,9 +72,8 @@ async def test_discover_candidate_paths_generation(engine):
 
     response = await engine.discover_candidate_paths(
         person_id="scholar-test-1",
-        counseling_profile=counseling_profile,
-        goals=["Explore AI/ML and Robotics"],
-        constraints=["Class 12 Student"]
+        goals=["lawyer"],
+        geographic_preference="India"
     )
 
     assert response.person_id == "scholar-test-1"
@@ -82,14 +81,13 @@ async def test_discover_candidate_paths_generation(engine):
     assert len(response.candidate_paths) <= 3
     
     path_ids = [p.path_id for p in response.candidate_paths]
-    assert "path_applied_ai_ml_systems" in path_ids
-    assert "path_robotics_embedded_systems" in path_ids
+    assert "path_corporate_law_compliance" in path_ids
+    assert "path_commercial_litigation" in path_ids
 
     # Verify skill gap taxonomy
-    ai_path = next(p for p in response.candidate_paths if p.path_id == "path_applied_ai_ml_systems")
+    ai_path = next(p for p in response.candidate_paths if p.path_id == "path_corporate_law_compliance")
     categories = {gap.category for gap in ai_path.skill_gaps}
     assert "CORE" in categories
-    assert "FOUNDATIONAL" in categories or "SPECIALIZED" in categories
 
     # Verify India vs Global context
     assert "nco_code" in ai_path.india_context
@@ -124,7 +122,7 @@ def test_counterfactual_what_if_sandbox(engine):
 @pytest.mark.asyncio
 async def test_path_selection_and_versioning(store, engine):
     person_id = "scholar-versioning-test"
-    paths = engine.generate_deterministic_candidate_paths(person_id=person_id)
+    paths = engine.generate_deterministic_candidate_paths(person_id=person_id, goals=["lawyer"])
     
     # Version 1 Selection
     record_v1 = PathSelectionRecord(

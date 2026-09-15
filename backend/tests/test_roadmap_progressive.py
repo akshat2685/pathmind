@@ -23,7 +23,7 @@ def store():
 @pytest.mark.asyncio
 async def test_roadmap_generation_and_progressive_disclosure(engine):
     person_id = "scholar-roadmap-test-1"
-    roadmap = await engine.get_or_create_roadmap(person_id=person_id)
+    roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
     assert roadmap.person_id == person_id
     assert roadmap.total_stages == 5
@@ -49,7 +49,7 @@ async def test_roadmap_generation_and_progressive_disclosure(engine):
 @pytest.mark.asyncio
 async def test_backend_lock_enforcement(engine):
     person_id = "scholar-lock-enforce-test"
-    roadmap = await engine.get_or_create_roadmap(person_id=person_id)
+    roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
     # Attempting to submit evidence for locked Stage 2 must raise PermissionError
     sub_locked = EvidenceSubmission(
@@ -66,7 +66,7 @@ async def test_backend_lock_enforcement(engine):
 @pytest.mark.asyncio
 async def test_successful_evidence_evaluation_and_unlock_loop(engine, personal_agent):
     person_id = "scholar-unlock-test"
-    roadmap = await engine.get_or_create_roadmap(person_id=person_id)
+    roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
     # Valid submission for Stage 1
     valid_sub = EvidenceSubmission(
@@ -86,7 +86,7 @@ async def test_successful_evidence_evaluation_and_unlock_loop(engine, personal_a
     assert len(eval_result.demonstrated) >= 2
 
     # Verify Stage 1 is COMPLETED and Stage 2 is UNLOCKED
-    updated_roadmap = await engine.get_or_create_roadmap(person_id)
+    updated_roadmap = await engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     assert updated_roadmap.completed_stages == 1
     assert updated_roadmap.current_stage_id == "stage_02_math_and_linear_algebra"
     
@@ -107,7 +107,7 @@ async def test_successful_evidence_evaluation_and_unlock_loop(engine, personal_a
 @pytest.mark.asyncio
 async def test_reinforcement_path_on_insufficient_evidence(engine):
     person_id = "scholar-reinforce-test"
-    roadmap = await engine.get_or_create_roadmap(person_id=person_id)
+    roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
     # Insufficient submission (too short, no tests)
     weak_sub = EvidenceSubmission(
@@ -123,7 +123,7 @@ async def test_reinforcement_path_on_insufficient_evidence(engine):
     assert len(eval_result.missing) >= 1
 
     # Verify Stage 1 remains in REINFORCEMENT status and Stage 2 remains LOCKED
-    updated_roadmap = await engine.get_or_create_roadmap(person_id)
+    updated_roadmap = await engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     assert updated_roadmap.completed_stages == 0
     assert updated_roadmap.current_stage_id == "stage_01_python_foundations"
     
@@ -139,7 +139,7 @@ async def test_reinforcement_path_on_insufficient_evidence(engine):
 @pytest.mark.asyncio
 async def test_constraint_adaptation_preserves_progress(engine):
     person_id = "scholar-adapt-test"
-    roadmap = await engine.get_or_create_roadmap(person_id=person_id)
+    roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
     # Adapt to 5 hours/week
     adapted_roadmap = await engine.adapt_constraints(

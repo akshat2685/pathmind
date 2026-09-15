@@ -397,7 +397,7 @@ class TrajectoryEngine:
             )
             return [path_civ]
 
-        elif goals and not any(k in goals_text for k in ["ai", "machine learning", "robotics", "software", "developer", "coding", "data", "engineer"]):
+        elif goals:
             primary_goal = goals[0].strip()
             path_custom = CandidatePath(
                 path_id=f"path_{primary_goal.lower().replace(' ', '_')[:30]}",

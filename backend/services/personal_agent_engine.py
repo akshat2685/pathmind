@@ -272,7 +272,7 @@ class PersonalAgentEngine:
             updated_model = await self.get_or_create_agent_model(person_id)
             if concept not in updated_model.weaknesses:
                 updated_model.weaknesses.append(concept)
-            updated_model.pace = "REINFORCED"
+            updated_model.observed_pace = "REINFORCED"
 
         updated_model.updated_at = datetime.now(timezone.utc).isoformat()
         version = await self.store.save_personal_agent_model(person_id, updated_model.model_dump(mode="json"))

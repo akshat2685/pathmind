@@ -356,7 +356,7 @@ class PathmindOrchestrator:
                         structured_findings["top_opportunity"] = top_match.model_dump(mode="json")
                         final_answer_parts.append(
                             f"Evaluated verified opportunity '{top_match.opportunity.title}' at {top_match.opportunity.organization} "
-                            f"(Match: {top_match.fit_state}, Readiness: {top_match.readiness_state}). Decision Advisor: {top_match.decision_recommendation}."
+                            f"(Match: {top_match.fit_status}, Readiness: {top_match.readiness_status}). Decision Advisor: {top_match.feasibility_status}."
                         )
                         # Propose preparation action plan
                         prop = ActionProposal(
@@ -400,7 +400,7 @@ class PathmindOrchestrator:
                         final_answer_parts.append(mem_res.answer)
 
                 elif agent_id == "ExecutionIntelligenceAgent":
-                    plan = await self.execution_engine.get_daily_plan(person_id)
+                    plan = await self.execution_engine.get_daily_execution_plan(person_id)
                     structured_findings["daily_execution"] = {
                         "primary_action": plan.primary_action.title if plan.primary_action else None,
                         "blocker_count": len(plan.active_blockers)

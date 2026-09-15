@@ -27,7 +27,7 @@ def adaptation_service(store, personal_agent):
 async def test_strong_evidence_advances_mastery_and_updates_personal_model(mastery_engine, personal_agent):
     """Test #1 & #15: Strong evidence advances mastery and updates personal model without LLM mechanics."""
     person_id = "test-learner-loop-1"
-    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
 
     # Submit strong code evidence
     attempt = await mastery_engine.submit_and_evaluate_evidence(
@@ -59,7 +59,7 @@ async def test_strong_evidence_advances_mastery_and_updates_personal_model(maste
 async def test_plan_stability_on_isolated_failure(mastery_engine, adaptation_service):
     """Test #3: One failed attempt triggers micro-adaptation, not an entire roadmap rewrite."""
     person_id = "test-learner-loop-2"
-    rm1 = await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    rm1 = await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     v1 = rm1.version
 
     attempt = await mastery_engine.submit_and_evaluate_evidence(
@@ -74,7 +74,7 @@ async def test_plan_stability_on_isolated_failure(mastery_engine, adaptation_ser
     assert attempt.status == "REINFORCE"
     
     # Active roadmap version should not have bumped
-    rm2 = await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    rm2 = await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     assert rm2.version == v1
 
     # Check that a micro-adaptation was generated
@@ -123,7 +123,7 @@ async def test_misconception_lifecycle(personal_agent):
 async def test_regression_risk_detection(mastery_engine, personal_agent):
     """Test #7: Subsequent failure on previously mastered prerequisite flags REGRESSION_RISK."""
     person_id = "test-learner-loop-4"
-    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id)
+    await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
     
     # 1. Force state to DEMONSTRATED
     profile = {
