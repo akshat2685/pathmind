@@ -13,6 +13,6 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
     FIRESTORE_PROJECT_ID: str | None = None
 
-    model_config = ConfigDict(env_file=".env", extra="ignore")
+    model_config = ConfigDict(env_file=os.path.join(os.path.dirname(__file__), "..", ".env"), extra="ignore")
 
 settings = Settings()

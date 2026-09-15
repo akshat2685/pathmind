@@ -31,6 +31,7 @@ from backend.api.execution_routes import router as execution_router
 from backend.api.opportunity_routes import router as opportunity_router
 from backend.api.orchestrator_routes import router as orchestrator_router
 from backend.api.market_routes import router as market_router
+from backend.api.agent_routes import router as agent_router
 from backend.core.security import SecurityHeadersMiddleware, StructuredErrorMiddleware
 from backend.core.config import settings
 import logging
@@ -88,6 +89,7 @@ app.include_router(execution_router)
 app.include_router(opportunity_router)
 app.include_router(orchestrator_router)
 app.include_router(market_router)
+app.include_router(agent_router)
 
 @app.get("/health/live")
 async def health_live():
