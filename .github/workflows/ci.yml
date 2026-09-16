@@ -26,6 +26,8 @@ jobs:
           pip install -r backend/requirements.txt
           pip install -r backend/requirements-dev.txt
       - name: Run Pytest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python -m pytest -v backend/tests/
 
