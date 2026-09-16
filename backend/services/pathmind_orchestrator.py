@@ -32,6 +32,11 @@ from backend.services.opportunity_matching_engine import OpportunityMatchingEngi
 from backend.services.second_brain_service import SecondBrainService
 from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.execution_engine import ExecutionEngine
+from backend.services.trajectory_engine import TrajectoryEngine
+from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.assessment_blueprint_service import AssessmentBlueprintService
+from backend.core.assessment_schemas import CounselingProfile, CounselingFact, AssessmentResult, AssessmentResponse
+from backend.core.roadmap_schemas import EvidenceSubmission, Roadmap, Stage
 
 class PathmindOrchestrator:
     """
@@ -61,6 +66,30 @@ class PathmindOrchestrator:
         self.opportunity_engine = OpportunityMatchingEngine(store=self.store, career_engine=self.career_engine)
         self.second_brain = SecondBrainService(store=self.store)
         self.execution_engine = ExecutionEngine(store=self.store)
+
+        # Longitudinal Trajectory, Roadmap & Dynamic Assessment Services
+        self.trajectory_engine = TrajectoryEngine()
+        self.roadmap_engine = RoadmapEngine(store=self.store)
+        self.blueprint_service = AssessmentBlueprintService()
+
+        # Google ADK Tools registration for genuine multi-agent orchestration
+        try:
+            from google.adk.tools import FunctionTool
+            from google.adk import Agent as ADKAgent
+            self.adk_tools = [
+                FunctionTool(self.blueprint_service.generate_evidence_requirements),
+                FunctionTool(self.blueprint_service.evaluate_evidence),
+                FunctionTool(self.blueprint_service.generate_assessment_blueprint),
+                FunctionTool(self.blueprint_service.evaluate_assessment_responses),
+            ]
+            self.adk_journey_agent = ADKAgent(
+                name="PathmindJourneyOrchestrator",
+                description="Google ADK agent coordinating continuous journey workflow and stage verification gates.",
+                tools=self.adk_tools
+            )
+        except Exception:
+            self.adk_tools = []
+            self.adk_journey_agent = None
 
         # In-memory idempotency cache (keyed by person_id:idempotency_key)
         self._idempotency_cache: Dict[str, OrchestrationResponse] = {}
@@ -546,3 +575,402 @@ class PathmindOrchestrator:
 
         await self.store.update_action_proposal_status(person_id, proposal_id, "REJECTED")
         return {"status": "REJECTED", "proposal_id": proposal_id}
+
+    # =========================================================================
+    # Continuous Single Guided Journey Orchestration (Requirements 3, 7, 8, 9, 10)
+    # =========================================================================
+
+    async def init_journey(self, name: str) -> Dict[str, Any]:
+        """
+        Requirement 3: CREATE THE CANONICAL PERSON ID IMMEDIATELY AFTER NAME COLLECTION.
+        Persists an initial learner record immediately in Firestore / store.
+        """
+        clean_name = name.strip()
+        if len(clean_name) < 2:
+            raise ValueError("Name must be at least 2 characters.")
+
+        # Generate canonical, safe person_id
+        safe_prefix = re.sub(r'[^a-zA-Z0-9]', '', clean_name.lower())[:8] or "scholar"
+        person_id = f"scholar_{safe_prefix}_{uuid.uuid4().hex[:8]}"
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        person_record = {
+            "person_id": person_id,
+            "name": clean_name,
+            "status": "INITIALIZED",
+            "created_at": now_iso,
+            "current_step": "NAME_COLLECTED"
+        }
+        await self.store.save_person_record(person_id, person_record)
+
+        journey_state = {
+            "person_id": person_id,
+            "name": clean_name,
+            "step": 1,
+            "step_name": "ASPIRATION",
+            "aspiration": "",
+            "stage": "",
+            "constraints": [],
+            "evidence": [],
+            "evidence_requirements": None,
+            "evidence_evaluation": None,
+            "assessment_blueprint": None,
+            "assessment_responses": [],
+            "assessment_evaluation": None,
+            "baseline_profile": None,
+            "candidate_paths": [],
+            "selected_path_id": None,
+            "active_roadmap": None,
+            "updated_at": now_iso
+        }
+        await self.store.save_journey_state(person_id, journey_state)
+
+        return {
+            "person_id": person_id,
+            "name": clean_name,
+            "step": 1,
+            "step_name": "ASPIRATION",
+            "message": f"Canonical scholar record created for {clean_name}."
+        }
+
+    async def get_journey_state(self, person_id: str) -> Dict[str, Any]:
+        """
+        Retrieves current journey state for seamless rehydration on fresh browser or page reload.
+        """
+        state = await self.store.get_journey_state(person_id)
+        if state:
+            return state
+
+        person = await self.store.get_person_record(person_id)
+        if person:
+            # Reconstruct minimal state
+            state = {
+                "person_id": person_id,
+                "name": person.get("name", "Scholar"),
+                "step": 1,
+                "step_name": "ASPIRATION",
+                "aspiration": "",
+                "stage": "",
+                "constraints": [],
+                "evidence": [],
+                "evidence_requirements": None,
+                "evidence_evaluation": None,
+                "assessment_blueprint": None,
+                "assessment_responses": [],
+                "assessment_evaluation": None,
+                "baseline_profile": None,
+                "candidate_paths": [],
+                "selected_path_id": None,
+                "active_roadmap": None,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await self.store.save_journey_state(person_id, state)
+            return state
+
+        raise ValueError(f"No journey state found for person {person_id}. Please initialize with Name.")
+
+    async def record_aspiration_and_stage(
+        self,
+        person_id: str,
+        aspiration: str,
+        stage: str,
+        constraints: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Records learner's aspiration and stage.
+        Generates grounded, domain-neutral evidence requirements.
+        """
+        state = await self.get_journey_state(person_id)
+        clean_aspiration = aspiration.strip()
+        clean_stage = stage.strip()
+        clean_constraints = constraints or []
+
+        if len(clean_aspiration) < 5:
+            raise ValueError("Please provide a descriptive aspiration (at least 5 characters).")
+
+        # Derive grounded evidence requirements
+        requirements = self.blueprint_service.generate_evidence_requirements(
+            aspiration=clean_aspiration,
+            stage=clean_stage
+        )
+
+        # Persist career goal
+        goal_data = {
+            "target_role": clean_aspiration,
+            "time_horizon": "1-2 years",
+            "weekly_hours": 15,
+            "constraints": clean_constraints,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await self.store.save_career_goal(person_id, goal_data)
+
+        # Update state
+        state["aspiration"] = clean_aspiration
+        state["stage"] = clean_stage
+        state["constraints"] = clean_constraints
+        state["evidence_requirements"] = requirements
+        state["step"] = 2
+        state["step_name"] = "EVIDENCE_COLLECTION"
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+
+        return state
+
+    async def submit_evidence_and_generate_blueprint(
+        self,
+        person_id: str,
+        evidence_items: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Evaluates submitted evidence and generates domain-neutral, stage-aware assessment blueprint.
+        """
+        state = await self.get_journey_state(person_id)
+        aspiration = state.get("aspiration") or "General Intellectual Mastery"
+        stage = state.get("stage") or "college"
+
+        # Evaluate evidence
+        evidence_eval = self.blueprint_service.evaluate_evidence(
+            evidence_items=evidence_items,
+            aspiration=aspiration,
+            stage=stage
+        )
+
+        # Generate stage-aware & domain-neutral blueprint
+        blueprint = self.blueprint_service.generate_assessment_blueprint(
+            person_id=person_id,
+            aspiration=aspiration,
+            stage=stage,
+            evidence_summary=evidence_eval
+        )
+        await self.store.save_assessment_blueprint(person_id, blueprint)
+
+        state["evidence"] = evidence_items
+        state["evidence_evaluation"] = evidence_eval
+        state["assessment_blueprint"] = blueprint
+        state["step"] = 3
+        state["step_name"] = "ACTUAL_ASSESSMENT"
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+
+        return state
+
+    async def submit_assessment_and_generate_baseline(
+        self,
+        person_id: str,
+        responses: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Evaluates assessment responses, calculates calibration scores,
+        and persists verified baseline counseling profile.
+        """
+        state = await self.get_journey_state(person_id)
+        aspiration = state.get("aspiration") or "Applied AI Specialist"
+        stage = state.get("stage") or "college"
+        blueprint = state.get("assessment_blueprint") or await self.store.get_assessment_blueprint(person_id)
+
+        if not blueprint:
+            raise ValueError("No active assessment blueprint found for evaluation.")
+
+        # Objective evaluation
+        eval_result = self.blueprint_service.evaluate_assessment_responses(
+            person_id=person_id,
+            blueprint=blueprint,
+            responses=responses,
+            aspiration=aspiration,
+            stage=stage
+        )
+
+        # Synthesize baseline CounselingProfile
+        riasec_scores = eval_result.get("riasec_inference", {})
+        top_interests = sorted(riasec_scores.items(), key=lambda x: x[1], reverse=True)
+        primary_interests = [k for k, v in top_interests[:3]]
+
+        caps = [
+            CounselingFact(
+                category="DEMONSTRATED_CAPABILITY",
+                claim=str(s),
+                evidence=["Assessment diagnostic responses"],
+                confidence="HIGH",
+                weight=1.0,
+                source="ASSESSMENT"
+            )
+            for s in eval_result.get("demonstrated_strengths", [])
+        ]
+        self_eff_facts = [
+            CounselingFact(
+                category="SELF_EFFICACY",
+                claim=f"{k}: {v}",
+                evidence=["Self-efficacy calibration response"],
+                confidence="HIGH" if isinstance(v, (int, float)) and v >= 0.7 else "MODERATE",
+                weight=1.0,
+                source="ASSESSMENT"
+            )
+            for k, v in eval_result.get("scct_calibration", {}).items()
+        ]
+
+        constraint_facts = [
+            CounselingFact(
+                category="CONSTRAINT",
+                claim=str(c),
+                evidence=["Self-reported learner constraint"],
+                confidence="HIGH",
+                weight=1.0,
+                source="INTAKE"
+            )
+            for c in state.get("constraints", [])
+        ]
+
+        counseling_profile = CounselingProfile(
+            person_id=person_id,
+            interest_vector=riasec_scores,
+            strongest_interests=primary_interests or ["Investigative", "Realistic"],
+            demonstrated_capabilities=caps,
+            self_efficacy_signals=self_eff_facts,
+            constraints=constraint_facts,
+            candidate_directions=[aspiration],
+            contradictions=[],
+            overall_confidence="VERIFIED"
+        )
+        await self.store.save_counseling_profile(person_id, counseling_profile.model_dump(mode="json"))
+
+        state["assessment_responses"] = responses
+        state["assessment_evaluation"] = eval_result
+        state["baseline_profile"] = counseling_profile.model_dump(mode="json")
+        state["step"] = 4
+        state["step_name"] = "BASELINE_READY"
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+
+        return state
+
+    async def discover_pathways(self, person_id: str) -> Dict[str, Any]:
+        """
+        Discovers 2-3 grounded candidate pathways based on baseline profile and aspiration.
+        """
+        state = await self.get_journey_state(person_id)
+        aspiration = state.get("aspiration") or "Applied Machine Learning Systems"
+        constraints = state.get("constraints") or []
+
+        profile_data = await self.store.get_counseling_profile(person_id)
+        counseling_profile = CounselingProfile(**profile_data) if profile_data else None
+
+        discovery_res = await self.trajectory_engine.discover_candidate_paths(
+            person_id=person_id,
+            counseling_profile=counseling_profile,
+            goals=[aspiration],
+            constraints=constraints
+        )
+
+        candidate_paths = [p.model_dump(mode="json") for p in discovery_res.candidate_paths]
+        state["candidate_paths"] = candidate_paths
+        state["step"] = 5
+        state["step_name"] = "PATHWAYS_DISCOVERED"
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+
+        return {
+            "person_id": person_id,
+            "candidate_paths": candidate_paths,
+            "rationale": discovery_res.overall_reasoning
+        }
+
+    async def select_pathway_and_init_roadmap(
+        self,
+        person_id: str,
+        selected_path_id: str
+    ) -> Dict[str, Any]:
+        """
+        Saves chosen pathway and generates multi-phase hidden roadmap with Phase 1 active.
+        """
+        state = await self.get_journey_state(person_id)
+        candidates = state.get("candidate_paths") or []
+        chosen_candidate = next((p for p in candidates if p.get("path_id") == selected_path_id), None)
+
+        if not chosen_candidate and candidates:
+            chosen_candidate = candidates[0]
+
+        target_role = chosen_candidate.get("title") if chosen_candidate else state.get("aspiration", "Applied AI Specialist")
+
+        # Save selection
+        await self.store.save_selected_path(person_id, {
+            "person_id": person_id,
+            "selected_path_id": selected_path_id,
+            "selected_path": chosen_candidate,
+            "selection_reason": "Learner chosen trajectory",
+            "selected_at": datetime.now(timezone.utc).isoformat()
+        })
+
+        # Synthesize personalized roadmap
+        roadmap = await self.roadmap_engine.get_or_create_roadmap(
+            person_id=person_id,
+            target_outcome=target_role
+        )
+
+        # Build disclosed view (Phase 1 unlocked, future phases locked)
+        disclosed_view = self.roadmap_engine.build_disclosed_view(roadmap)
+        disclosed_dict = disclosed_view.model_dump(mode="json")
+
+        state["selected_path_id"] = selected_path_id
+        state["active_roadmap"] = disclosed_dict
+        state["step"] = 6
+        state["step_name"] = "ROADMAP_ACTIVE"
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+
+        return {
+            "person_id": person_id,
+            "selected_path_id": selected_path_id,
+            "roadmap": disclosed_dict
+        }
+
+    async def get_active_disclosed_roadmap(self, person_id: str) -> Dict[str, Any]:
+        """
+        Retrieves the progressive disclosed view of the active roadmap.
+        """
+        roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
+        disclosed_view = self.roadmap_engine.build_disclosed_view(roadmap)
+        return disclosed_view.model_dump(mode="json")
+
+    async def submit_phase_evidence(
+        self,
+        person_id: str,
+        stage_id: str,
+        mission_id: str,
+        content_payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Requirement 10: The roadmap must be evidence-gated.
+        Backend decides PASS / REINFORCE / INSUFFICIENT_EVIDENCE.
+        """
+        roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
+
+        submission = EvidenceSubmission(
+            person_id=person_id,
+            roadmap_id=roadmap.roadmap_id,
+            stage_id=stage_id,
+            mission_id=mission_id,
+            evidence_type="CODE_REPO",
+            content_payload=content_payload
+        )
+
+        eval_result = await self.roadmap_engine.evaluate_evidence_and_progress(
+            person_id=person_id,
+            submission=submission
+        )
+
+        # Refresh disclosed roadmap
+        refreshed_roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
+        disclosed_view = self.roadmap_engine.build_disclosed_view(refreshed_roadmap)
+        disclosed_dict = disclosed_view.model_dump(mode="json")
+
+        # Update journey state
+        state = await self.get_journey_state(person_id)
+        state["active_roadmap"] = disclosed_dict
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+
+        return {
+            "evaluation": eval_result.model_dump(mode="json"),
+            "roadmap": disclosed_dict
+        }
+

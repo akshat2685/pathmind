@@ -1,121 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { NotificationCenter } from "@/components/pathmind/proactive/NotificationCenter";
 
-export function TopBar() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const pathname = usePathname();
+interface TopBarProps {
+  scholarName?: string | null;
+  personId?: string | null;
+}
 
-  const navItems = [
-    { href: "/", icon: "history_edu", label: "The Initiation", sub: "Home & Pathways" },
-    { href: "/onboarding", icon: "ink_pen", label: "The First Step", sub: "Longitudinal Profile" },
-    { href: "/assessment", icon: "psychology_alt", label: "Counseling Engine", sub: "Psychometric Assessment" },
-    { href: "/explorer", icon: "alt_route", label: "Career Explorer", sub: "Trajectory Discovery" },
-    { href: "/journey", icon: "map", label: "Learning Journey", sub: "Progressive Roadmap" },
-    { href: "/evidence", icon: "verified", label: "Evidence & Mastery", sub: "Proof & Progression" },
-    { href: "/readiness", icon: "rocket_launch", label: "Career Launchpad", sub: "Readiness & Opportunities" },
-    { href: "/evolution", icon: "timeline", label: "Personal Evolution", sub: "Longitudinal Model" },
-    { href: "/portfolio", icon: "folder_special", label: "Artifacts & Portfolio", sub: "Real-World Evidence" },
-    { href: "/execution", icon: "flag", label: "Today's Plan", sub: "Daily Actions & Progress" },
-    { href: "/opportunities", icon: "explore", label: "Opportunity Hub", sub: "Verified Matches & Deadlines" },
-    { href: "/orchestrator", icon: "hub", label: "Guidance Coordinator", sub: "Plan Coordination & Logic" },
-  ];
+export function TopBar({ scholarName: propName, personId: propId }: TopBarProps = {}) {
+  const [scholarName, setScholarName] = useState<string | null>(propName || null);
+  const [personId, setPersonId] = useState<string | null>(propId || null);
+
+  useEffect(() => {
+    if (propName !== undefined) setScholarName(propName);
+    if (propId !== undefined) setPersonId(propId);
+  }, [propName, propId]);
+
+  useEffect(() => {
+    const updateScholarInfo = () => {
+      if (typeof window !== "undefined") {
+        const storedName = localStorage.getItem("pathmind_user_name");
+        const storedId = localStorage.getItem("pathmind_person_id");
+        if (!propName) setScholarName(storedName);
+        if (!propId) setPersonId(storedId);
+      }
+    };
+
+    updateScholarInfo();
+    window.addEventListener("storage", updateScholarInfo);
+    window.addEventListener("pathmind_identity_changed", updateScholarInfo);
+    return () => {
+      window.removeEventListener("storage", updateScholarInfo);
+      window.removeEventListener("pathmind_identity_changed", updateScholarInfo);
+    };
+  }, [propName, propId]);
+
+  const handleReset = () => {
+    if (typeof window !== "undefined") {
+      if (confirm("Reset current journey and start fresh with a new scholar identity?")) {
+        localStorage.removeItem("pathmind_person_id");
+        localStorage.removeItem("pathmind_user_name");
+        localStorage.removeItem("pathmind_user_identity");
+        localStorage.removeItem("pathmind_user_goal");
+        localStorage.removeItem("pathmind_user_evidence");
+        window.location.reload();
+      }
+    }
+  };
 
   return (
-    <>
-      <header className="md:hidden flex justify-between items-center px-3 sm:px-4 py-2.5 w-full fixed top-0 left-0 bg-surface-container-low/95 backdrop-blur-md border-b-2 border-outline-variant shadow-sm z-40 box-border overflow-hidden">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-expanded={isMenuOpen}
-            className="p-2 -ml-1 text-on-surface hover:text-primary transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none shrink-0"
-          >
-            <span className="material-symbols-outlined text-2xl">
-              {isMenuOpen ? "close" : "menu"}
-            </span>
-          </button>
-          <Link href="/" className="flex items-center gap-1.5 min-w-0" aria-label="PATHMIND Homepage">
-            <span className="material-symbols-outlined text-secondary text-2xl shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
+    <header className="w-full flex justify-between items-center px-4 sm:px-8 py-3.5 bg-surface-container-low/90 backdrop-blur-md border-b border-outline/30 sticky top-0 z-40">
+      <div className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-2.5 group" aria-label="PATHMIND Homepage">
+          <div className="w-9 h-9 rounded-full bg-secondary/15 text-secondary border border-secondary/30 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
               auto_stories
             </span>
-            <span className="font-headline-lg text-xl italic text-secondary tracking-tight truncate max-w-[120px]">
-              Pathmind
-            </span>
-          </Link>
-        </div>
-        <div className="flex items-center gap-1 min-w-0 shrink-0">
-          <NotificationCenter />
-          <Link
-            href="/onboarding"
-            aria-label="Onboarding: Profile"
-            className="text-primary hover:text-tertiary transition-colors w-10 h-10 min-w-[40px] flex items-center justify-center shrink-0"
-            title="Onboarding"
-          >
-            <span className="material-symbols-outlined text-2xl">menu_book</span>
-          </Link>
-        </div>
-      </header>
-
-      {/* Mobile Slide-over Drawer */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex bg-black/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-surface border-r border-outline w-4/5 max-w-xs h-full flex flex-col pt-4 pb-6 px-4 shadow-2xl animate-in slide-in-from-left duration-200 overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-outline/30 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-                  auto_stories
-                </span>
-                <span className="font-headline-md text-secondary text-lg font-bold">PATHMIND</span>
-              </div>
-              <button
-                onClick={() => setIsMenuOpen(false)}
-                aria-label="Close navigation menu"
-                className="p-2 text-on-surface-variant hover:text-on-surface min-w-[44px] min-h-[44px] flex items-center justify-center cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-2xl">close</span>
-              </button>
-            </div>
-
-            <div className="text-[11px] uppercase tracking-wider font-label-md text-on-surface-variant/70 px-2 mb-2">
-              Journal Chapters
-            </div>
-
-            <div className="flex flex-col gap-1.5 flex-1">
-              {navItems.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setIsMenuOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${
-                      isActive
-                        ? "bg-tertiary/15 text-tertiary font-bold"
-                        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container"
-                    }`}
-                  >
-                    <span
-                      className="material-symbols-outlined text-xl shrink-0"
-                      style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}
-                    >
-                      {item.icon}
-                    </span>
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-sm font-medium leading-tight truncate">{item.label}</span>
-                      <span className="font-note-handwritten text-xs opacity-80 truncate">{item.sub}</span>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
           </div>
-          <div className="flex-1" onClick={() => setIsMenuOpen(false)} />
+          <div className="flex flex-col">
+            <span className="font-headline-md text-xl tracking-tight text-secondary font-bold">
+              PATHMIND
+            </span>
+            <span className="font-note-handwritten text-xs text-on-surface-variant hidden sm:inline">
+              Longitudinal Learning Companion
+            </span>
+          </div>
+        </Link>
+      </div>
+
+      <div className="flex items-center gap-3 sm:gap-4">
+        {scholarName && (
+          <div className="inline-flex items-center gap-2 px-3 py-1 sketchy-chip bg-primary-fixed/30 border border-primary/40 text-on-surface text-sm">
+            <span className="material-symbols-outlined text-primary text-base" style={{ fontVariationSettings: "'FILL' 1" }}>
+              history_edu
+            </span>
+            <span className="font-note-handwritten text-base font-semibold truncate max-w-[140px] sm:max-w-[200px]">
+              {scholarName}
+            </span>
+          </div>
+        )}
+
+        <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Ready</span>
         </div>
-      )}
-    </>
+
+        {personId && (
+          <button
+            onClick={handleReset}
+            title="Start fresh with a new scholar identity"
+            className="text-xs text-on-surface-variant hover:text-error transition-colors px-2.5 py-1 rounded border border-outline-variant/40 hover:border-error/40 flex items-center gap-1 cursor-pointer font-note-handwritten text-sm"
+          >
+            <span className="material-symbols-outlined text-sm">restart_alt</span>
+            <span className="hidden sm:inline">Reset</span>
+          </button>
+        )}
+
+        <NotificationCenter />
+      </div>
+    </header>
   );
 }

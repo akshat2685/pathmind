@@ -99,7 +99,10 @@ class FirestoreStore:
                 "opportunity_applications": [],
                 "execution_pause_state": None,
                 "orchestration_traces": [],
-                "action_proposals": []
+                "action_proposals": [],
+                "person_record": None,
+                "journey_state": None,
+                "assessment_blueprint": None
             }
 
     # --- Knowledge Cache ---
@@ -1514,6 +1517,94 @@ class FirestoreStore:
                 p["status"] = status
                 return p
         return None
+
+    # --- Person Record (Immediate Persistence upon Name Collection) ---
+    async def save_person_record(self, person_id: str, record_data: Dict[str, Any]) -> None:
+        self._ensure_person_bucket(person_id)
+        self._in_memory_persons[person_id]["person_record"] = record_data
+        if not self._available:
+            return
+        try:
+            doc_ref = self.db.collection('persons').document(person_id)
+            await asyncio.wait_for(doc_ref.set(record_data, merge=True), timeout=2.0)
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            pass
+
+    async def get_person_record(self, person_id: str) -> Optional[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        if not self._available:
+            return self._in_memory_persons[person_id].get("person_record")
+        try:
+            doc_ref = self.db.collection('persons').document(person_id)
+            doc = await asyncio.wait_for(doc_ref.get(), timeout=2.0)
+            if doc.exists:
+                return doc.to_dict()
+            return self._in_memory_persons[person_id].get("person_record")
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            return self._in_memory_persons[person_id].get("person_record")
+
+    # --- Continuous Journey State (Resumption & Progression) ---
+    async def save_journey_state(self, person_id: str, state_data: Dict[str, Any]) -> None:
+        self._ensure_person_bucket(person_id)
+        self._in_memory_persons[person_id]["journey_state"] = state_data
+        if not self._available:
+            return
+        try:
+            doc_ref = self.db.collection('persons').document(person_id).collection('journey').document('active_state')
+            await asyncio.wait_for(doc_ref.set(state_data), timeout=2.0)
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            pass
+
+    async def get_journey_state(self, person_id: str) -> Optional[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        if not self._available:
+            return self._in_memory_persons[person_id].get("journey_state")
+        try:
+            doc_ref = self.db.collection('persons').document(person_id).collection('journey').document('active_state')
+            doc = await asyncio.wait_for(doc_ref.get(), timeout=2.0)
+            if doc.exists:
+                return doc.to_dict()
+            return self._in_memory_persons[person_id].get("journey_state")
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            return self._in_memory_persons[person_id].get("journey_state")
+
+    # --- Domain-Neutral & Stage-Aware Assessment Blueprint ---
+    async def save_assessment_blueprint(self, person_id: str, blueprint_data: Dict[str, Any]) -> None:
+        self._ensure_person_bucket(person_id)
+        self._in_memory_persons[person_id]["assessment_blueprint"] = blueprint_data
+        if not self._available:
+            return
+        try:
+            doc_ref = self.db.collection('persons').document(person_id).collection('counseling').document('active_blueprint')
+            await asyncio.wait_for(doc_ref.set(blueprint_data), timeout=2.0)
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            pass
+
+    async def get_assessment_blueprint(self, person_id: str) -> Optional[Dict[str, Any]]:
+        self._ensure_person_bucket(person_id)
+        if not self._available:
+            return self._in_memory_persons[person_id].get("assessment_blueprint")
+        try:
+            doc_ref = self.db.collection('persons').document(person_id).collection('counseling').document('active_blueprint')
+            doc = await asyncio.wait_for(doc_ref.get(), timeout=2.0)
+            if doc.exists:
+                return doc.to_dict()
+            return self._in_memory_persons[person_id].get("assessment_blueprint")
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            return self._in_memory_persons[person_id].get("assessment_blueprint")
+
 
 
 
