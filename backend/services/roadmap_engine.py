@@ -324,10 +324,10 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
 """
                 response = self.model.generate_content(
                     prompt,
-                    generation_config={{
+                    generation_config={
                         "response_mime_type": "application/json",
                         "temperature": 0.3
-                    }}
+                    }
                 )
                 roadmap_dict = json.loads(response.text)
                 
