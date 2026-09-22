@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Path — Return to your journey</title>
+<!-- Tailwind CSS v3 with Forms & Container Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Bricolage Grotesque, Caveat (handwritten touch), & Cormorant Garamond (scholarly serif) -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;500;600;700&amp;family=Caveat:wght@500;600&amp;family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            parchment: {
+              DEFAULT: '#f9f6ec',
+              light: '#fdfae7',
+              dark: '#ede8d5',
+              border: '#d9d2be'
+            },
+            charcoal: {
+              DEFAULT: '#252321',
+              soft: '#423e3b',
+              muted: '#68635e'
+            },
+            sage: {
+              DEFAULT: '#8ba88e',
+              light: '#d2ded3',
+              wash: 'rgba(139, 168, 142, 0.18)'
+            },
+            terracotta: {
+              DEFAULT: '#a65959',
+              light: '#d89c8e',
+              wash: 'rgba(166, 89, 89, 0.12)'
+            },
+            ochre: {
+              wash: 'rgba(212, 175, 55, 0.10)'
+            }
+          },
+          fontFamily: {
+            sans: ['"Bricolage Grotesque"', 'sans-serif'],
+            serif: ['"Cormorant Garamond"', 'serif'],
+            script: ['"Caveat"', 'cursive']
+          },
+          boxShadow: {
+            'sketch-card': '4px 6px 0px rgba(37, 35, 33, 0.9), 12px 16px 28px rgba(70, 60, 50, 0.08)',
+            'sketch-btn': '2px 3px 0px rgba(37, 35, 33, 0.9)',
+            'sketch-btn-hover': '3px 5px 0px rgba(37, 35, 33, 0.9)',
+            'sketch-btn-active': '1px 1px 0px rgba(37, 35, 33, 0.9)'
+          }
+        }
+      }
+    };
+  </script>
+<!-- Paper & Notebook Textures -->
+<style data-purpose="custom-textures">
+    /* Subtle background grid pattern reminiscent of engineer/traveler field notebooks */
+    .bg-notebook-grid {
+      background-color: #f7f4e7;
+      background-image: 
+        linear-gradient(to right, rgba(90, 80, 70, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(90, 80, 70, 0.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    /* Organic wobbly pencil/charcoal border using border-radius jitter */
+    .border-sketch {
+      border: 1.75px solid #252321;
+      border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+    }
+    
+    .border-sketch-loose {
+      border: 1.5px solid #252321;
+      border-radius: 12px 18px 10px 22px / 20px 10px 24px 12px;
+    }
+
+    .border-sketch-stamp {
+      border: 2px dashed #423e3b;
+      border-radius: 6px;
+    }
+
+    /* Watercolor atmospheric washes */
+    .watercolor-wash-sage {
+      background: radial-gradient(circle at 30% 40%, rgba(139, 168, 142, 0.35) 0%, rgba(139, 168, 142, 0.08) 55%, transparent 75%);
+    }
+
+    .watercolor-wash-ochre {
+      background: radial-gradient(circle at 70% 30%, rgba(206, 166, 107, 0.25) 0%, rgba(206, 166, 107, 0.05) 50%, transparent 70%);
+    }
+
+    /* Torn paper deckle deck effect */
+    .deckle-edge {
+      filter: drop-shadow(0px 8px 16px rgba(45, 35, 25, 0.08));
+    }
+  </style>
+<!-- Input Field & Interaction Polish -->
+<style data-purpose="form-styling">
+    .charcoal-input {
+      background-color: rgba(253, 250, 231, 0.7);
+      border: 1.5px solid #4a453f;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .charcoal-input:focus {
+      background-color: #ffffff;
+      border-color: #252321;
+      outline: none;
+      box-shadow: 2px 3px 0px #252321;
+    }
+    .custom-checkbox:checked {
+      background-color: #252321;
+      border-color: #252321;
+      background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23f7f4e7' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+    }
+  </style>
+</head>
+<body class="bg-notebook-grid text-charcoal min-h-screen flex flex-col justify-between selection:bg-sage/40 selection:text-charcoal relative overflow-x-hidden font-sans antialiased">
+<!-- BEGIN: AmbientWatercolorGradients -->
+<!-- Subtle natural watercolor blobs to simulate hand-stained journal paper -->
+<div class="fixed top-0 left-0 w-[550px] h-[550px] watercolor-wash-sage pointer-events-none -z-10 blur-xl"></div>
+<div class="fixed -bottom-20 -right-20 w-[650px] h-[650px] watercolor-wash-ochre pointer-events-none -z-10 blur-2xl"></div>
+<!-- END: AmbientWatercolorGradients -->
+<!-- BEGIN: TopBar -->
+<header class="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
+<!-- Brand identity pairing logo + hand-lettered logotype -->
+<a class="flex items-center gap-3.5 group" data-purpose="brand-link" href="#">
+<div class="w-10 h-10 rounded-full border-sketch border-charcoal/80 overflow-hidden bg-parchment-light shadow-sm flex items-center justify-center transition-transform group-hover:-rotate-3">
+<img alt="Path Brandmark sketch" class="w-8 h-8 object-contain mix-blend-multiply opacity-90" src="https://lh3.googleusercontent.com/aida/AEtjO1UdILkeoONm9bo1VF2fAoC0KgoKz11J0fvGskaUm0pYwoopGcDsiTEogVDSTQv6rNNgZd8T4EzyXFrsgeaM-GELvQ0Tf5kGHnchGlUXeAPpNkKQb07ucGBTtM_Vmv-s1RhOwJUzj4LiQmsX146qwcLVjIyIWhmia3U7VR6HAjcfY8tYTE3qiANQPhaGZU8uFDdh-GW0S-_JTbbxf106HqszpAnwrpbHAlsOUgWnnsiwbIx6P-4nFt4qPQU"/>
+</div>
+<div class="flex flex-col">
+<span class="font-sans font-bold text-2xl tracking-tight leading-none text-charcoal">Path</span>
+<span class="font-script text-sm text-charcoal-muted tracking-wide -mt-0.5">living sketchbook</span>
+</div>
+</a>
+<!-- Top metadata / Scholar status badge -->
+<div class="hidden sm:flex items-center gap-4 text-xs font-serif text-charcoal-muted italic">
+<span class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-sage border border-charcoal/40"></span>
+        Volume IV • Traveler Registry
+      </span>
+<span class="text-charcoal/30">|</span>
+<a class="text-charcoal hover:text-terracotta transition-colors underline decoration-charcoal/30 decoration-wavy underline-offset-4" href="#">
+        Need direction?
+      </a>
+</div>
+</header>
+<!-- END: TopBar -->
+<!-- BEGIN: MainContentSection -->
+<main class="flex-grow flex items-center justify-center px-4 sm:px-6 lg:px-8 py-6 z-10">
+<div class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+<!-- LEFT COLUMN: Journey Preview Journal Card -->
+<section class="lg:col-span-5 flex flex-col justify-center order-2 lg:order-1" data-purpose="journey-preview-panel">
+<div class="relative bg-parchment-light p-5 sm:p-6 border-sketch-loose shadow-sketch-card deckle-edge rotate-[-1deg] transition-transform hover:rotate-0 duration-300">
+<!-- Pinned note / tape effect at top corner -->
+<div class="absolute -top-3.5 left-10 w-24 h-6 bg-amber-100/80 backdrop-blur-sm border border-charcoal/20 rotate-[-3deg] shadow-xs flex items-center justify-center">
+<span class="text-[10px] tracking-widest uppercase font-serif text-charcoal/60 font-semibold">Field Note</span>
+</div>
+<!-- Hero illustration depicting the ongoing journey -->
+<div class="overflow-hidden border border-charcoal/30 rounded-sm mb-4 relative group">
+<img alt="Hand-drawn charcoal winding path with sage and terracotta watercolors" class="w-full h-52 sm:h-64 object-cover object-center filter contrast-[1.03] transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida/AEtjO1Wyk_y0Pvjag_3RBnOcet1YpzM8JiKR5k1VP5S93NWm019QCa8zUEzG05-YqR5tvsZR1Zmux2hZW7-pOooQYmZGg9cGf0ZKGpg3Xmu3vabn5lNbQOLtxuapkS1HIXssSBYlstn3SmjR3IhFWKfp_MHarGEAgKGjuHNLtCwFwTlye9PJ1-eykGWEKJRowEGTRNZ-p_tMKmb2VXtVnECkNQ2J0QmDhKwPHnc2aAk1h8AtxQiRk7Hoj378K2o"/>
+<div class="absolute bottom-2 right-2 bg-parchment-dark/90 px-2.5 py-1 text-[11px] font-script text-charcoal border border-charcoal/40 rounded-sm">
+              Trail #14 • Unfinished
+            </div>
+</div>
+<!-- Handwritten caption / narrative encouragement -->
+<div class="space-y-2">
+<h3 class="font-serif text-xl italic font-semibold text-charcoal leading-snug">
+              "The Scholar's Trail is preserved as you left it."
+            </h3>
+<p class="text-xs text-charcoal-muted leading-relaxed font-sans">
+              Three uncharted milestones, seven journal entries, and the quiet contour of your ongoing exploration await your return.
+            </p>
+</div>
+<!-- Analog signature & seal decoration -->
+<div class="mt-4 pt-3 border-t border-dashed border-charcoal/20 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-terracotta/70 border border-charcoal"></span>
+<span class="text-[11px] font-script text-charcoal-muted">Cartographer's Log signed today</span>
+</div>
+<span class="font-script text-sm text-terracotta font-bold tracking-wider">#KeepExploring</span>
+</div>
+</div>
+</section>
+<!-- RIGHT COLUMN: Authentication & Entry Desk Card -->
+<section class="lg:col-span-7 order-1 lg:order-2" data-purpose="auth-card-panel">
+<div class="bg-parchment-light/95 border-sketch shadow-sketch-card p-6 sm:p-10 relative rotate-[0.5deg]">
+<!-- Header Titles inside the desk card -->
+<div class="mb-8">
+<div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-sage/20 border border-sage text-charcoal text-xs font-medium mb-3">
+<svg class="w-3.5 h-3.5 text-charcoal" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+              The Scholar’s Desk
+            </div>
+<h1 class="text-3xl sm:text-4xl font-sans font-bold tracking-tight text-charcoal">
+              Resume your trail.
+            </h1>
+<p class="text-sm font-serif italic text-charcoal-muted mt-1.5 text-base">
+              Step back into your living notebook to sketch thoughts and trace horizons.
+            </p>
+</div>
+<!-- Entry Form -->
+<form class="space-y-5" data-purpose="login-form" onsubmit="event.preventDefault();">
+<!-- Field: Traveler Identifier -->
+<div>
+<div class="flex justify-between items-baseline mb-1.5">
+<label class="block text-xs font-bold uppercase tracking-wider text-charcoal" for="traveler-id">
+                  Traveler's Name or Scribe ID
+                </label>
+<span class="text-xs font-script text-charcoal-muted">inked identifier</span>
+</div>
+<div class="relative">
+<input class="w-full charcoal-input px-3.5 py-3 rounded-md text-sm text-charcoal placeholder:text-charcoal-muted/50 placeholder:font-script placeholder:text-base border-charcoal" id="traveler-id" name="traveler-id" placeholder="e.g., scholar@path.ink" required="" type="text"/>
+<!-- Subtle quill icon -->
+<div class="absolute right-3.5 top-3.5 pointer-events-none text-charcoal/50">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.75" viewbox="0 0 24 24">
+<path d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Field: Keyphrase / Wax Seal Password -->
+<div>
+<div class="flex justify-between items-baseline mb-1.5">
+<label class="block text-xs font-bold uppercase tracking-wider text-charcoal" for="keyphrase">
+                  Keyphrase / Secret Seal
+                </label>
+<a class="text-xs font-script text-terracotta hover:underline hover:text-charcoal transition-colors" href="#">
+                  Forgot keyphrase?
+                </a>
+</div>
+<div class="relative">
+<input class="w-full charcoal-input px-3.5 py-3 rounded-md text-sm text-charcoal placeholder:text-charcoal/40 tracking-widest border-charcoal" id="keyphrase" name="keyphrase" placeholder="••••••••••••" required="" type="password"/>
+<!-- Subtle lock icon -->
+<div class="absolute right-3.5 top-3.5 pointer-events-none text-charcoal/50">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.75" viewbox="0 0 24 24">
+<rect height="11" rx="2" ry="2" stroke-linecap="round" stroke-linejoin="round" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</div>
+</div>
+</div>
+<!-- Remember me toggle + analog seal stamp -->
+<div class="flex items-center justify-between pt-1">
+<label class="flex items-center gap-2.5 cursor-pointer select-none group">
+<input class="custom-checkbox w-4 h-4 rounded text-charcoal border-charcoal focus:ring-0 focus:ring-offset-0 cursor-pointer" id="remember-parchment" type="checkbox"/>
+<span class="text-xs text-charcoal font-sans group-hover:text-black">
+                  Keep me remembered on this parchment
+                </span>
+</label>
+<span class="text-[11px] font-serif italic text-charcoal-muted hidden sm:inline">
+                Device #402
+              </span>
+</div>
+<!-- Primary Submission Button -->
+<button class="w-full mt-3 py-3.5 px-6 bg-charcoal hover:bg-[#383430] text-parchment font-sans font-semibold text-base rounded-md border-2 border-charcoal shadow-sketch-btn hover:shadow-sketch-btn-hover active:shadow-sketch-btn-active active:translate-x-0.5 active:translate-y-0.5 transition-all flex items-center justify-center gap-2 group cursor-pointer" type="submit">
+<span>Enter the Path</span>
+<span class="group-hover:translate-x-1 transition-transform font-serif text-lg leading-none">→</span>
+</button>
+</form>
+<!-- Alternative Pathways Divider -->
+<div class="relative my-7 text-center">
+<div class="absolute inset-0 flex items-center">
+<div class="w-full border-t border-dashed border-charcoal/30"></div>
+</div>
+<span class="relative bg-parchment-light px-3 text-xs font-serif italic text-charcoal-muted">
+              or open another course
+            </span>
+</div>
+<!-- Secondary Actions -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+<!-- New Journal / Sign Up -->
+<button class="py-2.5 px-4 bg-transparent hover:bg-sage/20 text-charcoal font-sans text-xs font-semibold rounded-md border-1.5 border-charcoal/70 border-sketch-loose transition-all hover:-translate-y-0.5 flex items-center justify-center gap-1.5" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+              Initiate New Journal
+            </button>
+<!-- Guest Explorer Mode -->
+<button class="py-2.5 px-4 bg-transparent hover:bg-terracotta-wash text-charcoal font-sans text-xs font-semibold rounded-md border-1.5 border-charcoal/70 border-sketch-loose transition-all hover:-translate-y-0.5 flex items-center justify-center gap-1.5" type="button">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+              Travel as Guest Wanderer
+            </button>
+</div>
+<!-- Charcoal corner stamp mark decoration -->
+<div class="absolute bottom-2 right-3 pointer-events-none opacity-25">
+<span class="font-script text-[11px] uppercase tracking-widest text-charcoal">Path-Edition-2024</span>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- END: MainContentSection -->
+<!-- BEGIN: Footer -->
+<footer class="w-full max-w-5xl mx-auto px-6 py-6 text-center z-10">
+<div class="inline-block border-b border-dashed border-charcoal/30 pb-1 mb-2">
+<p class="font-serif italic text-sm text-charcoal-soft">
+        "Every return is a continuation of the first step."
+      </p>
+</div>
+<div class="flex flex-wrap items-center justify-center gap-4 text-xs font-sans text-charcoal-muted">
+<span>Handcrafted in the Living Sketchbook System</span>
+<span>•</span>
+<a class="hover:text-charcoal underline underline-offset-2" href="#">Cartography Rights</a>
+<span>•</span>
+<a class="hover:text-charcoal underline underline-offset-2" href="#">Privacy &amp; Parchment</a>
+<span>•</span>
+<a class="hover:text-charcoal underline underline-offset-2" href="#">Field Inquiries</a>
+</div>
+</footer>
+<!-- END: Footer -->
+</body></html>

@@ -35,7 +35,7 @@ class ContextGraphService:
         self.readiness_engine = readiness_engine or CareerReadinessEngine()
         self.mastery_engine = mastery_engine or MasteryEngine()
         self.opp_provider = JobOpportunitiesProvider()
-        self.proactive_memory = ProactiveMemoryService(self.store)
+        self.proactive_memory = ProactiveMemoryService(store=self.store)
 
     async def assemble_context_graph(self, person_id: str) -> PersonalContextGraph:
         # 1. Identity & Profile

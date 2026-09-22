@@ -1,6 +1,8 @@
 from typing import Optional, Dict, Any, List
 import os
 import asyncio
+import json
+from pathlib import Path
 from datetime import datetime, timezone
 from backend.core.config import settings
 
@@ -16,38 +18,45 @@ class FirestoreStore:
         return self._person_locks[person_id]
 
     def __init__(self):
-        # Initializes using default GOOGLE_APPLICATION_CREDENTIALS or ADC if available
         self.db = None
         self._available = False
+        self._data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        self._disk_path = self._data_dir / "college_database.json"
         
-        has_creds = bool(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.environ.get("KUBERNETES_SERVICE_HOST") or os.environ.get("FIRESTORE_EMULATOR_HOST"))
-        if has_creds or settings.FIRESTORE_PROJECT_ID:
+        # Load any existing persisted data from disk
+        self._load_from_disk()
+        
+        from backend.services.supabase_adapter import get_supabase_adapter
+        self.supabase = get_supabase_adapter()
+        self._available = True
+
+    def _load_from_disk(self) -> None:
+        if self._disk_path.exists():
             try:
-                from google.cloud import firestore
-                # Only activate if credentials, explicit cloud environment, or emulator is detected
-                if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.path.exists(os.path.expanduser("~/.config/gcloud/application_default_credentials.json")) or os.environ.get("FIRESTORE_EMULATOR_HOST"):
-                    self.db = firestore.AsyncClient(project=settings.FIRESTORE_PROJECT_ID or "demo-project")
-                    self._available = True
-            except Exception as e:
-                if os.environ.get("RUNTIME_ENV") == "production":
-                    raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
-                self.db = None
-                self._available = False
-        
-        if os.environ.get("RUNTIME_ENV") == "production" and not self._available:
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+                with open(self._disk_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        for pid, bucket in data.items():
+                            self._ensure_person_bucket(pid)
+                            self._in_memory_persons[pid].update(bucket)
+            except Exception as err:
+                print(f"[Store] Warning loading persistent database: {err}")
+
+    def _save_to_disk(self) -> None:
+        try:
+            with open(self._disk_path, "w", encoding="utf-8") as f:
+                json.dump(self._in_memory_persons, f, indent=2, default=str)
+        except Exception as err:
+            print(f"[Store] Warning saving persistent database: {err}")
 
     async def check_health(self) -> str:
-        if not self._available:
-            return "IN_MEMORY_ACTIVE"
         try:
-            collections = self.db.collections()
-            async for _ in collections:
-                break
-            return "CONNECTED"
-        except Exception as e:
-            if os.environ.get("RUNTIME_ENV") == "production":
-                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            res = await self.supabase.check_database_health()
+            if res.get("status") == "ok":
+                return "CONNECTED"
+            return "SOURCE_UNAVAILABLE"
+        except Exception:
             return "SOURCE_UNAVAILABLE"
 
     def _ensure_person_bucket(self, person_id: str):
@@ -99,7 +108,19 @@ class FirestoreStore:
                 "opportunity_applications": [],
                 "execution_pause_state": None,
                 "orchestration_traces": [],
-                "action_proposals": []
+                "action_proposals": [],
+                "college_user_profile": None,
+                "college_academic_context": None,
+                "college_goal": None,
+                "college_learning_plans": [],
+                "college_active_plan": None,
+                "college_assessments": {},
+                "college_assessment_results": [],
+                "college_memories_short": [],
+                "college_memories_long": [],
+                "college_learning_signals": [],
+                "college_commitments": [],
+                "college_study_sessions": []
             }
 
     # --- Knowledge Cache ---
@@ -1515,8 +1536,139 @@ class FirestoreStore:
                 return p
         return None
 
+    # ==========================================
+    # --- PATHMIND COLLEGE ENGINEERING MVP ---
+    # ==========================================
 
+    def _get_learner_state(self, uid: str) -> dict:
+        if not hasattr(self, 'supabase') or not self.supabase or not self.supabase.client:
+            return {}
+        try:
+            res = self.supabase.client.table("learners").select("*").eq("user_id", uid).execute()
+            if res.data:
+                return res.data[0]
+        except Exception:
+            pass
+        return {}
 
+    def _update_learner_state(self, uid: str, updates: dict) -> None:
+        if not hasattr(self, 'supabase') or not self.supabase or not self.supabase.client:
+            return
+        try:
+            self.supabase.client.table("learners").update(updates).eq("user_id", uid).execute()
+        except Exception as e:
+            print(f"Error updating state: {e}")
 
+    async def list_all_college_users(self) -> list:
+        return []
 
+    async def get_or_create_college_user(self, uid: str, name: str = "", email: str = None) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.get_or_create_college_user(uid, name, email)
+        return res.model_dump() if res else None
 
+    async def save_college_user_profile(self, uid: str, profile_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_user_profile(uid, profile_data)
+
+    async def get_college_user_profile(self, uid: str) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_user_profile(uid)
+        return res.model_dump() if res else None
+
+    async def save_college_academic_context(self, uid: str, context_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_academic_context(uid, context_data)
+
+    async def get_college_academic_context(self, uid: str) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_academic_context(uid)
+        return res.model_dump() if res else None
+
+    async def save_college_learning_plan(self, uid: str, plan_data: dict) -> None:
+        from backend.services.college_store import college_store
+        from backend.core.college_schemas import CollegeLearningPlan
+        plan = CollegeLearningPlan(**plan_data)
+        await college_store.save_college_learning_plan(uid, plan)
+
+    async def get_college_learning_plan(self, uid: str) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_learning_plan(uid)
+        return res.model_dump() if res else None
+
+    async def save_college_assessment(self, uid: str, assessment_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_assessment(uid, assessment_data)
+
+    async def get_college_assessment(self, uid: str, assessment_id: str) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_assessment(uid, assessment_id)
+        return res.model_dump() if res else None
+
+    async def get_all_college_assessments(self, uid: str) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_all_college_assessments(uid)
+        return [r.model_dump() for r in res]
+
+    async def save_college_assessment_result(self, uid: str, result_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_assessment_result(uid, result_data)
+
+    async def get_college_assessment_results(self, uid: str) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_assessment_results(uid)
+        return [r.model_dump() for r in res]
+
+    async def save_college_commitment(self, uid: str, commitment_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_commitment(uid, commitment_data)
+
+    async def get_college_commitments(self, uid: str) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_commitments(uid)
+        return [r.model_dump() for r in res]
+
+    async def update_college_commitment_status(self, uid: str, commitment_id: str, status: str) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.update_college_commitment_status(uid, commitment_id, status)
+        return res.model_dump() if res else None
+        
+    async def save_college_goal(self, uid: str, goal_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_goal(uid, goal_data)
+
+    async def get_college_goal(self, uid: str) -> dict:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_goal(uid)
+        return res.model_dump() if res else None
+
+    async def save_college_short_memory(self, uid: str, memory_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_short_memory(uid, memory_data)
+
+    async def get_college_short_memories(self, uid: str) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_short_memories(uid)
+        return [r.model_dump() for r in res]
+
+    async def save_college_long_memory(self, uid: str, memory_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_long_memory(uid, memory_data)
+
+    async def get_college_long_memories(self, uid: str) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_long_memories(uid)
+        return [r.model_dump() for r in res]
+
+    async def update_long_memory_status(self, uid: str, memory_id: str, status: str, supersedes_id: Optional[str] = None) -> None:
+        from backend.services.college_store import college_store
+        await college_store.update_long_memory_status(uid, memory_id, status, supersedes_id)
+
+    async def save_learning_signal(self, uid: str, signal_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_learning_signal(uid, signal_data)
+
+    async def get_learning_signals(self, uid: str) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_college_learning_signals(uid)
+        return [r.model_dump() for r in res]

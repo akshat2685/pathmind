@@ -16,7 +16,7 @@ from backend.services.proactive_memory_service import ProactiveMemoryService
 class PersonalAgentEngine:
     def __init__(self):
         self.store = FirestoreStore()
-        self.proactive_memory = ProactiveMemoryService(self.store)
+        self.proactive_memory = ProactiveMemoryService(store=self.store)
 
     async def get_or_create_agent_model(self, person_id: str) -> PersonalAgentModel:
         model_dict = await self.store.get_personal_agent_model(person_id)

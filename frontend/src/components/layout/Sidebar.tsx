@@ -1,24 +1,36 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NotificationCenter } from "@/components/pathmind/proactive/NotificationCenter";
+import { useAuth } from "@/lib/contexts/AuthContext";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
+  
+  const scholarName = user?.email?.split('@')[0] || "Scholar";
+  const scholarId = user?.id || "";
 
   const navItems = [
     {
+      href: "/login",
+      icon: "login",
+      label: "The Scholar's Desk",
+      sub: "Registry & Identity",
+    },
+    {
       href: "/",
       icon: "history_edu",
-      label: "The Initiation",
-      sub: "Home & Pathways",
+      label: "College Engineering Hub",
+      sub: "Syllabus & Daily Plan",
     },
     {
       href: "/onboarding",
       icon: "ink_pen",
-      label: "The First Step",
-      sub: "Longitudinal Profile",
+      label: "Academic Initiation",
+      sub: "University & Curriculum",
     },
     {
       href: "/assessment",
@@ -139,17 +151,28 @@ export function Sidebar() {
       </div>
 
       {/* Bottom Scholar Info Card */}
-      <div className="mt-auto mx-4 p-4 sketch-border-subtle bg-surface-container-low/90">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center text-primary font-headline-sm text-lg shrink-0">
-            <span className="material-symbols-outlined text-xl">person</span>
+      <div className="mt-auto mx-4 p-3.5 sketch-border-subtle bg-surface-container-low/90">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center text-primary font-headline-sm text-sm shrink-0">
+              <span className="material-symbols-outlined text-base">person</span>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="font-headline-sm text-xs font-bold text-on-surface truncate">
+                {scholarName}
+              </span>
+              <span className="font-note-handwritten text-xs text-primary truncate">
+                {scholarId ? `@${scholarId}` : "Active Scholar"}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-headline-sm text-sm font-medium text-on-surface truncate">Student Scholar</span>
-            <span className="font-note-handwritten text-sm text-primary font-medium">
-              Learner Profile • Active Journey
-            </span>
-          </div>
+          <button
+            onClick={signOut}
+            className="text-[11px] font-note-handwritten text-[#a65959] hover:underline shrink-0 ml-1.5 bg-transparent border-none cursor-pointer"
+            title="Switch Traveler Identity"
+          >
+            Sign Out
+          </button>
         </div>
       </div>
     </nav>

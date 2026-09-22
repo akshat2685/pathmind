@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
     FIRESTORE_PROJECT_ID: str | None = None
 
+    # CORS Configuration
+    FRONTEND_ORIGIN: str = Field(default="http://localhost:3000", validation_alias="FRONTEND_ORIGIN")
+
+    # Supabase Configuration
+    SUPABASE_URL: str = Field(default="", validation_alias="SUPABASE_URL")
+    SUPABASE_SECRET_KEY: str = Field(default="", validation_alias="SUPABASE_SECRET_KEY")
+
     model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

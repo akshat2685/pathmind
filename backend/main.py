@@ -30,6 +30,8 @@ from backend.api.execution_routes import router as execution_router
 from backend.api.opportunity_routes import router as opportunity_router
 from backend.api.orchestrator_routes import router as orchestrator_router
 from backend.api.market_routes import router as market_router
+from backend.api.college_routes import router as college_router
+from backend.api.health_routes import router as connectivity_health_router
 from backend.core.security import SecurityHeadersMiddleware, StructuredErrorMiddleware
 from backend.core.config import settings
 import logging
@@ -45,15 +47,17 @@ app = FastAPI(title="PATHMIND Production API")
 app.add_middleware(StructuredErrorMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
-# Setup CORS for production and local development
+# Setup CORS using configurable FRONTEND_ORIGIN with development fallbacks
+allowed_origins = [settings.FRONTEND_ORIGIN]
+for dev_origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+    if dev_origin not in allowed_origins:
+        allowed_origins.append(dev_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://akshat2685.github.io"
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -86,6 +90,8 @@ app.include_router(execution_router)
 app.include_router(opportunity_router)
 app.include_router(orchestrator_router)
 app.include_router(market_router)
+app.include_router(college_router)
+app.include_router(connectivity_health_router)
 
 @app.get("/health/live")
 async def health_live():
