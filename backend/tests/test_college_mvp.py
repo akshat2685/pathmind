@@ -340,7 +340,7 @@ def test_diagnostic_assessment_honest_without_llm(monkeypatch):
     resp = client.post("/api/college/assessments/diagnostic", headers=AUTH_HEADERS_ALICE)
     # Explicit unavailable, never invented questions
     assert resp.status_code == 503
-    assert "DIAGNOSTIC_GENERATION_UNAVAILABLE" in resp.json()["detail"]
+    assert "DIAGNOSTIC_UNAVAILABLE" in resp.json()["detail"]
 
 
 def test_accountability_schedule_and_commitments():

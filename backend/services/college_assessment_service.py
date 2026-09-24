@@ -208,7 +208,7 @@ class CollegeAssessmentService:
             model = _get_gemini_model()
             if model is None:
                 raise ValueError(
-                    "DIAGNOSTIC_GENERATION_UNAVAILABLE: an AI question author "
+                    "DIAGNOSTIC_UNAVAILABLE: an AI question author "
                     "is required to build an honest diagnostic; refusing to "
                     "invent generic questions")
 
@@ -237,7 +237,7 @@ Never invent subject ids; use only the subjects listed."""
                 gen_qs = json.loads(text.strip())
             except Exception as exc:
                 raise ValueError(
-                    "DIAGNOSTIC_GENERATION_UNAVAILABLE: could not parse "
+                    "DIAGNOSTIC_UNAVAILABLE: could not parse "
                     f"authored questions ({type(exc).__name__})")
 
             questions = []
