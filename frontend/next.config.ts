@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
       }
     : {}),
   trailingSlash: true,
+  async redirects() {
+    return [
+      { source: "/signup", destination: "/login", permanent: false },
+      { source: "/signup/", destination: "/login/", permanent: false },
+    ];
+  },
   images: {
     unoptimized: true,
   },
