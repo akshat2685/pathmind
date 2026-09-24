@@ -936,6 +936,18 @@ export function CollegeDashboard() {
               )}
             </div>
 
+            {/* What exactly these papers are scoped to — nothing is ever hardcoded */}
+            <p className="text-[11px] text-[#68635e] italic -mt-1">
+              Scoped to: {universityDisplay}
+              {branch ? ` • ${branchLabel}` : ""}
+              {academicContext?.semester ? ` • Semester ${academicContext.semester}` : ""}
+              {pyqScope === "subject"
+                ? (pyqSubjects.find((s: any) => s.subject_id === pyqSubjectId)?.name
+                    ? ` • ${pyqSubjects.find((s: any) => s.subject_id === pyqSubjectId).name} only`
+                    : " • pick a subject above")
+                : " • all subjects of this semester, in levels"}
+            </p>
+
             {pyqError && (
               <div className="p-4 border border-dashed border-[#a65959] rounded-md bg-[#ffdad6]/20 text-xs text-[#93000a]">
                 {pyqError}
