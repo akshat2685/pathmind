@@ -17,6 +17,16 @@ class EngineeringBranch(str, Enum):
     CIVIL = "CIVIL_ENGINEER"
     GENERAL_OTHER = "GENERAL_OTHER"
 
+class PlanScope(str, Enum):
+    """Breadth of a goal/learning plan. Kept on the goal and plan records."""
+    WHOLE_PROGRAM = "WHOLE_PROGRAM"  # all semesters of the engineering program
+    SEMESTER = "SEMESTER"            # one semester (default, backward compatible)
+    SUBJECT_PART = "SUBJECT_PART"    # a specific part of a subject
+
+class AssessmentKind(str, Enum):
+    CHECKPOINT = "CHECKPOINT"    # tied to a learning-plan phase
+    DIAGNOSTIC = "DIAGNOSTIC"    # onboarding baseline; not tied to any phase
+
 class SourceTier(str, Enum):
     A = "A"  # Official university / syllabus / examination
     B = "B"  # NPTEL / SWAYAM / IIT / Government open education
@@ -109,12 +119,14 @@ class SubjectRecord(BaseModel):
 class CurriculumRecord(BaseModel):
     curriculum_id: str
     university_id: str
-    program_id: str
+    program_id: Optional[str] = None  # None for the honest GENERAL_OTHER empty curriculum
     academic_year: Optional[str] = None
     semester: int
     version: int = 1
     verification_status: VerificationStatus = VerificationStatus.VERIFIED
     created_at: str = Field(default_factory=current_iso_time)
+    # Echo of the requested branch (response convenience, not a DB column).
+    branch: Optional[str] = None
     subjects: List[SubjectRecord] = Field(default_factory=list)
 
 # --- Source & Resource Models ---
@@ -213,7 +225,9 @@ class UserProfile(BaseModel):
     email: Optional[str] = None
     primary_university_id: Optional[str] = None
     primary_program_id: Optional[str] = None
-    primary_branch: Optional[str] = None
+    # NOTE: there is no `primary_branch` column on the learners table; the
+    # branch lives in `supported_path`. This field was removed to stop the
+    # PostgREST 400 on profile writes.
     current_semester: Optional[int] = None
     current_academic_year: Optional[str] = None
     supported_path: str = "GENERAL_OTHER"
@@ -241,11 +255,15 @@ class AcademicContext(BaseModel):
     learning_style_preferences: List[str] = Field(default_factory=list)
     created_at: str = Field(default_factory=current_iso_time)
     updated_at: str = Field(default_factory=current_iso_time)
+    # Read-model convenience only (lives in learner_context_subjects, not on
+    # the contexts row). The store populates it on read and strips it on write.
+    subjects: List[str] = Field(default_factory=list)
 
 class CollegeGoal(BaseModel):
     goal_id: str
     user_id: str
     goal_type: str = "SEMESTER_EXAM"
+    scope: PlanScope = PlanScope.SEMESTER
     raw_goal: str
     normalized_goal: str
     target_subject_ids: List[str] = Field(default_factory=list)
@@ -303,6 +321,7 @@ class CollegeLearningPlan(BaseModel):
     user_id: str
     goal_id: str
     plan_type: str = "SEMESTER_PREPARATION"
+    scope: PlanScope = PlanScope.SEMESTER
     version: int = 1
     status: str = "ACTIVE"
     created_at: str = Field(default_factory=current_iso_time)
@@ -326,9 +345,11 @@ class CollegeAssessmentQuestion(BaseModel):
 class CollegeAssessment(BaseModel):
     assessment_id: str
     user_id: str
-    plan_id: str
-    phase_id: str
-    subject_id: str
+    # Nullable: DIAGNOSTIC assessments are not tied to any plan phase.
+    plan_id: Optional[str] = None
+    phase_id: Optional[str] = None
+    subject_id: Optional[str] = None
+    assessment_kind: AssessmentKind = AssessmentKind.CHECKPOINT
     title: str
     questions: List[CollegeAssessmentQuestion] = Field(default_factory=list)
     status: str = "AVAILABLE"
@@ -394,6 +415,24 @@ class LearningSignal(BaseModel):
     recommended_intervention: str
     created_at: str = Field(default_factory=current_iso_time)
 
+class TopicMasteryRecord(BaseModel):
+    """
+    Per-(user_id, subject_id, topic) mastery. The single source of truth the
+    phase unlock_rule gates on and the future memory subagent reads.
+
+    mastery_score is 0.0–1.0 (fraction of marks demonstrated on gradable
+    evidence). outcome is a MasteryStatus value; INSUFFICIENT_EVIDENCE means
+    no gradable evidence exists yet — never a guess. evidence_ref points at
+    the backing assessment_result_id or signal_id.
+    """
+    user_id: str
+    subject_id: Optional[str] = None
+    topic: str
+    mastery_score: float = Field(ge=0.0, le=1.0)
+    outcome: str = MasteryStatus.INSUFFICIENT_EVIDENCE.value
+    evidence_ref: Optional[str] = None
+    updated_at: str = Field(default_factory=current_iso_time)
+
 # --- Accountability & Daily Trail ---
 
 class AccountabilityCommitment(BaseModel):
@@ -415,6 +454,6 @@ class TodaySchedule(BaseModel):
     commitments: List[AccountabilityCommitment] = Field(default_factory=list)
     active_activities: List[CollegeActivity] = Field(default_factory=list)
     active_assessments: List[CollegeAssessment] = Field(default_factory=list)
-    streak_days: int = 1
+    streak_days: int = 0
     total_planned_minutes: int = 0
     total_completed_minutes: int = 0
