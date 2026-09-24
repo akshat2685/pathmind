@@ -1,0 +1,4 @@
+# Root requirements for the Vercel backend project.
+# Vercel's Python runtime installs from the project-root requirements.txt.
+-r backend/requirements.txt
+mangum>=0.17.0
