@@ -1,4 +1,19 @@
 # Root requirements for the Vercel backend project.
 # Vercel's Python runtime installs from the project-root requirements.txt.
--r backend/requirements.txt
+# NOTE: kept flat on purpose — Vercel's parser does not support `-r` includes.
+fastapi>=0.100.0
+uvicorn>=0.20.0
+google-generativeai>=0.8.0
+google-genai>=0.1.0
+google-cloud-firestore>=2.11.0
+google-cloud-storage>=2.10.0
+google-cloud-pubsub>=2.18.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+httpx>=0.25.0
+google-adk>=2.0.0
+youtube-transcript-api>=1.0.0
+supabase>=2.0.0
 mangum>=0.17.0
