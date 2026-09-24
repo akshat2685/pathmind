@@ -56,6 +56,12 @@ for dev_origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    # Allow every Vercel preview deployment (*.vercel.app): each redeploy mints
+    # a new preview URL, and a single hardcoded origin would break the web app's
+    # API calls (the browser blocks them as CORS failures, surfacing as
+    # "Failed to fetch") after every deploy. Auth uses Bearer tokens, not
+    # cookies, so a foreign site cannot act without the user's token.
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
