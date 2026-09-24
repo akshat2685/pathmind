@@ -54,32 +54,37 @@ class AcademicService:
         learning_style_preferences: Optional[List[str]] = None
     ) -> AcademicContext:
         """Stores authenticated learner's validated academic context."""
-        univ = await self.get_university(university_id)
-        univ_name = univ.name if univ else university_id
+        # Resolve the canonical program; None when knowledge tables are unseeded
+        # (program_id is nullable — never invent one).
+        program_id = await self.store.find_program_id(university_id, [branch.value, branch.name])
 
         context = AcademicContext(
             context_id=f"ctx_{uid}_{semester}",
-            uid=uid,
+            user_id=uid,
             university_id=university_id,
-            university_name=univ_name,
-            branch=branch,
+            program_id=program_id,
             semester=semester,
-            subjects=subjects,
             exam_window=exam_window or {},
             available_hours_per_week=available_hours_per_week,
             learning_style_preferences=learning_style_preferences or []
         )
 
-        await self.store.save_college_academic_context(uid, context.model_dump(mode="json"))
+        context_data = context.model_dump(mode="json")
+        context_data["subjects"] = subjects
+        await self.store.save_college_academic_context(uid, context_data)
 
-        # Update user profile
-        user_prof = await self.store.get_or_create_college_user(uid)
-        user_prof["primary_university_id"] = university_id
-        user_prof["primary_branch"] = branch.value
-        user_prof["current_semester"] = semester
-        user_prof["supported_path"] = branch.value
-        user_prof["profile_status"] = "CONTEXT_SET"
-        await self.store.save_college_user_profile(uid, user_prof)
+        # Sync denormalized profile fields. The learner profile must already exist
+        # (created via POST /profile during onboarding) — never fabricate one here.
+        user_prof = await self.store.get_college_user_profile(uid)
+        if not user_prof:
+            raise ValueError("PROFILE_NOT_FOUND: create the learner profile before saving academic context")
+        await self.store.save_college_user_profile(uid, {
+            "primary_university_id": university_id,
+            "primary_program_id": program_id,
+            "current_semester": semester,
+            "supported_path": branch.value,
+            "profile_status": "CONTEXT_SET",
+        })
 
         return context
 

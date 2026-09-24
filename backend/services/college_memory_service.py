@@ -118,7 +118,7 @@ class CollegeMemoryService:
         """Catalogues an actionable pedagogical insight (e.g. repeated error pattern)."""
         signal = LearningSignal(
             signal_id=f"sig_{uuid.uuid4().hex[:6]}",
-            uid=uid,
+            user_id=uid,
             signal_type=signal_type,
             subject_id=subject_id,
             topic_id=topic_id,

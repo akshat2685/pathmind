@@ -120,16 +120,19 @@ async def save_academic_context(
     req: SaveAcademicContextRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
-    return await academic_service.save_learner_academic_context(
-        uid=person_id,
-        university_id=req.university_id,
-        branch=req.branch,
-        semester=req.semester,
-        subjects=req.subjects,
-        exam_window=req.exam_window,
-        available_hours_per_week=req.available_hours_per_week,
-        learning_style_preferences=req.learning_style_preferences
-    )
+    try:
+        return await academic_service.save_learner_academic_context(
+            uid=person_id,
+            university_id=req.university_id,
+            branch=req.branch,
+            semester=req.semester,
+            subjects=req.subjects,
+            exam_window=req.exam_window,
+            available_hours_per_week=req.available_hours_per_week,
+            learning_style_preferences=req.learning_style_preferences
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
 
 @router.get("/academic-context", response_model=Optional[AcademicContext])
 async def get_academic_context(person_id: str = Depends(get_authenticated_person)):

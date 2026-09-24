@@ -1585,6 +1585,14 @@ class FirestoreStore:
         res = await college_store.get_college_academic_context(uid)
         return res.model_dump() if res else None
 
+    async def find_program_id(self, university_id: str, branch_values: list) -> Optional[str]:
+        from backend.services.college_store import college_store
+        return await college_store.find_program_id(university_id, branch_values)
+
+    async def get_context_subject_ids(self, context_id: str) -> list:
+        from backend.services.college_store import college_store
+        return await college_store.get_context_subject_ids(context_id)
+
     async def save_college_learning_plan(self, uid: str, plan_data: dict) -> None:
         from backend.services.college_store import college_store
         from backend.core.college_schemas import CollegeLearningPlan

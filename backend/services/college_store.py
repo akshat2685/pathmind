@@ -97,7 +97,9 @@ class CollegeStore:
             ctx = res.data[0]
             
             # Fetch relational subjects
-            sub_res = self.client.table("learner_context_subjects").select("subject_id").eq("context_id", ctx["context_id"]).eq("user_id", uid).execute()
+            # Fetch relational subjects. The mapping table carries no user_id
+            # column; ownership is enforced through the parent context FK + RLS.
+            sub_res = self.client.table("learner_context_subjects").select("subject_id").eq("context_id", ctx["context_id"]).execute()
             ctx["subjects"] = [s["subject_id"] for s in sub_res.data] if sub_res.data else []
             
             return AcademicContext(**ctx)
@@ -117,15 +119,47 @@ class CollegeStore:
             # Upsert context
             self.client.table("learner_academic_contexts").upsert(context_data, on_conflict="context_id").execute()
             
-            # Sync subjects (delete old, insert new)
-            self.client.table("learner_context_subjects").delete().eq("context_id", ctx_id).eq("user_id", uid).execute()
+            # Sync subjects (delete old, insert new). The mapping table has no
+            # user_id column; ownership is enforced via the parent context FK + RLS.
+            # Only link subject_ids that exist in subjects (FK-safe); warn on the rest.
+            self.client.table("learner_context_subjects").delete().eq("context_id", ctx_id).execute()
             if subjects:
-                subject_rows = [{"context_id": ctx_id, "user_id": uid, "subject_id": sid} for sid in subjects]
-                self.client.table("learner_context_subjects").insert(subject_rows).execute()
+                existing = self.client.table("subjects").select("subject_id").in_("subject_id", subjects).execute()
+                existing_ids = {s["subject_id"] for s in (existing.data or [])}
+                missing = [s for s in subjects if s not in existing_ids]
+                if missing:
+                    logger.warning("Skipping learner_context_subjects with no subjects row: %s", missing)
+                subject_rows = [{"context_id": ctx_id, "subject_id": sid} for sid in subjects if sid in existing_ids]
+                if subject_rows:
+                    self.client.table("learner_context_subjects").insert(subject_rows).execute()
                 
         except Exception as e:
             logger.error("Failed to save_college_academic_context: %s", str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    async def find_program_id(self, university_id: str, branch_values: List[str]) -> Optional[str]:
+        """Resolves the canonical program_id for a university + branch.
+
+        Returns None when the knowledge tables are unseeded; callers must not
+        invent a program id (no-fake-state rule).
+        """
+        try:
+            res = self.client.table("programs").select("program_id").eq("university_id", university_id).in_("branch", branch_values).limit(1).execute()
+            if res.data:
+                return res.data[0]["program_id"]
+            return None
+        except Exception as e:
+            logger.error("Failed to find_program_id: %s", str(e))
+            return None
+
+    async def get_context_subject_ids(self, context_id: str) -> List[str]:
+        """Returns subject_ids linked to an academic context (mapping table)."""
+        try:
+            res = self.client.table("learner_context_subjects").select("subject_id").eq("context_id", context_id).execute()
+            return [s["subject_id"] for s in (res.data or [])]
+        except Exception as e:
+            logger.error("Failed to get_context_subject_ids: %s", str(e))
+            return []
 
     # --- Goal ---
 
@@ -159,7 +193,8 @@ class CollegeStore:
             plan_id = plan_dict["plan_id"]
             
             # Fetch Plan Subjects
-            sub_res = self.client.table("learning_plan_subjects").select("*").eq("plan_id", plan_id).eq("user_id", uid).execute()
+            # Fetch Plan Subjects (mapping table has no user_id column)
+            sub_res = self.client.table("learning_plan_subjects").select("*").eq("plan_id", plan_id).execute()
             plan_dict["subjects"] = sub_res.data if sub_res.data else []
             
             # Fetch Phases
@@ -203,11 +238,20 @@ class CollegeStore:
             self.client.table("learning_plans").upsert(plan_dict, on_conflict="plan_id").execute()
             
             # 2. Insert Subjects
+            # 2. Insert Subjects (mapping table has no user_id column; FK-safe)
             if plan_data.subjects:
-                subs = [s.model_dump() for s in plan_data.subjects]
-                for s in subs: s["user_id"] = uid
-                self.client.table("learning_plan_subjects").delete().eq("plan_id", plan_id).eq("user_id", uid).execute()
-                self.client.table("learning_plan_subjects").insert(subs).execute()
+                subs = [s.model_dump(exclude={"user_id"}) for s in plan_data.subjects]
+                self.client.table("learning_plan_subjects").delete().eq("plan_id", plan_id).execute()
+                if subs:
+                    wanted = [s["subject_id"] for s in subs]
+                    existing = self.client.table("subjects").select("subject_id").in_("subject_id", wanted).execute()
+                    existing_ids = {s["subject_id"] for s in (existing.data or [])}
+                    missing = [s for s in wanted if s not in existing_ids]
+                    if missing:
+                        logger.warning("Skipping learning_plan_subjects with no subjects row: %s", missing)
+                    subs = [s for s in subs if s["subject_id"] in existing_ids]
+                    if subs:
+                        self.client.table("learning_plan_subjects").insert(subs).execute()
                 
             # 3. Insert Phases
             if plan_data.phases:

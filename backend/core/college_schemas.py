@@ -233,7 +233,7 @@ class AcademicContext(BaseModel):
     context_id: str
     user_id: str
     university_id: str
-    program_id: str
+    program_id: Optional[str] = None  # nullable in DB; None when programs unseeded
     semester: int
     academic_year: Optional[str] = None
     exam_window: Dict[str, Any] = Field(default_factory=dict)
@@ -259,7 +259,7 @@ class CollegeGoal(BaseModel):
 
 class LearningPlanSubject(BaseModel):
     plan_id: str
-    user_id: str
+    user_id: Optional[str] = None  # not a DB column; kept optional for compat
     subject_id: str
     created_at: str = Field(default_factory=current_iso_time)
 
