@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Optional, Dict, Any, List
 from backend.services.supabase_adapter import get_supabase_adapter
 from backend.core.college_schemas import (
@@ -496,5 +497,71 @@ class CollegeStore:
         except Exception as e:
             logger.error("Failed to upsert_topic_mastery: %s", str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    # --- Chat sessions & messages (agent conversation persistence) ---
+
+    async def get_or_create_chat_session(
+        self, uid: str, session_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Returns the chat session row; creates one when needed."""
+        try:
+            if session_id:
+                res = (
+                    self.client.table("chat_sessions").select("*")
+                    .eq("user_id", uid).eq("session_id", session_id).execute()
+                )
+                if res.data:
+                    return res.data[0]
+            new_session_id = session_id or f"chat_{uuid.uuid4().hex[:12]}"
+            row = {
+                "session_id": new_session_id,
+                "user_id": uid,
+                "title": "College agent conversation",
+                "status": "ACTIVE",
+            }
+            res = self.client.table("chat_sessions").insert(row).execute()
+            return (res.data or [row])[0]
+        except Exception as e:
+            logger.error("Failed to get_or_create_chat_session: %s", str(e))
+            return None
+
+    async def save_chat_message(
+        self,
+        uid: str,
+        session_id: str,
+        role: str,
+        content: str,
+        source_refs: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Persists one chat turn. Never raises — persistence failures return None."""
+        try:
+            row = {
+                "message_id": f"msg_{uuid.uuid4().hex[:12]}",
+                "session_id": session_id,
+                "user_id": uid,
+                "role": role,
+                "content": content,
+                "source_refs": source_refs or [],
+            }
+            res = self.client.table("chat_messages").insert(row).execute()
+            return (res.data or [row])[0]
+        except Exception as e:
+            logger.error("Failed to save_chat_message: %s", str(e))
+            return None
+
+    async def get_chat_history(
+        self, uid: str, session_id: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Recent messages for a session, oldest first. Never raises."""
+        try:
+            res = (
+                self.client.table("chat_messages").select("*")
+                .eq("user_id", uid).eq("session_id", session_id)
+                .order("timestamp", desc=False).limit(limit).execute()
+            )
+            return list(res.data or [])
+        except Exception as e:
+            logger.error("Failed to get_chat_history: %s", str(e))
+            return []
 
 college_store = CollegeStore()

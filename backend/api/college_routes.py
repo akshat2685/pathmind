@@ -36,6 +36,9 @@ from backend.services.college_assessment_service import CollegeAssessmentService
 from backend.services.college_accountability_service import CollegeAccountabilityService
 from backend.services.college_memory_service import CollegeMemoryService
 from backend.services.college_orchestrator import CollegeOrchestrator
+from backend.services.college_adk_runtime import run_agent_interact
+from backend.services.college_resource_pipeline import CollegeResourcePipeline
+from backend.services.college_store import college_store
 from backend.services.store import FirestoreStore
 
 router = APIRouter(prefix="/api/college", tags=["College Engineering MVP"])
@@ -343,7 +346,7 @@ async def get_learner_memories_endpoint(person_id: str = Depends(get_authenticat
         "learning_signals": [s.model_dump(mode="json") for s in signals]
     }
 
-# --- 8. Agent Interaction ---
+# --- 8. Agent Interaction (real Google ADK Runner) ---
 
 class AgentInteractRequest(BaseModel):
     message: str
@@ -354,8 +357,53 @@ async def agent_interact_endpoint(
     req: AgentInteractRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
-    return await orchestrator.interact(
+    """
+    Served by the ADK Runner (CollegeRootAgent + six sub-agents, TRD §4–5).
+    Without a Gemini key it answers via the deterministic legacy path —
+    same {message, state, ui_blocks, sources} shape either way (TRD §23).
+    """
+    return await run_agent_interact(
         uid=person_id,
         user_message=req.message,
-        session_id=req.session_id
+        session_id=req.session_id,
+        store=college_store,
+    )
+
+# --- 9. Verified learning resources (resource pipeline) ---
+
+@router.get("/resources")
+async def get_verified_resources_endpoint(
+    subject_id: str = Query(...),
+    topic: Optional[str] = Query(None),
+    person_id: str = Depends(get_authenticated_person),
+):
+    """
+    Cached VERIFIED resources for a subject/topic. Never fabricates URLs:
+    when nothing verified is cached, returns RESOURCE_ENRICHMENT_PENDING so
+    the client can call POST /resources/enrich.
+    """
+    pipeline = CollegeResourcePipeline(college_store)
+    return await pipeline.get_verified_resources(subject_id, topic=topic)
+
+class EnrichResourcesRequest(BaseModel):
+    subject_id: str
+    topic: str
+    time_budget_seconds: int = 30
+
+@router.post("/resources/enrich")
+async def enrich_resources_endpoint(
+    req: EnrichResourcesRequest,
+    person_id: str = Depends(get_authenticated_person)
+):
+    """
+    Bounded live internet research for one topic (DuckDuckGo primary, Tavily
+    backup, YouTube API for videos). Only reachable URLs are persisted as
+    VERIFIED. Budgeted to stay under the 60s Vercel cap; the frontend may
+    poll GET /resources afterwards for the cached results.
+    """
+    pipeline = CollegeResourcePipeline(college_store)
+    return await pipeline.research_topic(
+        subject_id=req.subject_id,
+        topic=req.topic,
+        time_budget_seconds=min(max(req.time_budget_seconds, 5), 45),
     )
