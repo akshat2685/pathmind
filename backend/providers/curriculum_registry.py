@@ -116,7 +116,16 @@ async def get_pyqs_for_subject(university_id: Optional[str], subject_id: str) ->
     return PYQSetRecord(**pyq_dict)
 
 async def get_resources_for_subject(subject_id: str) -> List[ResourceRecord]:
-    # Need to query resource_curriculum mappings or topics, but schema says resource_records has curriculum_ids?
-    # Schema says we have `resource_records`.
-    # Just returning empty for now or query resource_records.
-    return []
+    """Verified learning resources linked to a subject (learning_resources)."""
+    adapter = get_supabase_adapter()
+    if not adapter.client:
+        return []
+    res = (adapter.client.table("learning_resources").select("*")
+           .eq("subject_id", subject_id).execute())
+    records = []
+    for row in (res.data or []):
+        try:
+            records.append(ResourceRecord(**row))
+        except Exception:
+            continue
+    return records

@@ -86,7 +86,13 @@ class AcademicService:
             "profile_status": "CONTEXT_SET",
         })
 
-        return context
+        # Return the re-read context: it carries the persisted subjects from the
+        # mapping table (the in-memory object above never had them). Single
+        # source of truth, no stale fields.
+        saved = await self.get_learner_academic_context(uid)
+        if saved is None:  # pragma: no cover - defensive; save just succeeded
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+        return saved
 
     async def get_learner_academic_context(self, uid: str) -> Optional[AcademicContext]:
         raw = await self.store.get_college_academic_context(uid)

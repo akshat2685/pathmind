@@ -1560,7 +1560,8 @@ class FirestoreStore:
             print(f"Error updating state: {e}")
 
     async def list_all_college_users(self) -> list:
-        return []
+        from backend.services.college_store import college_store
+        return [u.model_dump(mode="json") for u in await college_store.list_all_college_users()]
 
     async def get_or_create_college_user(self, uid: str, name: str = "", email: str = None) -> dict:
         from backend.services.college_store import college_store
@@ -1651,6 +1652,8 @@ class FirestoreStore:
         return res.model_dump() if res else None
 
     async def save_college_short_memory(self, uid: str, memory_data: dict) -> None:
+        if not self._available:
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
         from backend.services.college_store import college_store
         await college_store.save_college_short_memory(uid, memory_data)
 
@@ -1660,6 +1663,8 @@ class FirestoreStore:
         return [r.model_dump() for r in res]
 
     async def save_college_long_memory(self, uid: str, memory_data: dict) -> None:
+        if not self._available:
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
         from backend.services.college_store import college_store
         await college_store.save_college_long_memory(uid, memory_data)
 

@@ -92,7 +92,7 @@ class CollegeLearningService:
                     activities = await self._build_phase_activities(
                         uid, plan_id, ctx.university_id, semester, sub, unit,
                         phase_order, ctx.available_hours_per_week, model)
-                    phase_id = f"phase_{plan_id}_s{semester}_u{unit.unit}"
+                    phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
                     phases.append(CollegePlanPhase(
                         phase_id=phase_id,
                         user_id=uid,
@@ -265,7 +265,7 @@ class CollegeLearningService:
         available_hours_per_week: Optional[int],
         model,
     ) -> List[CollegeActivity]:
-        phase_id = f"phase_{plan_id}_s{semester}_u{unit.unit}"
+        phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
         status = "AVAILABLE" if phase_order == 1 else "LOCKED"
         resources = await get_resources_for_subject(sub.subject_id)
         pyq_set = await get_pyqs_for_subject(university_id, sub.subject_id)

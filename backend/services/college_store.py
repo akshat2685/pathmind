@@ -39,6 +39,15 @@ class CollegeStore:
         
     # --- Users ---
 
+    async def list_all_college_users(self) -> List[UserProfile]:
+        """Lists every registered learner. Reads the real learners table."""
+        try:
+            res = self.client.table("learners").select("*").execute()
+            return [UserProfile(**row) for row in (res.data or [])]
+        except Exception as e:
+            logger.error("Failed to list_all_college_users: %s", str(e))
+            return []
+
     async def get_or_create_college_user(self, uid: str, name: str, email: Optional[str] = None) -> Optional[UserProfile]:
         """
         Creates a learner if it doesn't exist. Name is REQUIRED.
