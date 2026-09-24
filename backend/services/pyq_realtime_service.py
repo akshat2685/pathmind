@@ -57,13 +57,17 @@ def _utcnow_iso() -> str:
 
 
 def _extract_year(*texts: str) -> Optional[int]:
+    # Exam years must be plausible: 1990..current year. Page numbers or PDF
+    # metadata often produce bogus matches (e.g. 2072, 2092) — reject those
+    # rather than showing impossible "exam years" to the learner.
+    now_year = datetime.now(timezone.utc).year
     for t in texts:
         if not t:
             continue
         m = _YEAR_RE.search(t)
         if m:
             y = int(m.group(0))
-            if 1990 <= y <= 2100:
+            if 1990 <= y <= now_year:
                 return y
     return None
 
@@ -212,8 +216,22 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
                         university_id=university_id, retrieval="realtime")
         for h in seen.values()
     ]
-    # Most recent first; undated papers last (year unknown, kept honestly).
-    papers.sort(key=lambda p: (p["year"] is None, -(p["year"] or 0)))
+
+    def _relevance(p: Dict[str, Any]) -> int:
+        # Prefer hits that actually look like question papers over generic
+        # university PDFs (syllabi, notices) that Tavily also returns.
+        blob = f"{p['title']} {p['url']}".lower()
+        score = 0
+        for kw in ("question paper", "questionpaper", "previous year", "end semester",
+                   "mid semester", "model paper", "sample paper"):
+            if kw in blob:
+                score += 2
+        if blob.rstrip("/").endswith(".pdf"):
+            score += 1
+        return score
+
+    # Most relevant first, then most recent; undated papers last.
+    papers.sort(key=lambda p: (-_relevance(p), p["year"] is None, -(p["year"] or 0)))
     return papers
 
 
