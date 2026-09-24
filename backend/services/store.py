@@ -1680,3 +1680,14 @@ class FirestoreStore:
         from backend.services.college_store import college_store
         res = await college_store.get_college_learning_signals(uid)
         return [r.model_dump() for r in res]
+
+    async def get_topic_masteries(self, uid: str, subject_id: str = None) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_topic_masteries(uid, subject_id)
+        return [r.model_dump() for r in res]
+
+    async def upsert_topic_mastery(self, uid: str, record_data: dict) -> None:
+        from backend.services.college_store import college_store
+        from backend.core.college_schemas import TopicMasteryRecord
+        record = TopicMasteryRecord(**record_data)
+        await college_store.upsert_topic_mastery(uid, record)

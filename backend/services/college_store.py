@@ -15,7 +15,8 @@ from backend.core.college_schemas import (
     CollegeActivity,
     CollegePlanPhase,
     LearningPlanSubject,
-    LearnerContextSubject
+    LearnerContextSubject,
+    TopicMasteryRecord
 )
 
 logger = logging.getLogger(__name__)
@@ -432,6 +433,53 @@ class CollegeStore:
             self.client.table("pathmind_long_term_memories").update(data).eq("memory_id", memory_id).eq("user_id", uid).execute()
         except Exception as e:
             logger.error("Failed to update_long_memory_status: %s", str(e))
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    # --- Per-topic mastery (single source of truth for unlocks + baseline) ---
+
+    async def get_topic_mastery(
+        self, uid: str, subject_id: Optional[str], topic: str
+    ) -> Optional[TopicMasteryRecord]:
+        try:
+            res = (
+                self.client.table("learner_topic_mastery")
+                .select("*")
+                .eq("user_id", uid)
+                .eq("topic", topic)
+                .execute()
+            )
+            for row in res.data or []:
+                if row.get("subject_id") == subject_id:
+                    return TopicMasteryRecord(**row)
+            return None
+        except Exception as e:
+            logger.error("Failed to get_topic_mastery: %s", str(e))
+            return None
+
+    async def get_topic_masteries(
+        self, uid: str, subject_id: Optional[str] = None
+    ) -> List[TopicMasteryRecord]:
+        try:
+            query = (
+                self.client.table("learner_topic_mastery")
+                .select("*")
+                .eq("user_id", uid)
+            )
+            if subject_id is not None:
+                query = query.eq("subject_id", subject_id)
+            res = query.execute()
+            return [TopicMasteryRecord(**row) for row in (res.data or [])]
+        except Exception as e:
+            logger.error("Failed to get_topic_masteries: %s", str(e))
+            return []
+
+    async def upsert_topic_mastery(self, uid: str, record: TopicMasteryRecord) -> None:
+        try:
+            data = record.model_dump(mode="json")
+            data["user_id"] = uid
+            self.client.table("learner_topic_mastery").upsert(data).execute()
+        except Exception as e:
+            logger.error("Failed to upsert_topic_mastery: %s", str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
 
 college_store = CollegeStore()
