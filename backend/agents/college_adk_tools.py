@@ -19,7 +19,17 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from google.adk.tools import FunctionTool, ToolContext
+try:
+    from google.adk.tools import FunctionTool, ToolContext
+    _ADK_TOOLS_OK = True
+except ImportError:  # pragma: no cover - envs without a working google.adk
+    # Same rule as college_adk_agents: a broken google namespace must degrade,
+    # never crash module import. ToolContext is annotation-only (PEP 563, the
+    # file has `from __future__ import annotations`), so only FunctionTool
+    # needs a runtime guard in as_function_tools().
+    FunctionTool = None  # type: ignore[assignment]
+    ToolContext = None  # type: ignore[assignment]
+    _ADK_TOOLS_OK = False
 
 from backend.core.college_schemas import (
     CollegeAssessmentSubmission,
@@ -456,6 +466,8 @@ class CollegeToolKit:
 
     def as_function_tools(self, names: List[str]) -> List[FunctionTool]:
         """Build ADK FunctionTools for the named tool methods."""
+        if not _ADK_TOOLS_OK or FunctionTool is None:
+            raise RuntimeError("google-adk is not importable in this environment")
         tools: List[FunctionTool] = []
         for name in names:
             method = getattr(self, name, None)

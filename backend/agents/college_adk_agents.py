@@ -12,7 +12,14 @@ from __future__ import annotations
 import os
 from typing import Dict, List, Optional
 
-from google.adk.agents import LlmAgent
+try:
+    from google.adk.agents import LlmAgent
+    _ADK_IMPORT_OK = True
+except ImportError:  # pragma: no cover - envs without a working google.adk
+    # google-adk shares the `google` namespace with google-cloud-*; a broken
+    # namespace must degrade to the legacy orchestrator, never crash boot.
+    LlmAgent = None  # type: ignore[assignment]
+    _ADK_IMPORT_OK = False
 
 from backend.agents.college_adk_tools import CollegeToolKit
 from backend.core.config import settings
@@ -56,8 +63,9 @@ HONESTY RULES (non-negotiable):
 
 
 def _gemini_available() -> bool:
-    return bool(settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
-                or os.environ.get("GOOGLE_API_KEY"))
+    return _ADK_IMPORT_OK and bool(
+        settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+        or os.environ.get("GOOGLE_API_KEY"))
 
 
 def build_agents(toolkit: CollegeToolKit,
@@ -67,7 +75,12 @@ def build_agents(toolkit: CollegeToolKit,
 
     context_brief: short text with recent chat history + memory summaries,
     injected into the root instruction so the agent actually remembers.
+
+    Raises RuntimeError when google-adk is not importable; callers are
+    expected to catch this and use the deterministic legacy orchestrator.
     """
+    if not _ADK_IMPORT_OK or LlmAgent is None:
+        raise RuntimeError("google-adk is not importable in this environment")
     academic = LlmAgent(
         name="academic_agent",
         model=_MODEL,
