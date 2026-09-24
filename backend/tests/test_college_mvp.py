@@ -7,9 +7,9 @@ import backend.core.security as security
 
 # Mock Supabase Auth for tests
 mock_user_response_alice = MagicMock()
-mock_user_response_alice.user.id = "alice-scholar-cse"
+mock_user_response_alice.user.id = "11111111-1111-4111-8111-111111111111"
 mock_user_response_bob = MagicMock()
-mock_user_response_bob.user.id = "bob-scholar-mech"
+mock_user_response_bob.user.id = "22222222-2222-4222-8222-222222222222"
 
 def mock_get_user(token: str):
     if token == "alice-token":
@@ -34,20 +34,20 @@ def test_list_all_users_lists_new_users():
     # Alice logs in / gets profile
     resp_alice = client.get("/api/college/profile", headers=AUTH_HEADERS_ALICE)
     assert resp_alice.status_code == 200
-    assert resp_alice.json()["uid"] == "alice-scholar-cse"
+    assert resp_alice.json()["uid"] == "11111111-1111-4111-8111-111111111111"
 
     # Bob logs in / gets profile
     resp_bob = client.get("/api/college/profile", headers=AUTH_HEADERS_BOB)
     assert resp_bob.status_code == 200
-    assert resp_bob.json()["uid"] == "bob-scholar-mech"
+    assert resp_bob.json()["uid"] == "22222222-2222-4222-8222-222222222222"
 
     # List all users
     resp_users = client.get("/api/college/users")
     assert resp_users.status_code == 200
     users = resp_users.json()
     uids = [u["uid"] for u in users]
-    assert "alice-scholar-cse" in uids
-    assert "bob-scholar-mech" in uids
+    assert "11111111-1111-4111-8111-111111111111" in uids
+    assert "22222222-2222-4222-8222-222222222222" in uids
 
 def test_search_and_list_universities():
     """Verify university lookup finds canonical accredited institutions."""
@@ -263,5 +263,5 @@ def test_memory_isolation_between_learners():
     assert resp_mem_bob.status_code == 200
     bob_short = resp_mem_bob.json()["short_term"]
     for m in bob_short:
-        assert m["uid"] == "bob-scholar-mech"
+        assert m["uid"] == "22222222-2222-4222-8222-222222222222"
         assert "Data Structures" not in m["content"]
