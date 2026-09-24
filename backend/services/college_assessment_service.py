@@ -56,20 +56,11 @@ class ShortAnswerGrade:
 def _get_gemini_model():
     """
     Returns a configured Gemini model, or None when unavailable.
-    Kept separate from every deterministic rule: no LLM call ever happens
-    inside college_rules.
+    Delegates to the shared accessor so the model id stays centralized
+    (settings.GEMINI_MODEL). No LLM call ever happens inside college_rules.
     """
-    from backend.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        return None
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        return genai.GenerativeModel("gemini-2.5-flash")
-    except Exception as exc:
-        log_event("college.assessment.llm_unavailable",
-                  outcome="error", error_code=type(exc).__name__)
-        return None
+    from backend.core.gemini import get_gemini_model as _shared
+    return _shared()
 
 
 async def grade_short_answer_with_llm(
@@ -127,6 +118,23 @@ _CONFIDENCE_TO_FLOAT = {
 class CollegeAssessmentService:
     def __init__(self, store: Optional[FirestoreStore] = None):
         self.store = store or FirestoreStore()
+
+    @staticmethod
+    def _generate_content_or_unavailable(model, prompt: str, feature: str):
+        """
+        Calls model.generate_content, converting ANY provider failure
+        (retired model id, bad key, quota, network) into an honest
+        ValueError the route maps to 503 — never a bare 500.
+        """
+        try:
+            return model.generate_content(prompt)
+        except Exception as exc:
+            log_event(f"college.assessment.{feature.lower()}_llm_failed",
+                      outcome="error", error_code=type(exc).__name__)
+            raise ValueError(
+                f"{feature}_UNAVAILABLE: the AI service could not be reached "
+                f"({type(exc).__name__}); try again later instead of "
+                f"receiving invented questions")
 
     # ------------------------------------------------------------------
     # Generation
@@ -227,7 +235,8 @@ spread across the subjects above. Each item:
   "topic": "short topic label", "subject_id": "<one of the subjects above>"}}
 MCQs must include "options" and "answer". SHORT_ANSWER must include "rubric".
 Never invent subject ids; use only the subjects listed."""
-            response = model.generate_content(prompt)
+            response = self._generate_content_or_unavailable(
+                model, prompt, "DIAGNOSTIC")
             text = response.text.strip()
             if text.startswith("```"):
                 text = text.strip("`")

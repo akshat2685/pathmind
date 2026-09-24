@@ -145,7 +145,7 @@ class CollegeOrchestrator:
                 for m in proactive_ctx.get("retrieved_memories", []):
                     mems_context += f"[{m.get('memory_id')}] {m.get('title')}: {m.get('content')}\n"
 
-                model = genai.GenerativeModel("gemini-2.5-flash")
+                model = genai.GenerativeModel(settings.GEMINI_MODEL)
 
                 # Fetch today's schedule for deeper context
                 today_schedule = await self.accountability_service.get_today_schedule(uid)

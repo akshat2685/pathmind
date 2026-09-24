@@ -38,16 +38,28 @@ async def search_universities(query: str) -> List[UniversityRecord]:
     return [UniversityRecord(**row) for row in (res.data or [])]
 
 async def get_university_by_id(univ_id: str) -> Optional[UniversityRecord]:
-    adapter = get_supabase_adapter()
-    if not adapter.client:
+    try:
+        adapter = get_supabase_adapter()
+        if not adapter.client:
+            return None
+
+        res = adapter.client.table("universities").select("*").eq("university_id", univ_id).execute()
+        if res.data:
+            return UniversityRecord(**res.data[0])
         return None
-        
-    res = adapter.client.table("universities").select("*").eq("university_id", univ_id).execute()
-    if res.data:
-        return UniversityRecord(**res.data[0])
-    return None
+    except Exception:
+        # Never 500 the caller on a provider hiccup; "unknown" is honest.
+        return None
 
 async def get_curriculum(university_id: str, branch: EngineeringBranch, semester: int) -> Optional[CurriculumRecord]:
+    try:
+        return await _get_curriculum_inner(university_id, branch, semester)
+    except Exception:
+        # A provider hiccup must read as "no verified curriculum", never a 500.
+        return None
+
+
+async def _get_curriculum_inner(university_id: str, branch: EngineeringBranch, semester: int) -> Optional[CurriculumRecord]:
     adapter = get_supabase_adapter()
     if not adapter.client:
         return None

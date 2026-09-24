@@ -24,7 +24,7 @@ except ImportError:  # pragma: no cover - envs without a working google.adk
 from backend.agents.college_adk_tools import CollegeToolKit
 from backend.core.config import settings
 
-_MODEL = "gemini-2.5-flash"
+_MODEL = settings.GEMINI_MODEL
 
 
 def _response_contract() -> str:

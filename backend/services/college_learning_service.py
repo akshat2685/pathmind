@@ -237,17 +237,10 @@ class CollegeLearningService:
 
     @staticmethod
     def _get_gemini_model():
-        from backend.core.config import settings
-        if not settings.GEMINI_API_KEY:
-            return None
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            return genai.GenerativeModel("gemini-2.5-flash")
-        except Exception as exc:
-            log_event("college.plan.llm_unavailable",
-                      outcome="error", error_code=type(exc).__name__)
-            return None
+        # Centralized in backend.core.gemini (settings.GEMINI_MODEL) so a
+        # model retirement is an env change, not a code deploy.
+        from backend.core.gemini import get_gemini_model as _shared
+        return _shared()
 
     # ------------------------------------------------------------------
     # Activities

@@ -178,6 +178,12 @@ async def generate_plan_endpoint(
         log_event("college.route.plan_failed", user_id=person_id,
                   outcome="error", error_code=str(ve).split(":")[0])
         raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as exc:
+        # Never a bare 500: surface the error code so the cause is diagnosable.
+        code = f"PLAN_FAILED:{type(exc).__name__}"
+        log_event("college.route.plan_failed", user_id=person_id,
+                  outcome="error", error_code=code)
+        raise HTTPException(status_code=500, detail=code)
 
 @router.get("/plans/current", response_model=Optional[CollegeLearningPlan])
 async def get_current_plan_endpoint(person_id: str = Depends(get_authenticated_person)):
@@ -293,6 +299,12 @@ async def generate_diagnostic_endpoint(
         log_event("college.route.diagnostic_failed", user_id=person_id,
                   outcome="error", error_code=code)
         raise HTTPException(status_code=status, detail=detail)
+    except Exception as exc:
+        # Never a bare 500: surface the error code so the cause is diagnosable.
+        code = f"DIAGNOSTIC_FAILED:{type(exc).__name__}"
+        log_event("college.route.diagnostic_failed", user_id=person_id,
+                  outcome="error", error_code=code)
+        raise HTTPException(status_code=500, detail=code)
 
 @router.get("/baseline")
 async def get_baseline_endpoint(
