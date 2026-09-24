@@ -251,7 +251,9 @@ class CollegeStore:
             # 2. Insert Subjects
             # 2. Insert Subjects (mapping table has no user_id column; FK-safe)
             if plan_data.subjects:
-                subs = [s.model_dump(exclude={"user_id"}) for s in plan_data.subjects]
+                # learning_plan_subjects is a pure mapping table (plan_id, subject_id):
+                # drop model-only fields that are not DB columns.
+                subs = [s.model_dump(exclude={"user_id", "created_at"}) for s in plan_data.subjects]
                 self.client.table("learning_plan_subjects").delete().eq("plan_id", plan_id).execute()
                 if subs:
                     wanted = [s["subject_id"] for s in subs]
