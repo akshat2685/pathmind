@@ -58,14 +58,60 @@ class CollegeOrchestrator:
         # 3. Check for specific subject or PYQ intent
         msg_lower = user_message.lower()
         if "pyq" in msg_lower or "previous year" in msg_lower or "past paper" in msg_lower:
-            univ_id = ctx.university_id if ctx else "univ_aicte_model"
-            sub_id = ctx.subjects[0] if ctx and ctx.subjects else "sub_cs_dsa"
-            pyq_result = await self.pyq_service.get_pyqs(univ_id, sub_id)
-            
+            if not ctx:
+                return {
+                    "message": "I need your academic context (university, branch, semester) before I can look up previous year questions. Please complete onboarding first.",
+                    "state": "NEEDS_CONTEXT",
+                    "ui_blocks": [
+                        {
+                            "type": "NEXT_ACTION",
+                            "data": {
+                                "label": "Complete academic setup",
+                                "action": "OPEN_ONBOARDING"
+                            }
+                        }
+                    ],
+                    "sources": []
+                }
+            subject_ids = await self.store.get_context_subject_ids(ctx.context_id)
+            if not subject_ids:
+                return {
+                    "message": "Your academic context has no subjects linked yet, so I can't look up previous year questions.",
+                    "state": "NEEDS_CONTEXT",
+                    "ui_blocks": [
+                        {
+                            "type": "NEXT_ACTION",
+                            "data": {
+                                "label": "Update academic context",
+                                "action": "OPEN_ONBOARDING"
+                            }
+                        }
+                    ],
+                    "sources": []
+                }
+            sub_id = subject_ids[0]
+            pyq_result = await self.pyq_service.get_pyqs(ctx.university_id, sub_id)
+
+            if pyq_result.get("status") == "PYQ_NOT_AVAILABLE":
+                return {
+                    "message": pyq_result.get("message") or "Verified previous year questions are currently unavailable for this subject.",
+                    "state": "PYQ_REVIEW",
+                    "ui_blocks": [
+                        {
+                            "type": "NEXT_ACTION",
+                            "data": {
+                                "label": "Continue studying",
+                                "action": "OPEN_DASHBOARD"
+                            }
+                        }
+                    ],
+                    "sources": []
+                }
+
             pyq_set = pyq_result.get("pyq_set") or {}
-            source_id = pyq_set.get("source_id", "src_aicte_official") if isinstance(pyq_set, dict) else "src_aicte_official"
+            sources = [pyq_set["source_id"]] if isinstance(pyq_set, dict) and pyq_set.get("source_id") else []
             return {
-                "message": f"Here is the verified Previous Year Questions (PYQs) repository for {sub_id}.",
+                "message": f"Here are the verified previous year questions for {sub_id}.",
                 "state": "PYQ_REVIEW",
                 "ui_blocks": [
                     {
@@ -80,7 +126,7 @@ class CollegeOrchestrator:
                         }
                     }
                 ],
-                "sources": [source_id]
+                "sources": sources
             }
 
         # 4. Generate intelligent guidance with Gemini if configured
@@ -155,11 +201,19 @@ class CollegeOrchestrator:
                 ai_response_text = None
 
         if not ai_response_text:
-            branch_label = ctx.branch.value.replace("_", " ").title() if ctx else "Engineering"
-            ai_response_text = f"I've mapped your academic roadmap for {branch_label}. Review your active phase activities below, check verified NPTEL lectures, and complete the checkpoint assessment."
+            # Branch label comes from the learner profile (supported_path), not
+            # from AcademicContext which has no branch field.
+            raw_profile = await self.store.get_college_user_profile(uid)
+            if isinstance(raw_profile, dict):
+                supported_path = raw_profile.get("supported_path")
+            else:
+                supported_path = getattr(raw_profile, "supported_path", None)
+            branch_label = supported_path.replace("_", " ").title() if supported_path else "Engineering"
+            ai_response_text = f"I've mapped your academic roadmap for {branch_label}. Review your active phase activities below and complete the checkpoint assessment."
 
         # Compile active steps
         steps = []
+        subject_ids = await self.store.get_context_subject_ids(ctx.context_id) if ctx else []
         if raw_plan and raw_plan.phases:
             for act in raw_plan.phases[0].activities[:3]:
                 steps.append({
@@ -176,7 +230,7 @@ class CollegeOrchestrator:
                 {
                     "type": "LEARNING_PLAN",
                     "data": {
-                        "subject": ctx.subjects[0] if ctx and ctx.subjects else "Core Engineering",
+                        "subject": subject_ids[0] if subject_ids else "Core Engineering",
                         "steps": steps
                     }
                 },
@@ -188,5 +242,6 @@ class CollegeOrchestrator:
                     }
                 }
             ],
-            "sources": ["src_aicte_official", "src_nptel_official"]
+            # No verified sources back this generic reply — never claim any.
+            "sources": []
         }

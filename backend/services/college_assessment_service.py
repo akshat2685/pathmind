@@ -181,12 +181,11 @@ Make the first two MCQs and the last one SHORT_ANSWER.
                 else:
                     item_score = 0.0
             else:
-                # Qualitative / Short Answer: Check depth and length of technical explanation
-                if len(student_ans) > 40:
-                    item_score = float(q.marks) * 0.85  # Solid demonstration
-                elif len(student_ans) > 15:
-                    item_score = float(q.marks) * 0.5   # Partial demonstration
+                # Qualitative / Short Answer: grade on content match only — never on answer length.
+                if q.correct_answer:
+                    item_score = float(q.marks) if student_ans.lower() == q.correct_answer.lower() else 0.0
                 else:
+                    # No reference answer: cannot auto-grade honestly; flag for review.
                     item_score = 0.0
 
             earned_marks += item_score
@@ -195,7 +194,8 @@ Make the first two MCQs and the last one SHORT_ANSWER.
                 "topic": q.topic,
                 "earned_marks": item_score,
                 "total_marks": q.marks,
-                "status": "STRONG" if item_score >= q.marks * 0.7 else "NEEDS_WORK"
+                "status": "STRONG" if item_score >= q.marks * 0.7 else "NEEDS_WORK",
+                "requires_review": q.question_type != "MCQ" and not q.correct_answer,
             })
 
         percentage = (earned_marks / total_marks * 100) if total_marks > 0 else 0.0
