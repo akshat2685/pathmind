@@ -32,6 +32,8 @@ from backend.core.college_logging import log_event
 from backend.services.academic_service import AcademicService
 from backend.services.college_learning_service import CollegeLearningService
 from backend.services.pyq_service import PYQService
+from backend.services.pyq_realtime_service import get_pyqs_scoped
+from backend.services.syllabus_service import get_syllabus_source
 from backend.services.college_assessment_service import CollegeAssessmentService
 from backend.services.college_accountability_service import CollegeAccountabilityService
 from backend.services.college_memory_service import CollegeMemoryService
@@ -211,6 +213,38 @@ async def get_pyqs_endpoint(
 ):
     """Retrieves verified PYQs or returns explicit PYQ_NOT_AVAILABLE."""
     return await PYQService.get_pyqs(university_id, subject_id)
+
+@router.get("/pyq/search")
+async def search_pyq_endpoint(
+    university_id: str = Query(...),
+    branch: str = Query(...),
+    semester: int = Query(...),
+    subject_id: Optional[str] = Query(None),
+    subject_name: Optional[str] = Query(None),
+    scope: str = Query("subject", description="subject = this subject only; program = whole branch, progressive levels"),
+    level: int = Query(1, ge=1, le=3),
+):
+    """Learner-scoped PYQ retrieval. Seeded papers first, then real-time
+    retrieval from the university's official website (domain-restricted).
+    Every paper carries a direct download URL. Never invents papers."""
+    return await get_pyqs_scoped(
+        university_id=university_id, branch=branch, semester=semester,
+        subject_id=subject_id, subject_name=subject_name,
+        scope=scope, level=level,
+    )
+
+@router.get("/syllabus/source")
+async def syllabus_source_endpoint(
+    university_id: str = Query(...),
+    branch: str = Query(...),
+    semester: int = Query(...),
+):
+    """Syllabus source: seeded verified curriculum first, otherwise a
+    real-time dig through the university's official website for the
+    official syllabus document. Never invents syllabus content."""
+    return await get_syllabus_source(
+        university_id=university_id, branch=branch, semester=semester
+    )
 
 # --- 5. Checkpoint Assessments & Mastery ---
 

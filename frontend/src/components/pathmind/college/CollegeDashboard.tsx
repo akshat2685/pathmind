@@ -222,6 +222,8 @@ export function CollegeDashboard() {
   const [pyqSubjects, setPyqSubjects] = useState<any[]>([]);
   const [pyqSubjectId, setPyqSubjectId] = useState<string>("");
   const [pyqError, setPyqError] = useState<string | null>(null);
+  const [pyqScope, setPyqScope] = useState<"subject" | "program">("subject");
+  const [pyqLevel, setPyqLevel] = useState<number>(1);
   const [activeAssessment, setActiveAssessment] = useState<any>(null);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
   const [assessmentResult, setAssessmentResult] = useState<any>(null);
@@ -339,13 +341,26 @@ export function CollegeDashboard() {
     }
   };
 
-  const loadPYQs = async (universityId: string, subjectId: string) => {
-    if (!universityId || !subjectId) return;
+  const loadPYQs = async (
+    universityId: string,
+    subjectId: string,
+    scope: "subject" | "program" = pyqScope,
+    level: number = pyqLevel
+  ) => {
+    if (!universityId) return;
     setPyqError(null);
     try {
-      const res = await apiClient.get<any>(
-        `/api/college/pyqs?university_id=${encodeURIComponent(universityId)}&subject_id=${encodeURIComponent(subjectId)}`
-      );
+      const subj = pyqSubjects.find((s: any) => s.subject_id === subjectId);
+      const params = new URLSearchParams({
+        university_id: universityId,
+        branch: branch || "",
+        semester: String(academicContext?.semester ?? ""),
+        scope,
+        level: String(level),
+      });
+      if (subjectId) params.set("subject_id", subjectId);
+      if (subj?.name) params.set("subject_name", subj.name);
+      const res = await apiClient.get<any>(`/api/college/pyq/search?${params.toString()}`);
       if (res.ok) {
         setPyqData(res.data);
       } else {
@@ -356,6 +371,12 @@ export function CollegeDashboard() {
       setPyqData(null);
       setPyqError(err instanceof Error ? err.message : "Failed to load PYQs.");
     }
+  };
+
+  const reloadPYQs = (scope: "subject" | "program", level: number) => {
+    setPyqScope(scope);
+    setPyqLevel(level);
+    loadPYQs(academicContext?.university_id, pyqSubjectId, scope, level);
   };
 
   const loadMemories = async () => {
@@ -862,7 +883,7 @@ export function CollegeDashboard() {
                     value={pyqSubjectId}
                     onChange={(e) => {
                       setPyqSubjectId(e.target.value);
-                      loadPYQs(academicContext?.university_id, e.target.value);
+                      loadPYQs(academicContext?.university_id, e.target.value, pyqScope, pyqLevel);
                     }}
                     className="px-3 py-1.5 text-xs rounded border border-[#252321] bg-white"
                   >
@@ -874,6 +895,45 @@ export function CollegeDashboard() {
                   </select>
                 )}
               </div>
+            </div>
+
+            {/* Scope toggle: this subject only vs whole program (progressive levels) */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex rounded border border-[#252321] overflow-hidden text-xs font-bold">
+                <button
+                  onClick={() => reloadPYQs("subject", 1)}
+                  className={`px-3 py-1.5 ${pyqScope === "subject" ? "bg-[#252321] text-[#fdfae7]" : "bg-white text-[#252321]"}`}
+                >
+                  This subject only
+                </button>
+                <button
+                  onClick={() => reloadPYQs("program", 1)}
+                  className={`px-3 py-1.5 ${pyqScope === "program" ? "bg-[#252321] text-[#fdfae7]" : "bg-white text-[#252321]"}`}
+                >
+                  Whole program
+                </button>
+              </div>
+              {pyqScope === "program" && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="font-bold text-[#68635e]">Level:</span>
+                  {[1, 2, 3].map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => reloadPYQs("program", l)}
+                      disabled={pyqData && !pyqData.has_more_levels && l > pyqLevel}
+                      className={`w-7 h-7 rounded-full border border-[#252321] font-bold ${
+                        pyqLevel === l ? "bg-[#a65959] text-white" : "bg-white text-[#252321]"
+                      } disabled:opacity-40`}
+                      title={l === 1 ? "Most recent papers" : l === 2 ? "Wider bank" : "Full archive"}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                  <span className="text-[#68635e] italic">
+                    {pyqData?.level_label || "Level 1 — most recent papers first"}
+                  </span>
+                </div>
+              )}
             </div>
 
             {pyqError && (
@@ -893,6 +953,55 @@ export function CollegeDashboard() {
                   {pyqData?.message ||
                     "Verified previous year examination questions are currently unavailable for this subject from official repositories. No synthetic questions are substituted."}
                 </p>
+              </div>
+            ) : pyqData.papers ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#68635e]">
+                  <span>
+                    {pyqData.level_label} • {pyqData.total_found} paper{pyqData.total_found === 1 ? "" : "s"} from official university sources
+                  </span>
+                  <span className="text-[#4a654e] font-bold">{pyqData.status}</span>
+                </div>
+                <div className="space-y-3">
+                  {pyqData.papers.map((p: any) => (
+                    <div
+                      key={p.paper_id}
+                      className="p-4 rounded-md border border-[#252321]/30 bg-white/70 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-bold text-sm text-[#252321]">{p.title}</p>
+                          <p className="text-[11px] text-[#68635e] mt-1">
+                            {p.year ? `Exam year: ${p.year} • ` : ""}
+                            Source: {p.source_domain || "university archive"} •
+                            Trust tier {p.trust_tier || "A"} •
+                            {p.retrieval === "realtime" ? " found live on the official site" : " curated archive"}
+                          </p>
+                        </div>
+                        {p.download_url && (
+                          <a
+                            href={p.download_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#252321] bg-[#252321] text-[#fdfae7] text-xs font-bold hover:opacity-90"
+                          >
+                            <span className="material-symbols-outlined text-sm">download</span>
+                            Download
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {pyqData.has_more_levels && (
+                  <button
+                    onClick={() => reloadPYQs("program", pyqLevel + 1)}
+                    className="w-full py-2 rounded border border-dashed border-[#252321]/40 text-xs font-bold text-[#252321] hover:bg-white/60"
+                  >
+                    Unlock Level {pyqLevel + 1} — wider question bank →
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
