@@ -20,7 +20,7 @@ class FirestoreStore:
     def __init__(self):
         self.db = None
         self._available = False
-        self._data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+        self._data_dir = self._resolve_data_dir()
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._disk_path = self._data_dir / "college_database.json"
         
@@ -30,6 +30,25 @@ class FirestoreStore:
         from backend.services.supabase_adapter import get_supabase_adapter
         self.supabase = get_supabase_adapter()
         self._available = True
+
+    @staticmethod
+    def _resolve_data_dir() -> Path:
+        """Best-effort writable dir for the legacy disk cache.
+
+        Local dev: <repo>/data. Serverless (Vercel): the bundle filesystem
+        is read-only (only /tmp is writable), so fall back to /tmp there.
+        This runs at module import time in several routers, so it must
+        never raise.
+        """
+        import tempfile
+        candidate = Path(__file__).resolve().parent.parent.parent / "data"
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            fallback = Path(tempfile.gettempdir()) / "pathmind_data"
+            fallback.mkdir(parents=True, exist_ok=True)
+            return fallback
 
     def _load_from_disk(self) -> None:
         if self._disk_path.exists():
