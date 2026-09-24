@@ -101,10 +101,21 @@ class CollegeStore:
 
     async def get_college_academic_context(self, uid: str) -> Optional[AcademicContext]:
         try:
-            res = self.client.table("learner_academic_contexts").select("*").eq("user_id", uid).execute()
+            # A user can hold several contexts (one per semester they've tried).
+            # Always serve the most recently saved one — data[0] without an
+            # ORDER BY is arbitrary and served stale contexts, breaking
+            # subject-part plan generation with SUBJECT_NOT_FOUND.
+            res = (
+                self.client.table("learner_academic_contexts")
+                .select("*")
+                .eq("user_id", uid)
+                .order("updated_at", desc=True)
+                .limit(1)
+                .execute()
+            )
             if not res.data:
                 return None
-            
+
             ctx = res.data[0]
             
             # Fetch relational subjects
