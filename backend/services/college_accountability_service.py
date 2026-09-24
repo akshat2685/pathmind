@@ -78,7 +78,9 @@ class CollegeAccountabilityService:
     ) -> Optional[AccountabilityCommitment]:
         res = await self.store.update_college_commitment_status(uid, commitment_id, status.value)
         if res:
-            return AccountabilityCommitment(**res)
+            # The store may return a model instance (direct CollegeStore) or a
+            # dict (FirestoreStore delegation) — handle both honestly.
+            return res if isinstance(res, AccountabilityCommitment) else AccountabilityCommitment(**res)
         return None
 
     async def get_today_schedule(self, uid: str) -> TodaySchedule:
@@ -114,7 +116,7 @@ class CollegeAccountabilityService:
             commitments=commitments,
             active_activities=active_activities,
             active_assessments=active_assessments,
-            streak_days=max(1, len([c for c in commitments if c.status == CommitmentStatus.COMPLETED])),
+            streak_days=len([c for c in commitments if c.status == CommitmentStatus.COMPLETED]),
             total_planned_minutes=total_planned,
             total_completed_minutes=total_completed
         )
