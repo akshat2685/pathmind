@@ -1,95 +1,300 @@
 """
 College Learning Plan & Phase Progression Service for PATHMIND College Engineering MVP.
-Generates personalized, ordered activity sequences with concrete video timestamps,
-reading pages, practice problems, authentic PYQs, and checkpoint assessments.
+
+Generates ordered, scope-aware learning plans (WHOLE_PROGRAM / SEMESTER /
+SUBJECT_PART) covering the full syllabus — never a capped subset.
+
+Phase progression is mastery-gated (schema §16): completing activities marks a
+phase COMPLETED, but the next phase unlocks ONLY when the phase's unlock_rule
+(required assessment score per topic) is satisfied by evidence in the
+per-topic mastery store. `complete_activity` never unlocks on its own.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import uuid
+
 from backend.core.college_schemas import (
     CollegeLearningPlan,
     CollegePlanPhase,
     CollegeActivity,
+    CollegeGoal,
     ActivityType,
     EngineeringBranch,
     AcademicContext,
-    CollegeGoal,
+    CollegeAssessment,
+    LearningPlanSubject,
+    PlanScope,
     ResourceRecord,
-    PYQQuestionRecord
+    PYQQuestionRecord,
 )
+from backend.core.college_rules import evaluate_unlock_rule
+from backend.core.college_logging import log_event, timed_stage
 from backend.providers.curriculum_registry import (
     get_curriculum,
     get_resources_for_subject,
-    get_pyqs_for_subject
+    get_pyqs_for_subject,
 )
 from backend.services.store import FirestoreStore
+
+#: Fraction of the phase assessment score required to unlock the next phase.
+UNLOCK_REQUIRED_SCORE = 75.0
+
 
 class CollegeLearningService:
     def __init__(self, store: Optional[FirestoreStore] = None):
         self.store = store or FirestoreStore()
 
+    # ------------------------------------------------------------------
+    # Plan generation
+    # ------------------------------------------------------------------
+
     async def generate_learning_plan(
         self,
         uid: str,
         goal_id: str,
-        target_subject_code_or_id: Optional[str] = None
+        target_subject_code_or_id: Optional[str] = None,
+        scope: PlanScope = PlanScope.SEMESTER,
     ) -> CollegeLearningPlan:
         """
-        Synthesizes an ordered, multi-phase learning plan for the student's current academic context.
+        Synthesizes an ordered, multi-phase learning plan across the whole
+        requested scope. Every subject unit becomes a phase (full syllabus).
         """
-        raw_ctx = await self.store.get_college_academic_context(uid)
-        if not raw_ctx:
-            raise ValueError("ACADEMIC_CONTEXT_REQUIRED: Please complete academic onboarding first.")
-        
-        ctx = AcademicContext(**raw_ctx)
-        curr = await get_curriculum(ctx.university_id, ctx.branch, ctx.semester)
+        with timed_stage("college.plan.generated", user_id=uid, scope=scope.value):
+            raw_ctx = await self.store.get_college_academic_context(uid)
+            if not raw_ctx:
+                raise ValueError(
+                    "ACADEMIC_CONTEXT_REQUIRED: Please complete academic onboarding first.")
+            ctx = AcademicContext(**raw_ctx)
 
-        plan_id = f"plan_{uid}_{ctx.semester}_{uuid.uuid4().hex[:6]}"
-        subject_scope = [target_subject_code_or_id] if target_subject_code_or_id else ctx.subjects
+            branch = await self._resolve_branch(uid)
+            scoped_subjects = await self._resolve_scoped_subjects(
+                uid, ctx, branch, scope, target_subject_code_or_id)
 
-        # Find target subjects in curriculum
-        matched_subjects = []
-        if curr and curr.subjects:
-            for s in curr.subjects:
-                if not subject_scope or s.subject_id in subject_scope or s.code in subject_scope or s.name in subject_scope:
-                    matched_subjects.append(s)
-            if not matched_subjects:
-                matched_subjects = curr.subjects[:2]
-        
-        phases: List[CollegePlanPhase] = []
-        phase_order = 1
-        
+            await self._ensure_goal(uid, goal_id, scope)
+
+            plan_id = f"plan_{uid}_{scope.value.lower()}_{uuid.uuid4().hex[:6]}"
+            model = self._get_gemini_model()
+
+            phases: List[CollegePlanPhase] = []
+            plan_subjects: List[LearningPlanSubject] = []
+            seen_subjects = set()
+            phase_order = 1
+
+            for semester, sub in scoped_subjects:
+                if sub.subject_id not in seen_subjects:
+                    seen_subjects.add(sub.subject_id)
+                    plan_subjects.append(LearningPlanSubject(
+                        plan_id=plan_id,
+                        subject_id=sub.subject_id,
+                    ))
+                # Full syllabus: every unit becomes a phase (no [:2] cap).
+                for unit in sub.units:
+                    activities = await self._build_phase_activities(
+                        uid, plan_id, ctx.university_id, semester, sub, unit,
+                        phase_order, ctx.available_hours_per_week, model)
+                    phase_id = f"phase_{plan_id}_s{semester}_u{unit.unit}"
+                    phases.append(CollegePlanPhase(
+                        phase_id=phase_id,
+                        user_id=uid,
+                        plan_id=plan_id,
+                        order=phase_order,
+                        title=f"{sub.code}: {unit.title}",
+                        objective=(f"Master fundamental theories and exam problems "
+                                   f"for {sub.name} (Semester {semester}, Unit {unit.unit})."),
+                        status="AVAILABLE" if phase_order == 1 else "LOCKED",
+                        # Schema §16 unlock rule: demonstrated mastery required.
+                        unlock_rule={
+                            "type": "ASSESSMENT_MASTERY",
+                            "required_assessment_score": UNLOCK_REQUIRED_SCORE,
+                            "required_topics": list(unit.topics),
+                        },
+                        activities=activities,
+                        assessment_id=f"asmt_{phase_id}",
+                    ))
+                    phase_order += 1
+
+            if not phases:
+                raise ValueError(
+                    "CURRICULUM_NOT_FOUND: no verified curriculum units cover "
+                    "the requested scope.")
+
+            plan = CollegeLearningPlan(
+                plan_id=plan_id,
+                user_id=uid,
+                goal_id=goal_id,
+                plan_type=("PROGRAM_PREPARATION" if scope == PlanScope.WHOLE_PROGRAM
+                           else "TOPIC_MASTERY" if scope == PlanScope.SUBJECT_PART
+                           else "SEMESTER_PREPARATION"),
+                scope=scope,
+                phases=phases,
+                subjects=plan_subjects,
+            )
+            await self.store.save_college_learning_plan(
+                uid, plan.model_dump(mode="json"))
+            log_event("college.plan.saved", user_id=uid, plan_id=plan_id,
+                      phase_count=len(phases),
+                      subject_count=len(plan_subjects), outcome="ok")
+            return plan
+
+    async def _resolve_branch(self, uid: str) -> EngineeringBranch:
+        raw_profile = await self.store.get_college_user_profile(uid)
+        supported_path = None
+        if isinstance(raw_profile, dict):
+            supported_path = raw_profile.get("supported_path")
+        elif raw_profile is not None:
+            supported_path = getattr(raw_profile, "supported_path", None)
+        try:
+            return EngineeringBranch(supported_path) if supported_path else EngineeringBranch.GENERAL_OTHER
+        except ValueError:
+            return EngineeringBranch.GENERAL_OTHER
+
+    async def _resolve_scoped_subjects(
+        self,
+        uid: str,
+        ctx: AcademicContext,
+        branch: EngineeringBranch,
+        scope: PlanScope,
+        target_subject_code_or_id: Optional[str],
+    ) -> List[Tuple[int, Any]]:
+        """
+        Returns [(semester, SubjectRecord)] across the whole requested scope.
+        Never invents subjects; raises honest errors when nothing verified
+        covers the scope.
+        """
+        if scope == PlanScope.SUBJECT_PART:
+            if not target_subject_code_or_id:
+                raise ValueError(
+                    "SUBJECT_REQUIRED: SUBJECT_PART scope needs a target subject.")
+            curr = await get_curriculum(ctx.university_id, branch, ctx.semester)
+            if not curr or not curr.subjects:
+                raise ValueError("CURRICULUM_NOT_FOUND: no verified curriculum "
+                                 "for this branch/semester.")
+            matched = [s for s in curr.subjects
+                       if s.subject_id == target_subject_code_or_id
+                       or s.code == target_subject_code_or_id
+                       or s.name == target_subject_code_or_id]
+            if not matched:
+                raise ValueError(
+                    f"SUBJECT_NOT_FOUND: '{target_subject_code_or_id}' is not in "
+                    f"the verified curriculum.")
+            return [(ctx.semester, s) for s in matched]
+
+        if scope == PlanScope.WHOLE_PROGRAM:
+            scoped: List[Tuple[int, Any]] = []
+            for semester in range(1, 9):
+                curr = await get_curriculum(ctx.university_id, branch, semester)
+                if curr and curr.subjects:
+                    scoped.extend((semester, s) for s in curr.subjects)
+            if not scoped:
+                raise ValueError("CURRICULUM_NOT_FOUND: no verified curricula "
+                                 "found for this program.")
+            return scoped
+
+        # SEMESTER (default): the learner's chosen context subjects, or the
+        # whole semester when none were chosen.
+        curr = await get_curriculum(ctx.university_id, branch, ctx.semester)
+        if not curr or not curr.subjects:
+            raise ValueError("CURRICULUM_NOT_FOUND: no verified curriculum "
+                             "for this branch/semester.")
+        subject_ids = await self.store.get_context_subject_ids(ctx.context_id)
+        if target_subject_code_or_id:
+            matched = [s for s in curr.subjects
+                       if s.subject_id == target_subject_code_or_id
+                       or s.code == target_subject_code_or_id
+                       or s.name == target_subject_code_or_id]
+            if not matched:
+                raise ValueError(
+                    f"SUBJECT_NOT_FOUND: '{target_subject_code_or_id}' is not in "
+                    f"the verified curriculum.")
+        elif subject_ids:
+            matched = [s for s in curr.subjects
+                       if s.subject_id in subject_ids or s.code in subject_ids]
+            if not matched:
+                matched = list(curr.subjects)
+        else:
+            matched = list(curr.subjects)
+        return [(ctx.semester, s) for s in matched]
+
+    async def _ensure_goal(self, uid: str, goal_id: str, scope: PlanScope) -> None:
+        """
+        learning_plans has an FK to college_goals: make sure the referenced
+        goal exists. Creates the goal the learner actually asked for — never
+        a fabricated one.
+        """
+        raw_goal = await self.store.get_college_goal(uid)
+        if raw_goal and raw_goal.get("goal_id") == goal_id:
+            return
+        goal = CollegeGoal(
+            goal_id=goal_id,
+            user_id=uid,
+            goal_type="SEMESTER_EXAM",
+            scope=scope,
+            raw_goal=f"{scope.value.replace('_', ' ').title()} preparation",
+            normalized_goal=f"{scope.value.replace('_', ' ').title()} preparation",
+            status="ACTIVE",
+        )
+        await self.store.save_college_goal(uid, goal.model_dump(mode="json"))
+
+    @staticmethod
+    def _get_gemini_model():
         from backend.core.config import settings
+        if not settings.GEMINI_API_KEY:
+            return None
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            return genai.GenerativeModel("gemini-2.5-flash")
+        except Exception as exc:
+            log_event("college.plan.llm_unavailable",
+                      outcome="error", error_code=type(exc).__name__)
+            return None
+
+    # ------------------------------------------------------------------
+    # Activities
+    # ------------------------------------------------------------------
+
+    async def _build_phase_activities(
+        self,
+        uid: str,
+        plan_id: str,
+        university_id: str,
+        semester: int,
+        sub,
+        unit,
+        phase_order: int,
+        available_hours_per_week: Optional[int],
+        model,
+    ) -> List[CollegeActivity]:
+        phase_id = f"phase_{plan_id}_s{semester}_u{unit.unit}"
+        status = "AVAILABLE" if phase_order == 1 else "LOCKED"
+        resources = await get_resources_for_subject(sub.subject_id)
+        pyq_set = await get_pyqs_for_subject(university_id, sub.subject_id)
+        pyq_questions = pyq_set.questions if pyq_set else []
+
+        activities: List[CollegeActivity] = []
+        if model:
+            activities = self._genai_activities(
+                uid, plan_id, phase_id, status, model, sub, unit,
+                available_hours_per_week, resources, pyq_questions)
+        if not activities:
+            activities = self._static_activities(
+                uid, plan_id, phase_id, status, sub, unit,
+                resources, pyq_questions)
+        return activities
+
+    def _genai_activities(self, uid, plan_id, phase_id, status, model,
+                          sub, unit, available_hours_per_week,
+                          resources, pyq_questions) -> List[CollegeActivity]:
         import json
-        
-        gemini_available = bool(settings.GEMINI_API_KEY)
-        model = None
-        if gemini_available:
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel('gemini-2.5-flash')
-            except Exception as e:
-                print(f"Warning: Failed to initialize Gemini: {e}")
-
-        for sub in matched_subjects:
-            resources = await get_resources_for_subject(sub.subject_id)
-            pyq_set = await get_pyqs_for_subject(ctx.university_id, sub.subject_id)
-            pyq_questions = pyq_set.questions if pyq_set else []
-
-            for unit in sub.units[:2]:  # Focus on primary active units
-                phase_id = f"phase_{plan_id}_u{unit.unit}"
-                activities: List[CollegeActivity] = []
-                
-                if model:
-                    try:
-                        res_summary = [{"id": r.resource_id, "type": r.resource_type, "title": r.title} for r in resources]
-                        pyq_summary = [{"id": q.question_id, "text": q.question_text} for q in pyq_questions]
-                        
-                        prompt = f"""
+        try:
+            res_summary = [{"id": r.resource_id, "type": r.resource_type,
+                            "title": r.title} for r in resources]
+            pyq_summary = [{"id": q.question_id, "text": q.question_text}
+                           for q in pyq_questions]
+            prompt = f"""
 You are the PATHMIND Study Planner. Create a personalized study sequence for a college student.
 Subject: {sub.name}, Unit: {unit.title} (Topics: {', '.join(unit.topics)})
-Available hours/week: {ctx.available_hours_per_week}
+Available hours/week: {available_hours_per_week}
 
 Available Resources: {json.dumps(res_summary)}
 Available PYQs (Past Questions): {json.dumps(pyq_summary)}
@@ -105,134 +310,130 @@ Return ONLY a valid JSON array of activities in the best learning order. Each ac
 }}
 Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_PYQ).
 """
-                        response = model.generate_content(prompt)
-                        text = response.text.strip()
-                        if text.startswith("```json"): text = text[7:]
-                        if text.startswith("```"): text = text[3:]
-                        if text.endswith("```"): text = text[:-3]
-                        gen_activities = json.loads(text.strip())
-                        
-                        act_order = 1
-                        for ga in gen_activities:
-                            res = next((r for r in resources if r.resource_id == ga.get("resource_id")), None)
-                            pyq = next((q for q in pyq_questions if q.question_id == ga.get("pyq_id")), None)
-                            
-                            act_type = ga.get("type", "PRACTICE")
-                            if act_type not in [e.value for e in ActivityType]:
-                                act_type = "PRACTICE"
+            response = model.generate_content(prompt)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            gen_activities = json.loads(text.strip())
 
-                            activities.append(CollegeActivity(
-                                activity_id=f"act_{phase_id}_{act_order}",
-                                plan_id=plan_id,
-                                phase_id=phase_id,
-                                activity_type=ActivityType(act_type),
-                                title=ga.get("title", f"{act_type} Activity"),
-                                resource=res,
-                                pyq_question=pyq,
-                                order=act_order,
-                                instructions=ga.get("instructions", "Follow the study plan."),
-                                estimated_minutes=ga.get("minutes", 30),
-                                status="AVAILABLE" if phase_order == 1 else "LOCKED"
-                            ))
-                            act_order += 1
-                            
-                    except Exception as e:
-                        print(f"Gemini generation failed: {e}")
-                        activities = [] # Fallback to static
-                
-                if not activities:
-                    act_order = 1
-                    # Activity 1: WATCH (Lecture section with exact timestamps)
-                    video_res = next((r for r in resources if r.resource_type == "VIDEO"), None)
-                    if video_res:
-                        ts_info = video_res.video_timestamps[0] if video_res.video_timestamps else None
-                        ts_text = f" Watch from {ts_info.start_seconds // 60}:00 to {ts_info.end_seconds // 60}:00 for '{ts_info.purpose}'." if ts_info else " Watch the core foundational module."
-                        activities.append(CollegeActivity(
-                            activity_id=f"act_{phase_id}_{act_order}",
-                            plan_id=plan_id,
-                            phase_id=phase_id,
-                            activity_type=ActivityType.WATCH,
-                            title=f"Watch Lecture: {unit.title}",
-                            resource=video_res,
-                            order=act_order,
-                            instructions=f"Engage with {video_res.title} from {video_res.provider}.{ts_text}",
-                            estimated_minutes=video_res.estimated_minutes,
-                            status="AVAILABLE" if phase_order == 1 else "LOCKED"
-                        ))
-                        act_order += 1
-
-                    # Activity 2: READ (Verified notes/textbook with page range)
-                    doc_res = next((r for r in resources if r.resource_type in ["NOTES", "DOCUMENT"]), None)
-                    if doc_res:
-                        sec_info = doc_res.document_sections[0] if doc_res.document_sections else None
-                        pg_text = f" Study pages {sec_info.start_page}–{sec_info.end_page} covering '{sec_info.section_title}'." if sec_info else " Read the essential concept summary."
-                        activities.append(CollegeActivity(
-                            activity_id=f"act_{phase_id}_{act_order}",
-                            plan_id=plan_id,
-                            phase_id=phase_id,
-                            activity_type=ActivityType.READ,
-                            title=f"Read Verified Notes: {unit.title}",
-                            resource=doc_res,
-                            order=act_order,
-                            instructions=f"Review official notes from {doc_res.provider}.{pg_text}",
-                            estimated_minutes=doc_res.estimated_minutes,
-                            status="AVAILABLE" if phase_order == 1 else "LOCKED"
-                        ))
-                        act_order += 1
-
-                    # Activity 3: PRACTICE (Concept formulation & problem solving)
-                    activities.append(CollegeActivity(
-                        activity_id=f"act_{phase_id}_{act_order}",
-                        plan_id=plan_id,
-                        phase_id=phase_id,
-                        activity_type=ActivityType.PRACTICE,
-                        title=f"Solve Practice Problems: {unit.topics[0] if unit.topics else unit.title}",
-                        order=act_order,
-                        instructions=f"Derive and solve foundational numericals and concept problems for {', '.join(unit.topics[:3])}.",
-                        estimated_minutes=30,
-                        status="AVAILABLE" if phase_order == 1 else "LOCKED"
-                    ))
-                    act_order += 1
-
-                    # Activity 4: SOLVE_PYQ (Authentic past exam question if verified)
-                    if pyq_questions:
-                        target_pyq = pyq_questions[0]
-                        activities.append(CollegeActivity(
-                            activity_id=f"act_{phase_id}_{act_order}",
-                            plan_id=plan_id,
-                            phase_id=phase_id,
-                            activity_type=ActivityType.SOLVE_PYQ,
-                            title=f"Attempt University PYQ: {target_pyq.question_number}",
-                            pyq_question=target_pyq,
-                            order=act_order,
-                            instructions=f"Solve authentic university past question ({target_pyq.marks} marks): {target_pyq.question_text}",
-                            estimated_minutes=25,
-                            status="AVAILABLE" if phase_order == 1 else "LOCKED"
-                        ))
-                        act_order += 1
-
-                # Phase Definition
-                phases.append(CollegePlanPhase(
+            activities = []
+            for act_order, ga in enumerate(gen_activities, start=1):
+                res = next((r for r in resources
+                            if r.resource_id == ga.get("resource_id")), None)
+                pyq = next((q for q in pyq_questions
+                            if q.question_id == ga.get("pyq_id")), None)
+                act_type = ga.get("type", "PRACTICE")
+                if act_type not in [e.value for e in ActivityType]:
+                    act_type = "PRACTICE"
+                activities.append(CollegeActivity(
+                    activity_id=f"act_{phase_id}_{act_order}",
+                    user_id=uid,
+                    plan_id=plan_id,
                     phase_id=phase_id,
-                    order=phase_order,
-                    title=f"{sub.code}: {unit.title}",
-                    objective=f"Master fundamental theories and exam problems for {sub.name} (Unit {unit.unit}).",
-                    status="AVAILABLE" if phase_order == 1 else "LOCKED",
-                    activities=activities,
-                    assessment_id=f"asmt_{phase_id}"
+                    activity_type=ActivityType(act_type),
+                    title=ga.get("title", f"{act_type} Activity"),
+                    resource=res,
+                    resource_id=res.resource_id if res else None,
+                    pyq_question=pyq,
+                    pyq_question_id=pyq.question_id if pyq else None,
+                    order=act_order,
+                    instructions=ga.get("instructions", "Follow the study plan."),
+                    estimated_minutes=ga.get("minutes", 30),
+                    status=status,
                 ))
-                phase_order += 1
+            return activities
+        except Exception as exc:
+            log_event("college.plan.activity_generation_failed",
+                      outcome="error", error_code=type(exc).__name__)
+            return []
 
-        plan = CollegeLearningPlan(
+    def _static_activities(self, uid, plan_id, phase_id, status, sub, unit,
+                           resources, pyq_questions) -> List[CollegeActivity]:
+        activities: List[CollegeActivity] = []
+        act_order = 1
+
+        video_res = next((r for r in resources if r.resource_type == "VIDEO"), None)
+        if video_res:
+            ts_info = video_res.video_timestamps[0] if video_res.video_timestamps else None
+            ts_text = (f" Watch from {ts_info.start_seconds // 60}:00 to "
+                       f"{ts_info.end_seconds // 60}:00 for '{ts_info.purpose}'.") if ts_info else " Watch the core foundational module."
+            activities.append(CollegeActivity(
+                activity_id=f"act_{phase_id}_{act_order}",
+                user_id=uid,
+                plan_id=plan_id,
+                phase_id=phase_id,
+                activity_type=ActivityType.WATCH,
+                title=f"Watch Lecture: {unit.title}",
+                resource=video_res,
+                resource_id=video_res.resource_id,
+                order=act_order,
+                instructions=f"Engage with {video_res.title} from {video_res.provider}.{ts_text}",
+                estimated_minutes=video_res.estimated_minutes,
+                status=status,
+            ))
+            act_order += 1
+
+        doc_res = next((r for r in resources
+                        if r.resource_type in ["NOTES", "DOCUMENT"]), None)
+        if doc_res:
+            sec_info = doc_res.document_sections[0] if doc_res.document_sections else None
+            pg_text = (f" Study pages {sec_info.start_page}–{sec_info.end_page} "
+                       f"covering '{sec_info.section_title}'.") if sec_info else " Read the essential concept summary."
+            activities.append(CollegeActivity(
+                activity_id=f"act_{phase_id}_{act_order}",
+                user_id=uid,
+                plan_id=plan_id,
+                phase_id=phase_id,
+                activity_type=ActivityType.READ,
+                title=f"Read Verified Notes: {unit.title}",
+                resource=doc_res,
+                resource_id=doc_res.resource_id,
+                order=act_order,
+                instructions=f"Review official notes from {doc_res.provider}.{pg_text}",
+                estimated_minutes=doc_res.estimated_minutes,
+                status=status,
+            ))
+            act_order += 1
+
+        activities.append(CollegeActivity(
+            activity_id=f"act_{phase_id}_{act_order}",
+            user_id=uid,
             plan_id=plan_id,
-            uid=uid,
-            goal_id=goal_id,
-            subject_scope=subject_scope,
-            phases=phases
-        )
+            phase_id=phase_id,
+            activity_type=ActivityType.PRACTICE,
+            title=f"Solve Practice Problems: {unit.topics[0] if unit.topics else unit.title}",
+            order=act_order,
+            instructions=f"Derive and solve foundational numericals and concept problems for {', '.join(unit.topics[:3])}.",
+            estimated_minutes=30,
+            status=status,
+        ))
+        act_order += 1
 
-        await self.store.save_college_learning_plan(uid, plan.model_dump(mode="json"))
-        return plan
+        if pyq_questions:
+            target_pyq = pyq_questions[0]
+            activities.append(CollegeActivity(
+                activity_id=f"act_{phase_id}_{act_order}",
+                user_id=uid,
+                plan_id=plan_id,
+                phase_id=phase_id,
+                activity_type=ActivityType.SOLVE_PYQ,
+                title=f"Attempt University PYQ: {target_pyq.question_number}",
+                pyq_question=target_pyq,
+                pyq_question_id=target_pyq.question_id,
+                order=act_order,
+                instructions=f"Solve authentic university past question ({target_pyq.marks} marks): {target_pyq.question_text}",
+                estimated_minutes=25,
+                status=status,
+            ))
+        return activities
+
+    # ------------------------------------------------------------------
+    # Progression
+    # ------------------------------------------------------------------
 
     async def get_current_plan(self, uid: str) -> Optional[CollegeLearningPlan]:
         raw = await self.store.get_college_learning_plan(uid)
@@ -244,39 +445,91 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
         self,
         uid: str,
         activity_id: str,
-        completion_evidence: Optional[Dict[str, Any]] = None
+        completion_evidence: Optional[Dict[str, Any]] = None,
     ) -> CollegeLearningPlan:
-        """Marks activity complete and evaluates whether next activity or assessment unlocks."""
-        plan = await self.get_current_plan(uid)
-        if not plan:
-            raise ValueError("PLAN_NOT_FOUND")
+        """
+        Marks an activity complete. When every activity in a phase is done the
+        phase becomes COMPLETED — but the next phase is NOT unlocked here.
+        Unlocking requires demonstrated mastery via the phase assessment
+        (see maybe_unlock_next_phase).
+        """
+        with timed_stage("college.plan.activity_completed", user_id=uid,
+                         activity_id=activity_id):
+            plan = await self.get_current_plan(uid)
+            if not plan:
+                raise ValueError("PLAN_NOT_FOUND")
 
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc).isoformat()
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).isoformat()
 
-        found = False
-        for phase in plan.phases:
-            for act in phase.activities:
-                if act.activity_id == activity_id:
-                    act.status = "COMPLETED"
-                    act.completed_at = now
-                    act.completion_evidence = completion_evidence or {"type": "STUDY_CONFIRMATION"}
-                    found = True
+            found = False
+            for phase in plan.phases:
+                for act in phase.activities:
+                    if act.activity_id == activity_id:
+                        act.status = "COMPLETED"
+                        act.completed_at = now
+                        act.completion_evidence = (
+                            completion_evidence or {"type": "STUDY_CONFIRMATION"})
+                        found = True
+                        break
+                if found:
+                    if all(a.status == "COMPLETED" for a in phase.activities):
+                        phase.status = "COMPLETED"
+                        log_event("college.plan.phase_completed_awaiting_mastery",
+                                  user_id=uid, phase_id=phase.phase_id,
+                                  outcome="ok")
                     break
-            if found:
-                # Check if all activities in this phase are complete
-                if all(a.status == "COMPLETED" for a in phase.activities):
-                    phase.status = "COMPLETED"
-                    # Unlock next phase
-                    next_idx = phase.order
-                    if next_idx < len(plan.phases):
-                        plan.phases[next_idx].status = "AVAILABLE"
-                        for next_act in plan.phases[next_idx].activities:
-                            next_act.status = "AVAILABLE"
-                break
 
-        if not found:
-            raise ValueError("ACTIVITY_NOT_FOUND")
+            if not found:
+                raise ValueError("ACTIVITY_NOT_FOUND")
 
-        await self.store.save_college_learning_plan(uid, plan.model_dump(mode="json"))
-        return plan
+            await self.store.save_college_learning_plan(
+                uid, plan.model_dump(mode="json"))
+            return plan
+
+    async def maybe_unlock_next_phase(
+        self, uid: str, assessment: CollegeAssessment
+    ) -> bool:
+        """
+        Evaluate the phase's unlock_rule against the per-topic mastery store.
+        Unlocks the next phase only on demonstrated mastery — never on mere
+        activity completion. Returns True when a phase was unlocked.
+        """
+        with timed_stage("college.plan.unlock_evaluated", user_id=uid,
+                         assessment_id=assessment.assessment_id):
+            plan = await self.get_current_plan(uid)
+            if not plan:
+                return False
+            idx = next((i for i, p in enumerate(plan.phases)
+                        if p.phase_id == assessment.phase_id), None)
+            if idx is None:
+                log_event("college.plan.unlock_evaluated", user_id=uid,
+                          outcome="skipped", reason="PHASE_NOT_FOUND")
+                return False
+            phase = plan.phases[idx]
+
+            masteries = await self.store.get_topic_masteries(uid)
+            topic_scores = {
+                m["topic"]: float(m.get("mastery_score") or 0.0)
+                for m in masteries
+                if assessment.subject_id is None
+                or m.get("subject_id") == assessment.subject_id
+            }
+            unlocked, reason = evaluate_unlock_rule(phase.unlock_rule, topic_scores)
+            log_event("college.plan.unlock_evaluated", user_id=uid,
+                      phase_id=phase.phase_id, unlocked=unlocked, reason=reason,
+                      outcome="ok")
+            if not unlocked:
+                return False
+            if idx + 1 < len(plan.phases):
+                nxt = plan.phases[idx + 1]
+                nxt.status = "AVAILABLE"
+                for act in nxt.activities:
+                    if act.status == "LOCKED":
+                        act.status = "AVAILABLE"
+                await self.store.save_college_learning_plan(
+                    uid, plan.model_dump(mode="json"))
+                log_event("college.plan.phase_unlocked", user_id=uid,
+                          phase_id=nxt.phase_id, reason=reason, outcome="ok")
+                return True
+            return False

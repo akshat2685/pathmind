@@ -14,6 +14,8 @@ from backend.core.college_schemas import (
     AcademicContext,
     CollegeActivity
 )
+from backend.core.college_rules import calculate_streak_days, exam_countdown_days
+from backend.core.college_logging import log_event, timed_stage
 from backend.services.store import FirestoreStore
 
 class CollegeAccountabilityService:
@@ -42,8 +44,7 @@ class CollegeAccountabilityService:
             clean_date = exam_start.split("T")[0]
             target_date = datetime.strptime(clean_date, "%Y-%m-%d").date()
             today = datetime.now(timezone.utc).date()
-            delta = (target_date - today).days
-            return max(0, delta)
+            return exam_countdown_days(target_date, today)
         except Exception:
             return None
 
@@ -99,9 +100,27 @@ class CollegeAccountabilityService:
                         if act.get("status") in ["AVAILABLE", "IN_PROGRESS"]:
                             active_activities.append(CollegeActivity(**act))
 
-        today_str = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(timezone.utc).date()
+        today_str = today.isoformat()
         total_planned = sum(c.estimated_minutes for c in commitments if c.status != CommitmentStatus.CANCELLED)
         total_completed = sum(c.estimated_minutes for c in commitments if c.status == CommitmentStatus.COMPLETED)
+
+        # Real streak: consecutive calendar days with at least one completed
+        # commitment, derived from completion timestamps. Zero activity gives
+        # zero — no minimum floor.
+        completed_dates = []
+        for c in commitments:
+            if c.status != CommitmentStatus.COMPLETED or not c.updated_at:
+                continue
+            try:
+                completed_dates.append(
+                    datetime.fromisoformat(c.updated_at).date())
+            except (ValueError, TypeError):
+                continue
+        streak = calculate_streak_days(completed_dates, today)
+        log_event("college.accountability.streak_computed", user_id=uid,
+                  streak_days=streak,
+                  completed_commitments=len(completed_dates), outcome="ok")
 
         from backend.core.college_schemas import CollegeAssessment
         raw_assessments = await self.store.get_all_college_assessments(uid)
@@ -116,7 +135,7 @@ class CollegeAccountabilityService:
             commitments=commitments,
             active_activities=active_activities,
             active_assessments=active_assessments,
-            streak_days=len([c for c in commitments if c.status == CommitmentStatus.COMPLETED]),
+            streak_days=streak,
             total_planned_minutes=total_planned,
             total_completed_minutes=total_completed
         )

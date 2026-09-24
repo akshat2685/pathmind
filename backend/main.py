@@ -116,15 +116,17 @@ async def health_ready():
     store = FirestoreStore()
     firestore_status = await store.check_health()
     gemini_status = "CONFIGURED" if settings.GEMINI_API_KEY else "MISSING"
-    is_ready = firestore_status in ["CONNECTED", "IN_MEMORY_ACTIVE"]
+    is_ready = firestore_status == "CONNECTED"
 
-    return {
+    from fastapi.responses import JSONResponse
+    body = {
         "status": "ready" if is_ready else "not_ready",
         "dependencies": {
             "datastore": "healthy" if is_ready else "unhealthy",
             "ai_reasoning": "configured" if gemini_status == "CONFIGURED" else "degraded"
         }
     }
+    return JSONResponse(status_code=200 if is_ready else 503, content=body)
 
 @app.get("/health")
 async def health_check():

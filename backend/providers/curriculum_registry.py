@@ -51,7 +51,20 @@ async def get_curriculum(university_id: str, branch: EngineeringBranch, semester
     adapter = get_supabase_adapter()
     if not adapter.client:
         return None
-        
+
+    # GENERAL_OTHER is a graceful fallback per PRD §3: never a refusal, but
+    # zero fake engineering data — an honest empty curriculum.
+    if branch == EngineeringBranch.GENERAL_OTHER:
+        return CurriculumRecord(
+            curriculum_id=f"curriculum_general_other_{university_id}_s{semester}",
+            university_id=university_id,
+            program_id=None,
+            semester=semester,
+            verification_status=VerificationStatus.UNVERIFIABLE,
+            branch=branch.value,
+            subjects=[],
+        )
+
     # Find program by branch/university
     # Then find curriculum
     prog_res = adapter.client.table("programs").select("program_id").eq("university_id", university_id).eq("branch", branch.value).execute()
@@ -82,15 +95,18 @@ async def get_curriculum(university_id: str, branch: EngineeringBranch, semester
                 subjects.append(SubjectRecord(**s_row))
                 
     curr_dict["subjects"] = subjects
-    curr_dict["branch"] = branch
+    curr_dict["branch"] = branch.value
     return CurriculumRecord(**curr_dict)
 
-async def get_pyqs_for_subject(university_id: str, subject_id: str) -> Optional[PYQSetRecord]:
+async def get_pyqs_for_subject(university_id: Optional[str], subject_id: str) -> Optional[PYQSetRecord]:
     adapter = get_supabase_adapter()
     if not adapter.client:
         return None
-        
-    res = adapter.client.table("pyq_sets").select("*").eq("university_id", university_id).eq("subject_id", subject_id).order("exam_year", desc=True).limit(1).execute()
+
+    query = adapter.client.table("pyq_sets").select("*").eq("subject_id", subject_id)
+    if university_id:
+        query = query.eq("university_id", university_id)
+    res = query.order("exam_year", desc=True).limit(1).execute()
     if not res.data:
         return None
         

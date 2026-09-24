@@ -363,7 +363,13 @@ class CollegeStore:
 
     async def update_college_commitment_status(self, uid: str, commitment_id: str, status: str) -> Optional[AccountabilityCommitment]:
         try:
-            res = self.client.table("accountability_commitments").update({"status": status}).eq("commitment_id", commitment_id).eq("user_id", uid).execute()
+            # Bump updated_at ourselves: PostgREST does not maintain it, and
+            # the streak engine derives consecutive-day streaks from it.
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).isoformat()
+            res = self.client.table("accountability_commitments").update(
+                {"status": status, "updated_at": now}
+            ).eq("commitment_id", commitment_id).eq("user_id", uid).execute()
             if res.data:
                 return AccountabilityCommitment(**res.data[0])
             return None

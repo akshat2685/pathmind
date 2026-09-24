@@ -21,11 +21,14 @@ from backend.core.college_schemas import (
     AccountabilityCommitment,
     CommitmentStatus,
     EngineeringBranch,
+    PlanScope,
     CollegeShortMemory,
     CollegeLongMemory,
     LearningSignal,
     UserProfile
 )
+from backend.core.college_rules import build_learner_baseline
+from backend.core.college_logging import log_event
 from backend.services.academic_service import AcademicService
 from backend.services.college_learning_service import CollegeLearningService
 from backend.services.pyq_service import PYQService
@@ -121,7 +124,7 @@ async def save_academic_context(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await academic_service.save_learner_academic_context(
+        context = await academic_service.save_learner_academic_context(
             uid=person_id,
             university_id=req.university_id,
             branch=req.branch,
@@ -131,7 +134,13 @@ async def save_academic_context(
             available_hours_per_week=req.available_hours_per_week,
             learning_style_preferences=req.learning_style_preferences
         )
+        log_event("college.route.academic_context_saved", user_id=person_id,
+                  university_id=req.university_id, semester=req.semester,
+                  outcome="ok")
+        return context
     except ValueError as ve:
+        log_event("college.route.academic_context_failed", user_id=person_id,
+                  outcome="error", error_code=str(ve).split(":")[0])
         raise HTTPException(status_code=400, detail=str(ve))
 
 @router.get("/academic-context", response_model=Optional[AcademicContext])
@@ -143,6 +152,7 @@ async def get_academic_context(person_id: str = Depends(get_authenticated_person
 class GeneratePlanRequest(BaseModel):
     goal_id: Optional[str] = "goal_semester_prep"
     target_subject_code_or_id: Optional[str] = None
+    scope: PlanScope = PlanScope.SEMESTER
 
 @router.post("/plans/generate", response_model=CollegeLearningPlan)
 async def generate_plan_endpoint(
@@ -150,12 +160,18 @@ async def generate_plan_endpoint(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await learning_service.generate_learning_plan(
+        plan = await learning_service.generate_learning_plan(
             uid=person_id,
             goal_id=req.goal_id or "goal_semester_prep",
-            target_subject_code_or_id=req.target_subject_code_or_id
+            target_subject_code_or_id=req.target_subject_code_or_id,
+            scope=req.scope,
         )
+        log_event("college.route.plan_generated", user_id=person_id,
+                  plan_id=plan.plan_id, scope=req.scope.value, outcome="ok")
+        return plan
     except ValueError as ve:
+        log_event("college.route.plan_failed", user_id=person_id,
+                  outcome="error", error_code=str(ve).split(":")[0])
         raise HTTPException(status_code=400, detail=str(ve))
 
 @router.get("/plans/current", response_model=Optional[CollegeLearningPlan])
@@ -172,18 +188,24 @@ async def complete_activity_endpoint(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await learning_service.complete_activity(
+        plan = await learning_service.complete_activity(
             uid=person_id,
             activity_id=activity_id,
             completion_evidence=req.evidence
         )
+        log_event("college.route.activity_completed", user_id=person_id,
+                  activity_id=activity_id, outcome="ok")
+        return plan
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
 
 # --- 4. Verified Previous Year Questions (PYQs) ---
 
 @router.get("/pyqs")
-async def get_pyqs_endpoint(university_id: str = Query(...), subject_id: str = Query(...)):
+async def get_pyqs_endpoint(
+    subject_id: str = Query(...),
+    university_id: Optional[str] = Query(None),
+):
     """Retrieves verified PYQs or returns explicit PYQ_NOT_AVAILABLE."""
     return await PYQService.get_pyqs(university_id, subject_id)
 
@@ -194,6 +216,7 @@ class GenerateAssessmentRequest(BaseModel):
     phase_id: str
     subject_id: str
     topic_title: str
+    topics: Optional[List[str]] = None
 
 @router.post("/assessments/generate", response_model=CollegeAssessment)
 async def generate_assessment_endpoint(
@@ -205,8 +228,48 @@ async def generate_assessment_endpoint(
         plan_id=req.plan_id,
         phase_id=req.phase_id,
         subject_id=req.subject_id,
-        topic_title=req.topic_title
+        topic_title=req.topic_title,
+        topics=req.topics,
     )
+
+@router.post("/assessments/diagnostic", response_model=CollegeAssessment)
+async def generate_diagnostic_endpoint(
+    person_id: str = Depends(get_authenticated_person)
+):
+    """
+    Onboarding diagnostic: authored from the learner's aspirations, branch and
+    subjects. Not tied to any plan phase. Results feed the per-topic mastery
+    store and the learner baseline.
+    """
+    try:
+        assessment = await assessment_service.generate_diagnostic_assessment(
+            uid=person_id)
+        log_event("college.route.diagnostic_generated", user_id=person_id,
+                  assessment_id=assessment.assessment_id, outcome="ok")
+        return assessment
+    except ValueError as ve:
+        detail = str(ve)
+        code = detail.split(":")[0]
+        status = 404 if code == "PROFILE_NOT_FOUND" else 400
+        if "UNAVAILABLE" in code:
+            status = 503
+        log_event("college.route.diagnostic_failed", user_id=person_id,
+                  outcome="error", error_code=code)
+        raise HTTPException(status_code=status, detail=detail)
+
+@router.get("/baseline")
+async def get_baseline_endpoint(
+    person_id: str = Depends(get_authenticated_person)
+):
+    """
+    Learner baseline (strengths / weaknesses / gaps) derived from the
+    per-topic mastery store — the single source of truth.
+    """
+    from datetime import datetime, timezone
+    masteries = await store.get_topic_masteries(person_id)
+    baseline = build_learner_baseline(masteries)
+    baseline["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return baseline
 
 @router.post("/assessments/submit", response_model=CollegeAssessmentResult)
 async def submit_assessment_endpoint(
@@ -214,7 +277,11 @@ async def submit_assessment_endpoint(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await assessment_service.evaluate_submission(uid=person_id, submission=submission)
+        result = await assessment_service.evaluate_submission(uid=person_id, submission=submission)
+        log_event("college.route.assessment_submitted", user_id=person_id,
+                  assessment_id=submission.assessment_id,
+                  mastery_status=result.mastery_status, outcome="ok")
+        return result
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
 
