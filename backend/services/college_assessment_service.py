@@ -411,19 +411,38 @@ Make the first two MCQs and the last one SHORT_ANSWER.
             topic_results: List[Dict[str, Any]] = []
             confidences: List[float] = []
 
-            for q in assessment.questions:
+            # Grade every non-MCQ answer concurrently: each LLM grading call
+            # is slow, and sequential grading times out on serverless when a
+            # diagnostic has more than one free-text question.
+            graded: Dict[int, tuple] = {}
+            pending: List[tuple] = []
+            for i, q in enumerate(assessment.questions):
                 student_ans = (submission.answers.get(q.question_id) or "").strip()
                 marks = float(q.marks or 0)
-
                 if q.question_type == "MCQ":
-                    item_score = score_mcq_answer(
-                        student_ans, q.correct_answer, marks)
-                    confidence: Optional[float] = CONFIDENCE_DETERMINISTIC
-                    requires_review = False
-                    reasoning = "Deterministic exact-match scoring."
+                    graded[i] = (
+                        score_mcq_answer(student_ans, q.correct_answer, marks),
+                        CONFIDENCE_DETERMINISTIC, False,
+                        "Deterministic exact-match scoring.")
                 else:
-                    (item_score, confidence, requires_review,
-                     reasoning) = await self._grade_short_answer(q, student_ans)
+                    pending.append((i, q, student_ans))
+
+            if pending:
+                _grade_sem = asyncio.Semaphore(4)
+
+                async def _grade_one(item):
+                    i, q, ans = item
+                    async with _grade_sem:
+                        return i, await self._grade_short_answer(q, ans)
+
+                for i, res in await asyncio.gather(
+                        *(_grade_one(it) for it in pending)):
+                    graded[i] = res
+
+            for i, q in enumerate(assessment.questions):
+                marks = float(q.marks or 0)
+                (item_score, confidence, requires_review,
+                 reasoning) = graded[i]
 
                 earned_marks += item_score
                 if confidence is not None:
