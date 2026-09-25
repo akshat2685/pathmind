@@ -127,6 +127,13 @@ class CollegeLearningService:
 
             _concurrency = asyncio.Semaphore(8)
 
+            # One batch fetch for all subjects (3 queries in a thread)
+            # instead of 2 blocking reads per phase (~174 for whole-program).
+            subject_ids = list({sub.subject_id
+                                for _, sub, _, _ in phase_specs})
+            prefetched = await self._prefetch_subject_inputs(
+                ctx.university_id, subject_ids)
+
             async def _build_one(
                 spec: Tuple[int, Any, Any, int],
             ) -> Tuple[List[CollegeActivity], bool]:
@@ -137,7 +144,8 @@ class CollegeLearningService:
                     return await self._build_phase_activities(
                         uid, plan_id, ctx.university_id, semester, sub, unit,
                         order, ctx.available_hours_per_week,
-                        model if _wants_llm(order) else None)
+                        model if _wants_llm(order) else None,
+                        prefetched=prefetched)
 
             built_per_phase = await asyncio.gather(
                 *(_build_one(spec) for spec in phase_specs))
@@ -383,6 +391,75 @@ class CollegeLearningService:
     # Activities
     # ------------------------------------------------------------------
 
+    async def _prefetch_subject_inputs(
+        self, university_id: Optional[str], subject_ids: List[str],
+    ) -> Tuple[Dict[str, List[ResourceRecord]],
+               Dict[str, List[PYQQuestionRecord]]]:
+        """
+        Batch-fetch resources + PYQ questions for many subjects in 3 queries.
+        The supabase-py client is synchronous: letting each of the 87
+        whole-program phases do its own 2 reads blocks the event loop ~60s+
+        and blows the serverless window. The blocking batch runs in a thread
+        so the loop stays free. Returns (resources_by_subject,
+        pyq_questions_by_subject). Mirrors the semantics of
+        get_resources_for_subject / get_pyqs_for_subject.
+        """
+        def _fetch():
+            from backend.providers.curriculum_registry import (
+                get_supabase_adapter)
+            resources_by: Dict[str, List[ResourceRecord]] = {}
+            pyqs_by: Dict[str, List[PYQQuestionRecord]] = {}
+            adapter = get_supabase_adapter()
+            if not adapter.client or not subject_ids:
+                return resources_by, pyqs_by
+            try:
+                res = (adapter.client.table("learning_resources")
+                       .select("*").in_("subject_id", subject_ids).execute())
+                for row in (res.data or []):
+                    try:
+                        rec = ResourceRecord(**row)
+                    except Exception:
+                        continue
+                    # subject_id lives on the DB row, not the pydantic model.
+                    resources_by.setdefault(
+                        row.get("subject_id"), []).append(rec)
+            except Exception:
+                pass
+            try:
+                q = (adapter.client.table("pyq_sets").select("*")
+                     .in_("subject_id", subject_ids))
+                if university_id:
+                    q = q.eq("university_id", university_id)
+                sets = q.execute()
+                # latest exam_year set per subject
+                best: Dict[str, dict] = {}
+                for row in (sets.data or []):
+                    sid = row.get("subject_id")
+                    if (sid not in best or (row.get("exam_year") or 0) >
+                            (best[sid].get("exam_year") or 0)):
+                        best[sid] = row
+                set_ids = [r.get("pyq_set_id") for r in best.values()
+                           if r.get("pyq_set_id")]
+                questions_by_set: Dict[str, List[PYQQuestionRecord]] = {}
+                if set_ids:
+                    qr = (adapter.client.table("pyq_questions").select("*")
+                          .in_("pyq_set_id", set_ids).execute())
+                    for qrow in (qr.data or []):
+                        try:
+                            qrec = PYQQuestionRecord(**qrow)
+                        except Exception:
+                            continue
+                        questions_by_set.setdefault(
+                            qrow.get("pyq_set_id"), []).append(qrec)
+                for sid, srow in best.items():
+                    pyqs_by[sid] = questions_by_set.get(
+                        srow.get("pyq_set_id"), [])
+            except Exception:
+                pass
+            return resources_by, pyqs_by
+
+        return await asyncio.to_thread(_fetch)
+
     async def _build_phase_activities(
         self,
         uid: str,
@@ -394,15 +471,22 @@ class CollegeLearningService:
         phase_order: int,
         available_hours_per_week: Optional[int],
         model,
+        prefetched: Optional[Tuple[Dict[str, List[ResourceRecord]],
+                                   Dict[str, List[PYQQuestionRecord]]]] = None,
     ) -> Tuple[List[CollegeActivity], bool]:
         """Returns (activities, used_llm). used_llm is False when the model
         was unavailable or returned nothing and the deterministic static
         sequence was used instead."""
         phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
         status = "AVAILABLE" if phase_order == 1 else "LOCKED"
-        resources = await get_resources_for_subject(sub.subject_id)
-        pyq_set = await get_pyqs_for_subject(university_id, sub.subject_id)
-        pyq_questions = pyq_set.questions if pyq_set else []
+        if prefetched is not None:
+            # Batch-prefetched by the caller: no per-phase DB reads.
+            resources = prefetched[0].get(sub.subject_id, [])
+            pyq_questions = prefetched[1].get(sub.subject_id, [])
+        else:
+            resources = await get_resources_for_subject(sub.subject_id)
+            pyq_set = await get_pyqs_for_subject(university_id, sub.subject_id)
+            pyq_questions = pyq_set.questions if pyq_set else []
 
         activities: List[CollegeActivity] = []
         used_llm = False
