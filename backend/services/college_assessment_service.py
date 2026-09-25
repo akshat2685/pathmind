@@ -17,6 +17,7 @@ Grading honesty rules (TRD §16):
 
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -91,7 +92,7 @@ Maximum marks: {marks}
 
 Return ONLY a JSON object, no other text:
 {{"score": <number from 0 to {marks}>, "confidence": "high|medium|low", "reasoning": "<1-2 sentences: which rubric points were met or missed>"}}"""
-    response = model.generate_content(prompt)
+    response = await asyncio.to_thread(model.generate_content, prompt)
     text = response.text.strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -527,8 +528,30 @@ Make the first two MCQs and the last one SHORT_ANSWER.
             if not requires_review:
                 return (score, CONFIDENCE_DETERMINISTIC, False,
                         "Exact match against the reference answer.")
-            return (0.0, CONFIDENCE_DETERMINISTIC, False,
-                    "Did not match the reference answer.")
+            # Not an exact match: a thoughtful free-text answer must never be
+            # auto-scored as zero. Grade it against the reference answer with
+            # the LLM; if that fails, flag for human review instead of a 0.
+            model = _get_gemini_model()
+            if model is not None:
+                try:
+                    grade = await grade_short_answer_with_llm(
+                        question_text=question.question_text,
+                        rubric=question.rubric,
+                        reference_answer=question.correct_answer,
+                        student_answer=student_answer,
+                        marks=marks,
+                        model=model,
+                    )
+                    return (grade.score,
+                            _CONFIDENCE_TO_FLOAT[grade.confidence],
+                            False, grade.reasoning)
+                except Exception as exc:
+                    log_event("college.assessment.llm_grading_failed",
+                              outcome="error", error_code=type(exc).__name__)
+            return (0.0, None, True,
+                    "Free-text answer did not match the reference answer and "
+                    "AI grading was unavailable; flagged for human review "
+                    "instead of auto-scoring zero.")
 
         if question.rubric:
             model = _get_gemini_model()

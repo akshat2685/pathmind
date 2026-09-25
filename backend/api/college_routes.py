@@ -318,6 +318,8 @@ async def get_baseline_endpoint(
     masteries = await store.get_topic_masteries(person_id)
     baseline = build_learner_baseline(masteries)
     baseline["updated_at"] = datetime.now(timezone.utc).isoformat()
+    log_event("college.route.baseline_served", user_id=person_id,
+              topic_count=baseline.get("topic_count", 0), outcome="ok")
     return baseline
 
 @router.post("/assessments/submit", response_model=CollegeAssessmentResult)

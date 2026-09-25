@@ -240,6 +240,13 @@ export function CollegeDashboard() {
   const [newCmtTitle, setNewCmtTitle] = useState("");
   const [newCmtMinutes, setNewCmtMinutes] = useState(45);
 
+  // Data-loading UX: never show a stale "not set" screen while loading,
+  // and never fail silently — a failed fetch gets an explicit retry banner.
+  const [dataLoading, setDataLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+
   useEffect(() => {
     if (user) {
       setUserName(user.email?.split("@")[0] || "Scholar");
@@ -248,7 +255,37 @@ export function CollegeDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  const loadAllData = async () => {
+  // Refresh when a plan is generated elsewhere (e.g. onboarding Step 5):
+  // the dashboard may already be mounted, so an event beats navigation.
+  useEffect(() => {
+    const onRefresh = () => loadAllData();
+    window.addEventListener("pathmind:refresh", onRefresh);
+    return () => window.removeEventListener("pathmind:refresh", onRefresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // One-shot success banner after a fresh plan generation (set by Step 5).
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("pathmind_plan_ready") === "1") {
+        sessionStorage.removeItem("pathmind_plan_ready");
+        setToast("Your study plan is ready — phases unlock as you demonstrate mastery.");
+      }
+    } catch {
+      /* storage unavailable: skip banner */
+    }
+  }, []);
+
+  // Auto-dismiss toasts.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const loadAllData = async (retrying = false) => {
+    setLoadError(null);
+    setDataLoading(true);
     try {
       // 1. Learner profile (branch lives here as supported_path)
       const profRes = await apiClient.get<any>("/api/college/profile");
@@ -257,7 +294,18 @@ export function CollegeDashboard() {
 
       // 2. Academic Context — without it there is nothing honest to show
       const ctxRes = await apiClient.get<any>("/api/college/academic-context");
-      if (!ctxRes.ok || !ctxRes.data) {
+      if (!ctxRes.ok) {
+        // A transient failure (e.g. token refresh race on first load) gets
+        // one retry; a hard failure gets an explicit banner, never a stale
+        // "not set" screen.
+        if (!retrying) {
+          await new Promise((r) => setTimeout(r, 1200));
+          return loadAllData(true);
+        }
+        setLoadError(ctxRes.error || "Could not load your academic context.");
+        return;
+      }
+      if (!ctxRes.data) {
         router.push("/onboarding");
         return;
       }
@@ -286,6 +334,13 @@ export function CollegeDashboard() {
       await loadPyqSubjects(ctx, profileBranch);
     } catch (err) {
       console.error("Failed to load dashboard data", err);
+      if (!retrying) {
+        await new Promise((r) => setTimeout(r, 1200));
+        return loadAllData(true);
+      }
+      setLoadError(err instanceof Error ? err.message : "Failed to load dashboard data.");
+    } finally {
+      setDataLoading(false);
     }
   };
 
@@ -399,6 +454,7 @@ export function CollegeDashboard() {
       if (res.ok) {
         setLearningPlan(res.data);
         loadSchedule();
+        setToast("Activity marked complete. Demonstrate mastery in the checkpoint to unlock the next phase.");
       } else {
         setActionError(res.error || "Could not mark the activity complete.");
       }
@@ -509,15 +565,24 @@ export function CollegeDashboard() {
       });
       if (res.ok && res.data) {
         const data = res.data;
+        const text = (data.message || "").trim();
         setMentorMessages([
           ...newMsgList,
-          {
-            role: "agent",
-            text: data.message,
-            state: data.state,
-            ui_blocks: data.ui_blocks,
-            sources: data.sources,
-          },
+          text
+            ? {
+                role: "agent",
+                text,
+                state: data.state,
+                ui_blocks: data.ui_blocks,
+                sources: data.sources,
+              }
+            : {
+                // Never render an empty bubble: say so honestly instead.
+                role: "agent",
+                text: "The mentor returned an empty reply — nothing was fabricated in its place. Please try asking again.",
+                state: "ERROR",
+                ui_blocks: [],
+              },
         ]);
         loadMemories();
       } else {
@@ -547,12 +612,19 @@ export function CollegeDashboard() {
   };
 
   const handleLogout = async () => {
-    await signOut();
+    setLoggingOut(true);
+    try {
+      await signOut();
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   const branchLabel =
     branch?.replace(/_/g, " ").replace("ENGINEER", "Engineering") || "Engineering";
-  const universityDisplay = universityName || academicContext?.university_id || "University not set";
+  const universityDisplay = dataLoading
+    ? "Loading your academic station…"
+    : (universityName || academicContext?.university_id || "University not set");
   const examDays = schedule?.exam_days_remaining;
   // Phase whose checkpoint was just taken — used to narrate the mastery gate.
   const activePhase = (learningPlan?.phases || []).find((p: any) => p.phase_id === activePhaseId);
@@ -604,9 +676,10 @@ export function CollegeDashboard() {
           </Link>
           <button
             onClick={handleLogout}
-            className="text-xs px-3 py-1.5 border border-[#a65959]/40 hover:border-[#a65959] text-[#a65959] rounded-md font-medium cursor-pointer"
+            disabled={loggingOut}
+            className="text-xs px-3 py-1.5 border border-[#a65959]/40 hover:border-[#a65959] text-[#a65959] rounded-md font-medium cursor-pointer disabled:opacity-60"
           >
-            Exit Journal
+            {loggingOut ? "Exiting…" : "Exit Journal"}
           </button>
         </div>
       </header>
@@ -617,6 +690,27 @@ export function CollegeDashboard() {
           <div className="p-4 rounded-md border-[1.5px] border-[#a65959] bg-[#ffdad6]/30 text-xs text-[#93000a]">
             <span className="font-bold">Action failed: </span>
             {actionError}
+          </div>
+        )}
+
+        {loadError && (
+          <div className="p-4 rounded-md border-[1.5px] border-[#a65959] bg-[#ffdad6]/30 text-xs text-[#93000a] flex items-center justify-between gap-3">
+            <span>
+              <span className="font-bold">Couldn&apos;t load your data: </span>
+              {loadError}
+            </span>
+            <button
+              onClick={() => loadAllData()}
+              className="shrink-0 px-4 py-1.5 bg-[#a65959] text-white font-bold rounded-md cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 bg-[#252321] text-[#fdfae7] text-sm font-semibold rounded-md shadow-[3px_4px_0px_rgba(37,35,33,0.4)] max-w-[90vw] text-center">
+            {toast}
           </div>
         )}
 

@@ -11,6 +11,7 @@ per-topic mastery store. `complete_activity` never unlocks on its own.
 """
 
 from typing import List, Dict, Any, Optional, Tuple
+import asyncio
 import uuid
 
 from backend.core.college_schemas import (
@@ -80,6 +81,12 @@ class CollegeLearningService:
             seen_subjects = set()
             phase_order = 1
 
+            # Collect phase specs first (order preserved), then build
+            # activities concurrently. Serial per-phase Gemini calls are what
+            # blew the ~60s serverless cap on whole-program generation; a
+            # bounded semaphore keeps free-tier rate limits in check while
+            # cutting wall-clock time ~8x.
+            phase_specs: List[Tuple[int, Any, Any, int]] = []
             for semester, sub in scoped_subjects:
                 if sub.subject_id not in seen_subjects:
                     seen_subjects.add(sub.subject_id)
@@ -89,34 +96,49 @@ class CollegeLearningService:
                     ))
                 # Full syllabus: every unit becomes a phase (no [:2] cap).
                 for unit in sub.units:
-                    activities = await self._build_phase_activities(
-                        uid, plan_id, ctx.university_id, semester, sub, unit,
-                        phase_order, ctx.available_hours_per_week, model)
-                    phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
-                    phases.append(CollegePlanPhase(
-                        phase_id=phase_id,
-                        user_id=uid,
-                        plan_id=plan_id,
-                        order=phase_order,
-                        title=f"{sub.code}: {unit.title}",
-                        objective=(f"Master fundamental theories and exam problems "
-                                   f"for {sub.name} (Semester {semester}, Unit {unit.unit})."),
-                        status="AVAILABLE" if phase_order == 1 else "LOCKED",
-                        # Schema §16 unlock rule: demonstrated mastery required.
-                        unlock_rule={
-                            "type": "ASSESSMENT_MASTERY",
-                            "required_assessment_score": UNLOCK_REQUIRED_SCORE,
-                            "required_topics": list(unit.topics),
-                        },
-                        activities=activities,
-                        assessment_id=f"asmt_{phase_id}",
-                    ))
+                    phase_specs.append((semester, sub, unit, phase_order))
                     phase_order += 1
 
-            if not phases:
+            if not phase_specs:
                 raise ValueError(
                     "CURRICULUM_NOT_FOUND: no verified curriculum units cover "
                     "the requested scope.")
+
+            _concurrency = asyncio.Semaphore(8)
+
+            async def _build_one(
+                spec: Tuple[int, Any, Any, int],
+            ) -> List[CollegeActivity]:
+                semester, sub, unit, order = spec
+                async with _concurrency:
+                    return await self._build_phase_activities(
+                        uid, plan_id, ctx.university_id, semester, sub, unit,
+                        order, ctx.available_hours_per_week, model)
+
+            activities_per_phase = await asyncio.gather(
+                *(_build_one(spec) for spec in phase_specs))
+
+            for (semester, sub, unit, order), activities in zip(
+                    phase_specs, activities_per_phase):
+                phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
+                phases.append(CollegePlanPhase(
+                    phase_id=phase_id,
+                    user_id=uid,
+                    plan_id=plan_id,
+                    order=order,
+                    title=f"{sub.code}: {unit.title}",
+                    objective=(f"Master fundamental theories and exam problems "
+                               f"for {sub.name} (Semester {semester}, Unit {unit.unit})."),
+                    status="AVAILABLE" if order == 1 else "LOCKED",
+                    # Schema §16 unlock rule: demonstrated mastery required.
+                    unlock_rule={
+                        "type": "ASSESSMENT_MASTERY",
+                        "required_assessment_score": UNLOCK_REQUIRED_SCORE,
+                        "required_topics": list(unit.topics),
+                    },
+                    activities=activities,
+                    assessment_id=f"asmt_{phase_id}",
+                ))
 
             plan = CollegeLearningPlan(
                 plan_id=plan_id,
@@ -128,9 +150,16 @@ class CollegeLearningService:
                 scope=scope,
                 phases=phases,
                 subjects=plan_subjects,
+                # Persist as DRAFT first: if the function is killed mid-save
+                # (serverless timeout), the previous ACTIVE plan stays the
+                # newest readable one. Flip to ACTIVE only after the full
+                # hierarchy is persisted.
+                status="DRAFT",
             )
             await self.store.save_college_learning_plan(
                 uid, plan.model_dump(mode="json"))
+            await self.store.activate_college_learning_plan(uid, plan_id)
+            plan.status = "ACTIVE"
             log_event("college.plan.saved", user_id=uid, plan_id=plan_id,
                       phase_count=len(phases),
                       subject_count=len(plan_subjects), outcome="ok")
@@ -266,7 +295,11 @@ class CollegeLearningService:
 
         activities: List[CollegeActivity] = []
         if model:
-            activities = self._genai_activities(
+            # generate_content is a blocking sync call: run it in a thread so
+            # the concurrent phase builds actually overlap instead of stalling
+            # the event loop.
+            activities = await asyncio.to_thread(
+                self._genai_activities,
                 uid, plan_id, phase_id, status, model, sub, unit,
                 available_hours_per_week, resources, pyq_questions)
         if not activities:

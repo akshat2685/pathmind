@@ -1587,6 +1587,10 @@ class FirestoreStore:
         res = await college_store.get_or_create_college_user(uid, name, email)
         return res.model_dump() if res else None
 
+    async def activate_college_learning_plan(self, uid: str, plan_id: str) -> None:
+        from backend.services.college_store import college_store
+        await college_store.activate_college_learning_plan(uid, plan_id)
+
     async def save_college_user_profile(self, uid: str, profile_data: dict) -> None:
         from backend.services.college_store import college_store
         await college_store.save_college_user_profile(uid, profile_data)

@@ -207,35 +207,51 @@ class CollegeStore:
 
     async def get_college_learning_plan(self, uid: str) -> Optional[CollegeLearningPlan]:
         try:
-            res = self.client.table("learning_plans").select("*").eq("user_id", uid).eq("status", "ACTIVE").order("created_at", desc=True).limit(1).execute()
+            # Newest ACTIVE plans first; a plan left half-written by a killed
+            # function (pre-DRAFT-era orphan, or a DRAFT that leaked through)
+            # must never shadow the learner's last good plan — skip phaseless
+            # rows and keep looking.
+            res = self.client.table("learning_plans").select("*").eq("user_id", uid).eq("status", "ACTIVE").order("created_at", desc=True).limit(5).execute()
             if not res.data:
                 return None
-                
-            plan_dict = res.data[0]
-            plan_id = plan_dict["plan_id"]
-            
-            # Fetch Plan Subjects
-            # Fetch Plan Subjects (mapping table has no user_id column)
-            sub_res = self.client.table("learning_plan_subjects").select("*").eq("plan_id", plan_id).execute()
-            plan_dict["subjects"] = sub_res.data if sub_res.data else []
-            
-            # Fetch Phases
-            phases_res = self.client.table("learning_plan_phases").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
-            phases = phases_res.data if phases_res.data else []
-            
-            # Fetch Activities
-            act_res = self.client.table("learning_activities").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
-            activities = act_res.data if act_res.data else []
-            
-            # Assemble Hierarchy
-            for phase in phases:
-                phase["activities"] = [a for a in activities if a["phase_id"] == phase["phase_id"]]
-                
-            plan_dict["phases"] = phases
-            return CollegeLearningPlan(**plan_dict)
-            
+
+            for plan_dict in res.data:
+                plan_id = plan_dict["plan_id"]
+
+                # Fetch Plan Subjects
+                # Fetch Plan Subjects (mapping table has no user_id column)
+                sub_res = self.client.table("learning_plan_subjects").select("*").eq("plan_id", plan_id).execute()
+                plan_dict["subjects"] = sub_res.data if sub_res.data else []
+
+                # Fetch Phases
+                phases_res = self.client.table("learning_plan_phases").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
+                phases = phases_res.data if phases_res.data else []
+
+                if not phases:
+                    logger.warning(
+                        "Skipping phaseless ACTIVE plan %s for user %s "
+                        "(likely orphaned by an interrupted generation); "
+                        "falling back to the next newest plan.", plan_id, uid)
+                    continue
+
+                # Fetch Activities
+                act_res = self.client.table("learning_activities").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
+                activities = act_res.data if act_res.data else []
+
+                # Assemble Hierarchy
+                for phase in phases:
+                    phase["activities"] = [a for a in activities if a["phase_id"] == phase["phase_id"]]
+
+                plan_dict["phases"] = phases
+                return CollegeLearningPlan(**plan_dict)
+
+            logger.warning("User %s has ACTIVE plan rows but none with phases.",
+                           uid)
+            return None
+
         except Exception as e:
-            logger.error("Failed to get_college_learning_plan: %s", str(e))
+            logger.error("Failed to get_college_learning_plan for user %s: %s",
+                         uid, str(e), exc_info=True)
             return None
 
     async def save_college_learning_plan(self, uid: str, plan_data: CollegeLearningPlan) -> None:
@@ -304,6 +320,21 @@ class CollegeStore:
                 self.client.table("learning_plans").delete().eq("plan_id", plan_id).eq("user_id", uid).execute()
             except Exception as rollback_e:
                 logger.error("Failed to rollback learning plan: %s", str(rollback_e))
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    async def activate_college_learning_plan(self, uid: str, plan_id: str) -> None:
+        """
+        Flip a fully-persisted plan from DRAFT to ACTIVE. Called only after
+        save_college_learning_plan completes, so a function killed mid-save
+        (serverless timeout) can never leave a half-written plan as the
+        newest ACTIVE row shadowing the learner's previous good plan.
+        """
+        try:
+            self.client.table("learning_plans").update({"status": "ACTIVE"}) \
+                .eq("plan_id", plan_id).eq("user_id", uid).execute()
+        except Exception as e:
+            logger.error("Failed to activate_college_learning_plan %s: %s",
+                         plan_id, str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
 
     async def update_activity_status(self, uid: str, activity_id: str, status: str, evidence: dict = None) -> None:

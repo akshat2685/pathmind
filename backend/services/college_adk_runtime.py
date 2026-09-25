@@ -140,8 +140,21 @@ def _parse_structured_reply(raw: str) -> Dict[str, Any]:
                            "data": {"text": text[:2000]}}],
             "sources": [],
         }
+    message_text = str(payload.get("message", "") or "").strip()
+    if not message_text:
+        # The agent returned the JSON contract with an empty message — never
+        # render an empty chat bubble; say so honestly instead.
+        logger.warning("ADK reply parsed but message was empty; "
+                       "returning honest fallback.")
+        return {
+            "message": "I couldn't form a structured answer this time.",
+            "state": "LEARNING",
+            "ui_blocks": [{"type": "TEXT",
+                           "data": {"text": text[:2000]}}],
+            "sources": [],
+        }
     return {
-        "message": str(payload.get("message", ""))[:4000],
+        "message": message_text[:4000],
         "state": str(payload.get("state", "LEARNING")),
         "ui_blocks": payload.get("ui_blocks") or [],
         "sources": [s for s in (payload.get("sources") or [])

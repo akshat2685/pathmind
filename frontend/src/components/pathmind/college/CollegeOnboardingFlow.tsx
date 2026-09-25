@@ -352,6 +352,14 @@ export function CollegeOnboardingFlow() {
         return;
       }
 
+      // Tell the dashboard a fresh plan is ready: a one-shot banner plus an
+      // explicit refresh event (covers the case where it is already mounted).
+      try {
+        sessionStorage.setItem("pathmind_plan_ready", "1");
+      } catch {
+        /* storage unavailable: banner skipped, refresh event still fires */
+      }
+      window.dispatchEvent(new Event("pathmind:refresh"));
       router.push("/");
     } finally {
       setSubmitting(false);
