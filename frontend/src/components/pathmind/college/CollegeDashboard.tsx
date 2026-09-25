@@ -229,6 +229,7 @@ export function CollegeDashboard() {
   const [assessmentResult, setAssessmentResult] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [enrichingPhaseId, setEnrichingPhaseId] = useState<string | null>(null);
   const [memories, setMemories] = useState<any>({ short_term: [], long_term: [], learning_signals: [] });
 
   // Mentor Chat State
@@ -495,10 +496,38 @@ export function CollegeDashboard() {
     }
   };
 
+  // On-demand AI enrichment for tail phases of large plans: large
+  // (whole-program) plans ship tail phases with the deterministic static
+  // activity sequence so generation fits the serverless window. This
+  // upgrades one phase to AI-personalized activities in a single call.
+  const handleEnrichPhase = async (phase: any) => {
+    setActionError(null);
+    if (!learningPlan?.plan_id || !phase?.phase_id) {
+      setActionError("Cannot personalize: plan or phase id is missing.");
+      return;
+    }
+    setEnrichingPhaseId(phase.phase_id);
+    try {
+      const res = await apiClient.post<any>(
+        `/api/college/plans/${learningPlan.plan_id}/phases/${phase.phase_id}/activities/enrich`,
+        {}
+      );
+      if (res.ok) {
+        setToast("Phase personalized with AI — activities updated.");
+        loadAllData();
+      } else {
+        setActionError(res.error || "Could not personalize this phase right now.");
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not personalize this phase right now.");
+    } finally {
+      setEnrichingPhaseId(null);
+    }
+  };
+
   const handleSubmitAssessment = async () => {
     if (!activeAssessment) return;
-    setActionError(null);
-    try {
+    setActionError(null);    try {
       const res = await apiClient.post<any>("/api/college/assessments/submit", {
         assessment_id: activeAssessment.assessment_id,
         answers: answers,
@@ -858,6 +887,16 @@ export function CollegeDashboard() {
                           {phase.status}
                         </span>
 
+                        {!phase.ai_enriched && (
+                          <button
+                            onClick={() => handleEnrichPhase(phase)}
+                            disabled={enrichingPhaseId === phase.phase_id}
+                            className="px-3 py-1.5 bg-[#7c5cbf] text-white text-xs font-bold rounded hover:bg-[#6a4da8] cursor-pointer disabled:opacity-60"
+                            title="Upgrade this phase's activities to an AI-personalized sequence"
+                          >
+                            {enrichingPhaseId === phase.phase_id ? "Personalizing…" : "✨ Personalize with AI"}
+                          </button>
+                        )}
                         {!isLocked && !isDone && (
                           <button
                             onClick={() => handleGenerateAssessment(phase)}

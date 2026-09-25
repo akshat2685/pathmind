@@ -14,6 +14,7 @@ from backend.core.college_schemas import (
     CurriculumRecord,
     AcademicContext,
     CollegeLearningPlan,
+    CollegePlanPhase,
     CollegeAssessment,
     CollegeAssessmentSubmission,
     CollegeAssessmentResult,
@@ -183,6 +184,43 @@ async def generate_plan_endpoint(
         code = f"PLAN_FAILED:{type(exc).__name__}"
         log_event("college.route.plan_failed", user_id=person_id,
                   outcome="error", error_code=code)
+        raise HTTPException(status_code=500, detail=code)
+
+@router.post("/plans/{plan_id}/phases/{phase_id}/activities/enrich",
+             response_model=CollegePlanPhase)
+async def enrich_phase_activities_endpoint(
+    plan_id: str,
+    phase_id: str,
+    person_id: str = Depends(get_authenticated_person),
+):
+    """
+    Upgrades one phase's activities to AI-personalized ones. Tail phases of
+    large (whole-program) plans ship with the deterministic static sequence
+    so generation fits the serverless window; this endpoint enriches any
+    single phase on demand.
+    """
+    try:
+        phase = await learning_service.enrich_phase_activities(
+            uid=person_id, plan_id=plan_id, phase_id=phase_id)
+        log_event("college.route.phase_enriched", user_id=person_id,
+                  plan_id=plan_id, phase_id=phase_id, outcome="ok")
+        return phase
+    except ValueError as ve:
+        detail = str(ve)
+        code = detail.split(":")[0]
+        status = 404 if code in ("PLAN_NOT_FOUND", "PHASE_NOT_FOUND",
+                                 "SUBJECT_NOT_FOUND", "UNIT_NOT_FOUND") else 400
+        if code == "AI_UNAVAILABLE":
+            status = 503
+        log_event("college.route.phase_enrich_failed", user_id=person_id,
+                  plan_id=plan_id, phase_id=phase_id, outcome="error",
+                  error_code=code)
+        raise HTTPException(status_code=status, detail=detail)
+    except Exception as exc:
+        code = f"ENRICH_FAILED:{type(exc).__name__}"
+        log_event("college.route.phase_enrich_failed", user_id=person_id,
+                  plan_id=plan_id, phase_id=phase_id, outcome="error",
+                  error_code=code)
         raise HTTPException(status_code=500, detail=code)
 
 @router.get("/plans/current", response_model=Optional[CollegeLearningPlan])

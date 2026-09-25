@@ -337,6 +337,39 @@ class CollegeStore:
                          plan_id, str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
 
+    async def save_college_phase(self, uid: str, phase_data) -> None:
+        """
+        Upserts a single phase row (e.g. the ai_enriched flag) and replaces
+        its activities. Lighter than re-saving the whole plan hierarchy;
+        used by on-demand phase enrichment.
+        """
+        from backend.core.college_schemas import CollegePlanPhase
+        phase = (phase_data if isinstance(phase_data, CollegePlanPhase)
+                 else CollegePlanPhase(**phase_data))
+        try:
+            phase_dict = phase.model_dump(exclude={"activities"})
+            phase_dict["user_id"] = uid
+            self.client.table("learning_plan_phases").upsert(
+                phase_dict, on_conflict="phase_id").execute()
+            try:
+                self.client.table("learning_activities").delete().eq(
+                    "phase_id", phase.phase_id).execute()
+            except Exception as exc:
+                logger.warning("Could not clear old activities for %s: %s",
+                               phase.phase_id, exc)
+            acts = []
+            for act in phase.activities:
+                act_dict = act.model_dump(exclude={"resource", "pyq_question"})
+                act_dict["user_id"] = uid
+                acts.append(act_dict)
+            if acts:
+                self.client.table("learning_activities").upsert(
+                    acts, on_conflict="activity_id").execute()
+        except Exception as e:
+            logger.error("Failed to save_college_phase %s: %s",
+                         phase.phase_id, str(e))
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
     async def update_activity_status(self, uid: str, activity_id: str, status: str, evidence: dict = None) -> None:
         try:
             data = {"status": status}

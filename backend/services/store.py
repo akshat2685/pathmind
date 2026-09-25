@@ -1623,6 +1623,10 @@ class FirestoreStore:
         plan = CollegeLearningPlan(**plan_data)
         await college_store.save_college_learning_plan(uid, plan)
 
+    async def save_college_phase(self, uid: str, phase_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_phase(uid, phase_data)
+
     async def get_college_learning_plan(self, uid: str) -> dict:
         from backend.services.college_store import college_store
         res = await college_store.get_college_learning_plan(uid)

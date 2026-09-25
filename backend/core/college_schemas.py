@@ -313,6 +313,11 @@ class CollegePlanPhase(BaseModel):
     unlock_rule: Dict[str, Any] = Field(default_factory=dict)
     assessment_id: Optional[str] = None
     created_at: str = Field(default_factory=current_iso_time)
+    # True when the phase's activities were sequenced by the LLM. Large
+    # (whole-program) plans build tail phases from the deterministic static
+    # sequence so generation fits the serverless window; the learner can
+    # upgrade any phase to AI-personalized activities on demand.
+    ai_enriched: bool = False
 
     activities: List[CollegeActivity] = Field(default_factory=list)
 

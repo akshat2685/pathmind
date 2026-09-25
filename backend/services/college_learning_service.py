@@ -12,6 +12,7 @@ per-topic mastery store. `complete_activity` never unlocks on its own.
 
 from typing import List, Dict, Any, Optional, Tuple
 import asyncio
+import re
 import uuid
 
 from backend.core.college_schemas import (
@@ -85,7 +86,13 @@ class CollegeLearningService:
             # activities concurrently. Serial per-phase Gemini calls are what
             # blew the ~60s serverless cap on whole-program generation; a
             # bounded semaphore keeps free-tier rate limits in check while
-            # cutting wall-clock time ~8x.
+            # cutting wall-clock time ~8x. For large plans (whole-program is
+            # 87 phases for RTU CSE) even 8x concurrency cannot fit the ~60s
+            # serverless window, so generation is tiered: small plans get LLM
+            # activities for every phase, large plans get them for the head
+            # phases only and the deterministic static sequence for the tail.
+            # Tail phases are fully usable (real resources + PYQs) and can be
+            # upgraded to AI-personalized activities on demand.
             phase_specs: List[Tuple[int, Any, Any, int]] = []
             for semester, sub in scoped_subjects:
                 if sub.subject_id not in seen_subjects:
@@ -104,22 +111,32 @@ class CollegeLearningService:
                     "CURRICULUM_NOT_FOUND: no verified curriculum units cover "
                     "the requested scope.")
 
+            _LLM_FULL_CAP = 16  # at/below: LLM activities for every phase
+            _LLM_HEAD = 3     # above: LLM activities for the head phases only
+            _tiered = len(phase_specs) > _LLM_FULL_CAP
+
+            def _wants_llm(order: int) -> bool:
+                return (not _tiered) or order <= _LLM_HEAD
+
             _concurrency = asyncio.Semaphore(8)
 
             async def _build_one(
                 spec: Tuple[int, Any, Any, int],
-            ) -> List[CollegeActivity]:
+            ) -> Tuple[List[CollegeActivity], bool]:
                 semester, sub, unit, order = spec
                 async with _concurrency:
+                    # model=None forces the deterministic static sequence
+                    # (no LLM call) for tail phases of large plans.
                     return await self._build_phase_activities(
                         uid, plan_id, ctx.university_id, semester, sub, unit,
-                        order, ctx.available_hours_per_week, model)
+                        order, ctx.available_hours_per_week,
+                        model if _wants_llm(order) else None)
 
-            activities_per_phase = await asyncio.gather(
+            built_per_phase = await asyncio.gather(
                 *(_build_one(spec) for spec in phase_specs))
 
-            for (semester, sub, unit, order), activities in zip(
-                    phase_specs, activities_per_phase):
+            for (semester, sub, unit, order), (activities, used_llm) in zip(
+                    phase_specs, built_per_phase):
                 phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
                 phases.append(CollegePlanPhase(
                     phase_id=phase_id,
@@ -129,6 +146,7 @@ class CollegeLearningService:
                     title=f"{sub.code}: {unit.title}",
                     objective=(f"Master fundamental theories and exam problems "
                                f"for {sub.name} (Semester {semester}, Unit {unit.unit})."),
+                    ai_enriched=used_llm,
                     status="AVAILABLE" if order == 1 else "LOCKED",
                     # Schema §16 unlock rule: demonstrated mastery required.
                     unlock_rule={
@@ -164,6 +182,84 @@ class CollegeLearningService:
                       phase_count=len(phases),
                       subject_count=len(plan_subjects), outcome="ok")
             return plan
+
+    async def enrich_phase_activities(
+        self, uid: str, plan_id: str, phase_id: str,
+    ) -> CollegePlanPhase:
+        """
+        (Re)generates one phase's activities with the LLM, persists them and
+        marks the phase ai_enriched. This is how tail phases of large
+        (whole-program) plans get AI-personalized activities on demand, one
+        phase per serverless-friendly call. Raises ValueError with an honest
+        code when it cannot proceed; never silently keeps stale activities.
+        """
+        raw_plan = await self.store.get_college_learning_plan(uid)
+        if not raw_plan or raw_plan.get("plan_id") != plan_id:
+            raise ValueError("PLAN_NOT_FOUND")
+        phases = raw_plan.get("phases") or []
+        target = next(
+            (ph for ph in phases if ph.get("phase_id") == phase_id), None)
+        if not target:
+            raise ValueError("PHASE_NOT_FOUND")
+
+        # phase_id format: phase_{plan_id}_{subject_id}_s{semester}_u{unit}
+        m = re.match(r"^phase_(.*)_s(\d+)_u(\d+)$", phase_id)
+        if not m:
+            raise ValueError("PHASE_ID_UNPARSEABLE")
+        prefix, semester_s, unit_s = m.groups()
+        expected_prefix = f"phase_{plan_id}_"
+        if not prefix.startswith(expected_prefix):
+            raise ValueError("PHASE_PLAN_MISMATCH")
+        subject_id = prefix[len(expected_prefix):]
+        semester_hint, unit_no = int(semester_s), int(unit_s)
+
+        raw_ctx = await self.store.get_college_academic_context(uid)
+        if not raw_ctx:
+            raise ValueError("ACADEMIC_CONTEXT_REQUIRED")
+        ctx = (raw_ctx if isinstance(raw_ctx, AcademicContext)
+               else AcademicContext(**raw_ctx))
+        branch = await self._resolve_branch(uid)
+
+        sub = None
+        semester = semester_hint
+        for sem_try in [semester_hint] + [s for s in range(1, 9)
+                                          if s != semester_hint]:
+            curr = await get_curriculum(ctx.university_id, branch, sem_try)
+            if curr and curr.subjects:
+                hit = next((s for s in curr.subjects
+                            if s.subject_id == subject_id), None)
+                if hit:
+                    sub = hit
+                    semester = sem_try
+                    break
+        if sub is None:
+            raise ValueError("SUBJECT_NOT_FOUND")
+        unit = next((u for u in sub.units if u.unit == unit_no), None)
+        if unit is None:
+            raise ValueError("UNIT_NOT_FOUND")
+
+        model = self._get_gemini_model()
+        if model is None:
+            raise ValueError(
+                "AI_UNAVAILABLE: the AI service is not configured right now.")
+
+        order = int(target.get("order") or 1)
+        activities, used_llm = await self._build_phase_activities(
+            uid, plan_id, ctx.university_id, semester, sub, unit,
+            order, ctx.available_hours_per_week, model)
+        if not used_llm:
+            raise ValueError(
+                "AI_UNAVAILABLE: the AI service did not return activities; "
+                "your current activities are unchanged. Try again in a bit.")
+
+        phase = CollegePlanPhase(**target)
+        phase.activities = activities
+        phase.ai_enriched = True
+        await self.store.save_college_phase(uid, phase.model_dump(mode="json"))
+        log_event("college.plan.phase_enriched", user_id=uid, plan_id=plan_id,
+                  phase_id=phase_id, activity_count=len(activities),
+                  outcome="ok")
+        return phase
 
     async def _resolve_branch(self, uid: str) -> EngineeringBranch:
         raw_profile = await self.store.get_college_user_profile(uid)
@@ -286,7 +382,10 @@ class CollegeLearningService:
         phase_order: int,
         available_hours_per_week: Optional[int],
         model,
-    ) -> List[CollegeActivity]:
+    ) -> Tuple[List[CollegeActivity], bool]:
+        """Returns (activities, used_llm). used_llm is False when the model
+        was unavailable or returned nothing and the deterministic static
+        sequence was used instead."""
         phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
         status = "AVAILABLE" if phase_order == 1 else "LOCKED"
         resources = await get_resources_for_subject(sub.subject_id)
@@ -294,6 +393,7 @@ class CollegeLearningService:
         pyq_questions = pyq_set.questions if pyq_set else []
 
         activities: List[CollegeActivity] = []
+        used_llm = False
         if model:
             # generate_content is a blocking sync call: run it in a thread so
             # the concurrent phase builds actually overlap instead of stalling
@@ -302,11 +402,12 @@ class CollegeLearningService:
                 self._genai_activities,
                 uid, plan_id, phase_id, status, model, sub, unit,
                 available_hours_per_week, resources, pyq_questions)
+            used_llm = bool(activities)
         if not activities:
             activities = self._static_activities(
                 uid, plan_id, phase_id, status, sub, unit,
                 resources, pyq_questions)
-        return activities
+        return activities, used_llm
 
     def _genai_activities(self, uid, plan_id, phase_id, status, model,
                           sub, unit, available_hours_per_week,
