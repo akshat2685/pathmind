@@ -12,6 +12,7 @@ per-topic mastery store. `complete_activity` never unlocks on its own.
 
 from typing import List, Dict, Any, Optional, Tuple
 import asyncio
+import concurrent.futures
 import re
 import uuid
 
@@ -325,9 +326,20 @@ class CollegeLearningService:
             return [(ctx.semester, s) for s in matched]
 
         if scope == PlanScope.WHOLE_PROGRAM:
+            # get_curriculum is blocking (sync supabase-py): fetch all 8
+            # semesters in worker threads instead of ~32 sequential reads.
+            def _fetch_sem(semester: int):
+                return asyncio.run(
+                    get_curriculum(ctx.university_id, branch, semester))
+
+            def _fetch_all():
+                with concurrent.futures.ThreadPoolExecutor(
+                        max_workers=8) as pool:
+                    return list(pool.map(_fetch_sem, range(1, 9)))
+
             scoped: List[Tuple[int, Any]] = []
-            for semester in range(1, 9):
-                curr = await get_curriculum(ctx.university_id, branch, semester)
+            for semester, curr in zip(
+                    range(1, 9), await asyncio.to_thread(_fetch_all)):
                 if curr and curr.subjects:
                     scoped.extend((semester, s) for s in curr.subjects)
             if not scoped:
