@@ -111,12 +111,19 @@ class CollegeLearningService:
                     "CURRICULUM_NOT_FOUND: no verified curriculum units cover "
                     "the requested scope.")
 
+            # Tiered generation. Small plans (semester / subject-part) get
+            # LLM activities for every phase. Large plans (whole-program is
+            # 87 phases) get the deterministic static sequence for ALL phases
+            # at generation time: a single phase LLM call costs ~30s+ on the
+            # free tier, so even a 3-phase LLM head cannot fit the ~60s
+            # serverless window reliably. Tail/head phases are fully usable
+            # (real resources + PYQs) and any single phase can be upgraded to
+            # AI-personalized activities on demand via enrich_phase_activities.
             _LLM_FULL_CAP = 16  # at/below: LLM activities for every phase
-            _LLM_HEAD = 3     # above: LLM activities for the head phases only
             _tiered = len(phase_specs) > _LLM_FULL_CAP
 
             def _wants_llm(order: int) -> bool:
-                return (not _tiered) or order <= _LLM_HEAD
+                return not _tiered
 
             _concurrency = asyncio.Semaphore(8)
 
@@ -220,10 +227,15 @@ class CollegeLearningService:
                else AcademicContext(**raw_ctx))
         branch = await self._resolve_branch(uid)
 
+        # Prefer the semester stored on the phase row: one curriculum fetch.
+        # Fall back to scanning semesters only if that misses.
+        try:
+            semester = int(target.get("semester") or semester_hint)
+        except (TypeError, ValueError):
+            semester = semester_hint
         sub = None
-        semester = semester_hint
-        for sem_try in [semester_hint] + [s for s in range(1, 9)
-                                          if s != semester_hint]:
+        for sem_try in [semester] + [s for s in range(1, 9)
+                                     if s != semester]:
             curr = await get_curriculum(ctx.university_id, branch, sem_try)
             if curr and curr.subjects:
                 hit = next((s for s in curr.subjects
