@@ -78,7 +78,7 @@ async def test_dependency_enforcement(execution_engine):
     assert "Prerequisite dependency" in str(exc.value)
 
 @pytest.mark.asyncio
-async def test_start_and_complete_action_with_outcome(execution_engine):
+async def test_start_and_complete_action_with_outcome(requires_live_db, execution_engine):
     person_id = "person_alex"
     actions = await execution_engine.decompose_stage_to_actions(
         person_id=person_id,
@@ -276,7 +276,7 @@ async def test_user_created_action(execution_engine):
     assert retrieved["title"] == req.title
 
 @pytest.mark.asyncio
-async def test_execution_api_routes():
+async def test_execution_api_routes(requires_live_db):
     from fastapi.testclient import TestClient
     from backend.main import app
 
