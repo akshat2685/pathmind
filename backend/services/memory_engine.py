@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
 from datetime import datetime, timezone
 import json
 from backend.core.config import settings
@@ -10,12 +10,12 @@ from backend.core.memory_schemas import (
     CrossStageBridgeResponse,
     SecondBrainQueryRequest
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.second_brain_service import SecondBrainService
 
 class MemoryEngine:
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
         self.second_brain = SecondBrainService(store=self.store)
         self.gemini_available = bool(settings.GEMINI_API_KEY)
         self.model = None

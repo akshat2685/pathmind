@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone
 from backend.core.longitudinal_schemas import (
     CapabilityEvolutionRecord,
@@ -9,7 +9,7 @@ from backend.core.longitudinal_schemas import (
     LongitudinalLearnerState
 )
 from backend.services.context_graph_service import ContextGraphService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class ProgressAnalysisService:
     """
@@ -19,10 +19,10 @@ class ProgressAnalysisService:
     """
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         context_service: Optional[ContextGraphService] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.context_service = context_service or ContextGraphService(store=self.store)
 
     async def reconstruct_capability_evolution(self, person_id: str) -> List[CapabilityEvolutionRecord]:

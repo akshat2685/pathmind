@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from backend.services.market_intelligence_service import MarketIntelligenceService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.core.market_schemas import MarketSignal, CareerTrajectory
 from backend.core.goal_schemas import CanonicalGoal
 from backend.core.security import get_authenticated_person
@@ -17,7 +17,7 @@ async def get_market_signals(
     Retrieves evidence-based market signals for the person's active career goal.
     Gracefully handles unavailable data without fabricating values.
     """
-    store = FirestoreStore()
+    store = get_pm_store()
     market_service = MarketIntelligenceService()
     
     goal_data = await store.get_goal(person_id)
@@ -35,7 +35,7 @@ async def get_career_trajectory(
     """
     Retrieves the domain-aware career trajectory for the person's target goal.
     """
-    store = FirestoreStore()
+    store = get_pm_store()
     market_service = MarketIntelligenceService()
     
     goal_data = await store.get_goal(person_id)

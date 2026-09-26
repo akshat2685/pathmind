@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, TYPE_CHECKING, Any
 from datetime import datetime, timezone
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ from backend.providers.opportunity_provider import (
     deduplicate_opportunities
 )
 from backend.services.opportunity_reasoning_agent import OpportunityReasoningAgent
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class OpportunityMatchingEngine:
     """
@@ -30,9 +30,9 @@ class OpportunityMatchingEngine:
         provider: Optional[BaseOpportunityProvider] = None,
         agent: Optional[OpportunityReasoningAgent] = None,
         career_engine: Optional["CareerReadinessEngine"] = None,
-        store: Optional[FirestoreStore] = None
+        store: Optional[Any] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.provider = provider or JobOpportunitiesProvider()
         self.agent = agent or OpportunityReasoningAgent()
         

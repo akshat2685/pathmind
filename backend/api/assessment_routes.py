@@ -9,12 +9,12 @@ from backend.core.assessment_schemas import (
 )
 from backend.services.assessment import AssessmentEngine
 from backend.services.goal_assessment_service import GoalAssessmentService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 router = APIRouter(prefix="/api/assessments", tags=["Assessments"])
 engine = AssessmentEngine()
 goal_engine = GoalAssessmentService()
-store = FirestoreStore()
+store = get_pm_store()
 
 from backend.core.security import get_authenticated_person
 get_person_id = get_authenticated_person

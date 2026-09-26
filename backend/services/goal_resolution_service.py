@@ -1,7 +1,7 @@
 import re
 import json
 import uuid
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Any
 from datetime import datetime, timezone
 
 from backend.core.config import settings
@@ -13,7 +13,7 @@ from backend.core.goal_schemas import (
     GoalResolutionResponse
 )
 from backend.services.knowledge import KnowledgeService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class GoalResolver:
     """
@@ -24,10 +24,10 @@ class GoalResolver:
     def __init__(
         self,
         knowledge_service: Optional[KnowledgeService] = None,
-        store: Optional[FirestoreStore] = None
+        store: Optional[Any] = None
     ):
         self.knowledge_service = knowledge_service or KnowledgeService()
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.gemini_available = bool(settings.GEMINI_API_KEY)
         self.model = None
 

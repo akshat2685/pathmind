@@ -10,12 +10,12 @@ from backend.core.roadmap_schemas import (
     RejectedRecommendation
 )
 from backend.core.adaptation_schemas import LearningSignal
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.proactive_memory_service import ProactiveMemoryService
 
 class PersonalAgentEngine:
     def __init__(self):
-        self.store = FirestoreStore()
+        self.store = get_pm_store()
         self.proactive_memory = ProactiveMemoryService(self.store)
 
     async def get_or_create_agent_model(self, person_id: str) -> PersonalAgentModel:

@@ -7,6 +7,7 @@ import { validateMeaningfulText } from "@/components/pathmind/steps/GoalStep";
 import { VerificationStep } from "@/components/pathmind/steps/VerificationStep";
 import { AspirationTestStep } from "@/components/pathmind/steps/AspirationTestStep";
 import { authedFetch } from "@/lib/api";
+import { ClaimBadge } from "@/components/pathmind/trust/ClaimBadge";
 import type { TestEvaluation } from "@/components/pathmind/steps/AspirationTestStep";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -91,11 +92,18 @@ export interface EvidenceRequirements {
   evaluation_criteria?: string[];
 }
 
+export interface ClassifiedClaim {
+  text: string;
+  claim_category: string;
+  verification_status: string;
+}
+
 export interface GroundedAssessment {
   potential: string;
-  strengths: string[];
-  gaps: string[];
-  path_outline: string[];
+  potential_claims?: ClassifiedClaim[];
+  strengths: (string | ClassifiedClaim)[];
+  gaps: (string | ClassifiedClaim)[];
+  path_outline: (string | ClassifiedClaim)[];
   uncertainty: string[];
   source?: string;
   generated_at?: string;
@@ -158,6 +166,7 @@ export default function GuidedJourneyPage() {
   // Evidence
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [evidenceRequirements, setEvidenceRequirements] = useState<EvidenceRequirements | null>(null);
+  const [domainStatus, setDomainStatus] = useState<"charted" | "uncharted" | null>(null);
   const [verificationData, setVerificationData] = useState<Record<string, unknown> | null>(null);
   const [testResult, setTestResult] = useState<TestEvaluation | null>(null);
   const [groundedAssessment, setGroundedAssessment] = useState<GroundedAssessment | null>(null);
@@ -316,6 +325,9 @@ export default function GuidedJourneyPage() {
 
       const data = await res.json();
       setEvidenceRequirements(data.evidence_requirements);
+      if (data.domain_status === "uncharted" || data.domain_status === "charted") {
+        setDomainStatus(data.domain_status);
+      }
 
       localStorage.setItem("pathmind_user_goal", aspiration.trim());
       localStorage.setItem("pathmind_user_identity", stage);
@@ -888,6 +900,22 @@ export default function GuidedJourneyPage() {
         {/* ================================================================= */}
         {/* STEP 2: IDENTITY VERIFICATION (genuine-user gate)                  */}
         {/* ================================================================= */}
+        {!loading && currentStep === 2 && domainStatus === "uncharted" && (
+          <div className="sketch-border p-4 bg-amber-500/10 border-amber-500/30 flex items-start gap-3 w-full max-w-3xl mb-4">
+            <span className="material-symbols-outlined text-xl text-amber-600 mt-0.5">
+              explore
+            </span>
+            <div className="space-y-1">
+              <p className="font-label-lg text-on-surface">Uncharted territory</p>
+              <p className="font-body-sm text-on-surface-variant">
+                We don&apos;t have a verified knowledge base for &ldquo;{aspiration}&rdquo; yet.
+                Your path will be built as a research draft — clearly labeled, never
+                presented as verified — and it gets upgraded automatically when this
+                field is verified.
+              </p>
+            </div>
+          </div>
+        )}
         {!loading && currentStep === 2 && (
           <VerificationStep
             userType={stage}
@@ -942,10 +970,10 @@ export default function GuidedJourneyPage() {
                   <div className="space-y-1.5">
                     <p className="font-headline-sm text-xs text-secondary uppercase tracking-wide">What your evidence shows you're good at</p>
                     <ul className="space-y-1">
-                      {groundedAssessment.strengths.map((s: string, idx: number) => (
+                      {groundedAssessment.strengths.map((s, idx: number) => (
                         <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
                           <span className="material-symbols-outlined text-sm text-secondary shrink-0">check_circle</span>
-                          <span>{s}</span>
+                          <ClaimBadge claim={s} />
                         </li>
                       ))}
                     </ul>
@@ -956,10 +984,10 @@ export default function GuidedJourneyPage() {
                   <div className="space-y-1.5">
                     <p className="font-headline-sm text-xs text-tertiary uppercase tracking-wide">Where you're lacking</p>
                     <ul className="space-y-1">
-                      {groundedAssessment.gaps.map((gap: string, idx: number) => (
+                      {groundedAssessment.gaps.map((gap, idx: number) => (
                         <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
                           <span className="material-symbols-outlined text-sm text-tertiary shrink-0">priority_high</span>
-                          <span>{gap}</span>
+                          <ClaimBadge claim={gap} />
                         </li>
                       ))}
                     </ul>
@@ -970,10 +998,10 @@ export default function GuidedJourneyPage() {
                   <div className="space-y-1.5">
                     <p className="font-headline-sm text-xs text-secondary uppercase tracking-wide">Your dedicated path</p>
                     <ol className="space-y-1">
-                      {groundedAssessment.path_outline.map((step: string, idx: number) => (
+                      {groundedAssessment.path_outline.map((step, idx: number) => (
                         <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
                           <span className="font-bold text-secondary shrink-0">{idx + 1}.</span>
-                          <span>{step}</span>
+                          <ClaimBadge claim={step} />
                         </li>
                       ))}
                     </ol>

@@ -1,12 +1,12 @@
 import re
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
 from backend.core.memory_schemas import (
     MemoryItem,
     ProactiveMemoryContext,
     MemoryRelevanceReason
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class ProactiveMemoryService:
     """
@@ -21,8 +21,8 @@ class ProactiveMemoryService:
     4. Current explicit input / newer verified state dominance over historical memory.
     5. Durable memory-write policy (ignoring trivial UI interactions).
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
 
     # --- Step 8: Explicit Memory-Write Policy ---
     DURABLE_EVENT_TYPES = {

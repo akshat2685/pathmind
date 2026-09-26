@@ -1,7 +1,7 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone, timedelta
 from backend.core.event_schemas import EventRecord
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class EventBusService:
     """
@@ -9,8 +9,8 @@ class EventBusService:
     Ensures real state changes are captured with structured provenance,
     while suppressing redundant duplicate triggers within a deterministic cooldown window.
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
         self.cooldown_seconds = 3600  # 1 hour cooldown for duplicate event types on same entity
 
     async def publish_event(

@@ -16,12 +16,12 @@ from backend.core.memory_schemas import (
 from backend.services.memory_engine import MemoryEngine
 from backend.services.second_brain_service import SecondBrainService
 from backend.services.proactive_memory_service import ProactiveMemoryService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/memory", tags=["Longitudinal Learning Memory"])
-store = FirestoreStore()
+store = get_pm_store()
 engine = MemoryEngine(store=store)
 second_brain = SecondBrainService(store=store)
 proactive_memory = ProactiveMemoryService(store=store)

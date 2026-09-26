@@ -1,17 +1,17 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Any
 import json
 from datetime import datetime, timezone
 from backend.core.config import settings
 from backend.core.career_schemas import CanonicalGoal
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class GoalInterpretationService:
     """
     Interprets raw user input into a CanonicalGoal.
     Includes deterministic validation to ensure domain neutrality and prevent AI hallucinations.
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
         self.gemini_available = bool(settings.GEMINI_API_KEY)
         self.model = None
 

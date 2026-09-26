@@ -1,5 +1,5 @@
 import re
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Any
 from datetime import datetime, timezone
 
 from backend.core.artifact_schemas import (
@@ -23,7 +23,7 @@ from backend.providers.artifact_provider import (
     CredentialArtifactProvider
 )
 from backend.services.artifact_analysis_agent import ArtifactAnalysisAgent
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.memory_engine import MemoryEngine
 
 class ArtifactService:
@@ -34,11 +34,11 @@ class ArtifactService:
     """
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         analysis_agent: Optional[ArtifactAnalysisAgent] = None,
         memory_engine: Optional[MemoryEngine] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.analysis_agent = analysis_agent or ArtifactAnalysisAgent()
         self.memory_engine = memory_engine or MemoryEngine()
         self.providers: Dict[str, BaseArtifactProvider] = {

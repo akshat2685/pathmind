@@ -3,7 +3,7 @@ import json
 import re
 import time
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
 from datetime import datetime, timezone
 
 from backend.core.orchestration_schemas import (
@@ -14,7 +14,7 @@ from backend.core.orchestration_schemas import (
     OrchestrationRequest,
     OrchestrationResponse,
     StructuredAIOutput,)
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.counseling import CounselingAgent
 from backend.services.adaptive_planning_agent import AdaptivePlanningAgent
 from backend.services.evidence_evaluation_agent import EvidenceEvaluationAgent
@@ -46,8 +46,8 @@ class PathmindOrchestrator:
     strict server-side person scoping, circular call prevention, prompt injection defenses,
     action proposal approval gates, and failure-tolerant execution.
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
 
         # Instantiate specialized agents & services
         self.counseling_agent = CounselingAgent()
@@ -708,6 +708,19 @@ class PathmindOrchestrator:
         if len(clean_aspiration) < 5:
             raise ValueError("Please provide a descriptive aspiration (at least 5 characters).")
 
+        # Resolve the aspiration to a known domain (deterministic alias match).
+        # Unknown aspirations are NOT faked into a domain — they take the
+        # honest "uncharted" path: recorded for research, path labeled
+        # provisional until the domain is verified.
+        domain = await self.store.get_domain_for_aspiration(clean_aspiration)
+        domain_status = "charted"
+        if domain == "general":
+            domain_status = "uncharted"
+            try:
+                await self.store.save_domain_request(person_id, clean_aspiration)
+            except Exception:
+                pass
+
         # Derive grounded evidence requirements
         requirements = self.blueprint_service.generate_evidence_requirements(
             aspiration=clean_aspiration,
@@ -728,6 +741,8 @@ class PathmindOrchestrator:
         state["aspiration"] = clean_aspiration
         state["stage"] = clean_stage
         state["constraints"] = clean_constraints
+        state["domain"] = domain
+        state["domain_status"] = domain_status
         state["evidence_requirements"] = requirements
         state["step"] = 2
         state["step_name"] = "EVIDENCE_COLLECTION"
@@ -828,8 +843,23 @@ class PathmindOrchestrator:
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             }
 
-        prompt = f"""You are PATHMIND, an honest career and learning navigator. A learner has provided REAL evidence about themselves. Assess their potential based ONLY on this evidence — not on wishful thinking.
+        domain = state.get("domain") or "general"
+        domain_status = state.get("domain_status") or "uncharted"
+        uncharted_note = ""
+        if domain_status == "uncharted":
+            uncharted_note = """
+IMPORTANT — UNCHARTED ASPIRATION: this aspiration matches no verified domain
+in our database. This assessment is PROVISIONAL and research-grade only.
+- Never cite universities, exam boards, or official bodies as sources.
+- Never present domain facts (cutoffs, salaries, typical timelines) as verified.
+- Mark every domain-specific claim as provisional in the uncertainty field.
+- The path_outline must be framed as a first research draft, not a verified roadmap.
+- Be explicit: "We have not verified this field yet — this is our best
+  research draft, and it will be upgraded when the domain is verified."
+"""
 
+        prompt = f"""You are PATHMIND, an honest career and learning navigator. A learner has provided REAL evidence about themselves. Assess their potential based ONLY on this evidence — not on wishful thinking.
+{uncharted_note}
 Aspiration: "{aspiration}"
 Stage: "{stage}"
 
@@ -895,6 +925,56 @@ Rules:
             result["source"] = "fallback"
             result["uncertainty"] = [f"Assessment generation failed ({type(e).__name__}); your data is saved."]
             print(f"[Orchestrator] grounded assessment failed: {e}")
+
+        # AJ's accountability rule: every AI claim gets classified
+        # (FACT / INFERENCE / UNKNOWN) with provenance, and safety guardrails
+        # scrub guarantee/diagnosis language. Claims persist to pm_claim_validations.
+        if result.get("source") == "gemini":
+            try:
+                from backend.services.trust_provenance_service import TrustProvenanceService
+                trust = TrustProvenanceService(store=self.store)
+                evidence_ids = []
+                if verification:
+                    vid = verification.get("verification_id") or verification.get("id")
+                    if vid:
+                        evidence_ids.append(str(vid))
+                if test_result:
+                    rid = test_result.get("result_id") or test_result.get("id")
+                    if rid:
+                        evidence_ids.append(str(rid))
+
+                async def _classify(text: str) -> Dict[str, Any]:
+                    claim = await trust.verify_claim_provenance(
+                        person_id=person_id,
+                        claim_text=text,
+                        claim_category="ASSESSMENT",
+                        source_type="AI_GENERATED",
+                        supporting_evidence_ids=evidence_ids or None,
+                    )
+                    try:
+                        await self.store.save_claim_validation(
+                            person_id, claim.model_dump() if hasattr(claim, "model_dump") else dict(claim)
+                        )
+                    except Exception as ce:
+                        print(f"[Orchestrator] claim persistence failed: {ce}")
+                    prov = claim.provenance if hasattr(claim, "provenance") else {}
+                    if hasattr(prov, "model_dump"):
+                        prov = prov.model_dump()
+                    return {
+                        "text": claim.claim_text if hasattr(claim, "claim_text") else text,
+                        "claim_category": str(claim.claim_category) if hasattr(claim, "claim_category") else "UNKNOWN",
+                        "verification_status": str(prov.get("verification_status", "UNKNOWN")) if isinstance(prov, dict) else "UNKNOWN",
+                    }
+
+                for field in ("strengths", "gaps", "path_outline"):
+                    items = result.get(field) or []
+                    result[field] = [await _classify(str(i)) for i in items if str(i).strip()]
+                # potential is a paragraph — classify per sentence
+                import re as _re
+                sentences = [s.strip() for s in _re.split(r"(?<=[.!?])\s+", result.get("potential") or "") if s.strip()]
+                result["potential_claims"] = [await _classify(s) for s in sentences]
+            except Exception as ce:
+                print(f"[Orchestrator] claim classification failed, continuing unclassified: {ce}")
 
         # Persist on the journey state so it survives and feeds downstream steps
         state["grounded_assessment"] = result
