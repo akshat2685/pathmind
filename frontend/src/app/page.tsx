@@ -959,7 +959,7 @@ export default function GuidedJourneyPage() {
               <div className="sketch-border p-5 bg-surface-container-low/70 space-y-4">
                 <div className="flex items-center gap-2 text-secondary font-headline-sm text-sm">
                   <span className="material-symbols-outlined text-base">psychology</span>
-                  <span>Your potential, based on what you've proven:</span>
+                  <span>Your potential, based on what you&apos;ve proven:</span>
                 </div>
 
                 <p className="font-body-md text-sm text-on-surface leading-relaxed">
@@ -968,7 +968,7 @@ export default function GuidedJourneyPage() {
 
                 {groundedAssessment.strengths && groundedAssessment.strengths.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="font-headline-sm text-xs text-secondary uppercase tracking-wide">What your evidence shows you're good at</p>
+                    <p className="font-headline-sm text-xs text-secondary uppercase tracking-wide">What your evidence shows you&apos;re good at</p>
                     <ul className="space-y-1">
                       {groundedAssessment.strengths.map((s, idx: number) => (
                         <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
@@ -982,7 +982,7 @@ export default function GuidedJourneyPage() {
 
                 {groundedAssessment.gaps && groundedAssessment.gaps.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="font-headline-sm text-xs text-tertiary uppercase tracking-wide">Where you're lacking</p>
+                    <p className="font-headline-sm text-xs text-tertiary uppercase tracking-wide">Where you&apos;re lacking</p>
                     <ul className="space-y-1">
                       {groundedAssessment.gaps.map((gap, idx: number) => (
                         <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">

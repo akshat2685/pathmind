@@ -499,7 +499,7 @@ export function AspirationTestStep({
             {evaluation.short_answers_pending_review && (
               <p className="text-xs text-on-surface-variant/80 italic flex items-center justify-center gap-1">
                 <span className="material-symbols-outlined text-sm">hourglass_top</span>
-                Written answers couldn't be auto-scored right now — they'll be
+                Written answers couldn&apos;t be auto-scored right now — they&apos;ll be
                 reviewed and your profile will refine.
               </p>
             )}
