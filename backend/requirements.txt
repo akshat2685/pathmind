@@ -12,3 +12,4 @@ requests>=2.31.0
 httpx>=0.25.0
 adk>=0.0.5
 apscheduler>=3.10.0
+supabase>=2.30.0
