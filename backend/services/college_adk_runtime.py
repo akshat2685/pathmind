@@ -271,8 +271,29 @@ async def run_agent_interact(uid: str, user_message: str,
                           outcome="error",
                           error_code=type(e).__name__)
         if shape is None:
-            shape = await _legacy_fallback(uid, user_message,
-                                           adk_session_id, store)
+            try:
+                shape = await _legacy_fallback(uid, user_message,
+                                               adk_session_id, store)
+            except Exception as e:
+                logger.error("Legacy mentor fallback failed: %s",
+                             type(e).__name__)
+                log_event("college.adk.interact_fallback_failed",
+                          user_id=uid, outcome="error",
+                          error_code=type(e).__name__)
+                shape = None
+        if shape is None:
+            # Absolute last resort: honest, well-formed, never a 500.
+            shape = {
+                "message": ("The AI mentor is temporarily unavailable "
+                            "(the language service could not be reached). "
+                            "Your study plan, assessments and PYQs are "
+                            "unaffected — please try asking again in a "
+                            "moment. Nothing was fabricated in place of "
+                            "the answer."),
+                "state": "ERROR",
+                "ui_blocks": [],
+                "sources": [],
+            }
 
         # 5. Persist assistant turn.
         try:

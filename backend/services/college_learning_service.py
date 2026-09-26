@@ -223,7 +223,7 @@ class CollegeLearningService:
         if not m:
             raise ValueError("PHASE_ID_UNPARSEABLE")
         prefix, semester_s, unit_s = m.groups()
-        expected_prefix = f"phase_{plan_id}_"
+        expected_prefix = f"{plan_id}_"  # regex already consumed the leading "phase_"
         if not prefix.startswith(expected_prefix):
             raise ValueError("PHASE_PLAN_MISMATCH")
         subject_id = prefix[len(expected_prefix):]
