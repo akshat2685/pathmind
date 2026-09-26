@@ -77,7 +77,19 @@ class ProactiveInterventionEngine:
         if graph.opportunity_context and prefs.enable_opportunity_alerts:
             top_opp = graph.opportunity_context[0]
             deadline_str = top_opp.get("deadline", "")
-            if deadline_str and "202" in deadline_str:
+            # Real date parsing: alert only if the deadline is a valid
+            # future date within 14 days. Never string-match years.
+            _deadline_soon = False
+            if deadline_str:
+                try:
+                    _dl = datetime.fromisoformat(str(deadline_str).replace("Z", "+00:00"))
+                    if _dl.tzinfo is None:
+                        _dl = _dl.replace(tzinfo=timezone.utc)
+                    _now = datetime.now(timezone.utc)
+                    _deadline_soon = _now < _dl < _now + timedelta(days=14)
+                except (ValueError, TypeError):
+                    _deadline_soon = False
+            if _deadline_soon:
                 evt = await self.event_bus.publish_event(
                     person_id=person_id,
                     event_type="OPPORTUNITY_DEADLINE_APPROACHING",
@@ -134,6 +146,44 @@ class ProactiveInterventionEngine:
                 generated.append(intv)
 
         return generated
+
+    async def generate_interventions_deduplicated(
+        self,
+        person_id: str,
+        window_hours: float = 6.0
+    ) -> List[Intervention]:
+        """
+        Scheduler-safe wrapper around scan_and_generate_interventions.
+
+        Idempotency: before returning, checks for existing recent interventions
+        for the same person + type + related entity (status PENDING/SEEN,
+        created within window_hours). Any newly generated duplicate is marked
+        DEDUPLICATED instead of being left active — so repeated scheduler runs
+        never stack identical nudges.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+        recent_keys = set()
+        for i in await self.store.get_interventions(person_id):
+            if i.get("status") not in ("PENDING", "SEEN"):
+                continue
+            try:
+                created = datetime.fromisoformat(str(i.get("created_at", "")).replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+            if created >= cutoff:
+                recent_keys.add((i.get("type"), i.get("related_entity_type"), i.get("related_entity_id")))
+
+        generated = await self.scan_and_generate_interventions(person_id)
+        kept: List[Intervention] = []
+        for intv in generated:
+            key = (intv.type, intv.related_entity_type, intv.related_entity_id)
+            if key in recent_keys:
+                # Duplicate of a recent live intervention — retire the new copy.
+                await self.store.update_intervention_status(person_id, intv.intervention_id, "DEDUPLICATED")
+            else:
+                kept.append(intv)
+                recent_keys.add(key)  # also dedupe multiples within this single run
+        return kept
 
     async def get_active_interventions(self, person_id: str) -> List[Intervention]:
         await self.scan_and_generate_interventions(person_id)

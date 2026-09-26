@@ -20,35 +20,44 @@ def validate_person_id_format(person_id: str) -> bool:
     return bool(PERSON_ID_PATTERN.match(person_id))
 
 def get_authenticated_person(
-    x_person_id: Optional[str] = Header(None),
     authorization: Optional[str] = Header(None)
 ) -> str:
     """
-    Extracts and strictly verifies the authenticated person identity.
-    Rejects malformed, injected, or path-traversal identifiers with HTTP 400/401.
+    Extracts and verifies the authenticated person identity via Supabase Auth JWT.
+    The Bearer token is verified server-side against Supabase Auth; the returned
+    user id is the only trusted identity. Self-asserted X-Person-ID headers are
+    NOT accepted (they allowed trivial impersonation).
     """
-    raw_id = None
-
-    # 1. Check Bearer Token if present
-    if isinstance(authorization, str) and authorization.startswith("Bearer "):
-        token = authorization[7:].strip()
-        if token and validate_person_id_format(token):
-            raw_id = token
-
-    # 2. Check X-Person-ID header
-    if not raw_id and isinstance(x_person_id, str):
-        raw_id = x_person_id.strip()
-
-    # 3. Default fallback is REMOVED for production integrity (Prompt 33)
-
-    # 4. Strict Validation
-    if not validate_person_id_format(raw_id):
+    if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
-            status_code=400,
-            detail="INVALID_IDENTITY_FORMAT: Person ID must be 3-64 alphanumeric characters without special characters."
+            status_code=401,
+            detail="MISSING_AUTHORIZATION: Bearer token is required."
         )
 
-    return raw_id
+    token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="MISSING_AUTHORIZATION: Bearer token is required."
+        )
+
+    from backend.services.supabase_adapter import get_supabase_adapter
+    adapter = get_supabase_adapter()
+    if not adapter.client:
+        raise HTTPException(
+            status_code=500,
+            detail="DATABASE_UNAVAILABLE: Unable to connect to Supabase for authentication."
+        )
+
+    try:
+        return adapter.verify_jwt(token)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="INVALID_TOKEN: Supabase JWT verification failed."
+        )
 
 def enforce_person_ownership(authenticated_id: str, target_person_id: str) -> None:
     """

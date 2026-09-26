@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 import time
 import uuid
@@ -11,8 +12,8 @@ from backend.core.orchestration_schemas import (
     AgentStepTrace,
     OrchestrationTrace,
     OrchestrationRequest,
-    OrchestrationResponse
-)
+    OrchestrationResponse,
+    StructuredAIOutput,)
 from backend.services.store import FirestoreStore
 from backend.services.counseling import CounselingAgent
 from backend.services.adaptive_planning_agent import AdaptivePlanningAgent
@@ -515,13 +516,32 @@ class PathmindOrchestrator:
             await self.store.save_action_proposal(person_id, prop.model_dump(mode="json"))
 
         final_answer = " ".join(final_answer_parts) if final_answer_parts else "Workflow executed."
+        # Spec §27: enforce the structured output contract at the boundary.
+        # Free-form agent text stays in `message`; findings map to typed fields.
+        _recs = []
+        if "top_opportunity" in structured_findings:
+            _recs.append({"type": "opportunity", "data": structured_findings["top_opportunity"]})
+        _sources = []
+        if "memory_recall" in structured_findings:
+            _sources.append({"type": "memory_recall", "data": structured_findings["memory_recall"]})
+        _uncertainty = []
+        if trace.status in ("PARTIAL", "TIMEOUT"):
+            _uncertainty.append(f"Workflow ended with status {trace.status}; results may be incomplete.")
+        _state = "NEEDS_USER_INPUT" if requires_approval else ("FAILED" if trace.status == "FAILED" else "OK")
+        structured_output = StructuredAIOutput(
+            message=final_answer,
+            state=_state,
+            recommendations=_recs,
+            sources=_sources,
+            uncertainty=_uncertainty,
+        )
         resp = OrchestrationResponse(
             workflow_id=workflow_id,
             person_id=person_id,
             task_type=task_type,
             status=trace.status,
             final_answer=final_answer,
-            structured_result=structured_findings,
+            structured_result=structured_output,
             action_proposals=action_proposals,
             requires_approval=requires_approval,
             trace=trace
@@ -715,6 +735,172 @@ class PathmindOrchestrator:
         await self.store.save_journey_state(person_id, state)
 
         return state
+
+    async def generate_grounded_assessment(
+        self,
+        person_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Grounded potential assessment (AJ's core loop).
+
+        Runs AFTER the learner has provided proof: verification data (marks,
+        semester results, experience) + aptitude test results. The assessment
+        is grounded in what they have ACTUALLY done and shown — not in the
+        aspiration alone.
+
+        Returns:
+          - potential: honest assessment based on their real marks, test
+            performance, and verification data vs what the domain requires
+          - gaps: specific, evidenced ("your test scored 40% on X", "your
+            marks are Y but this path typically needs Z")
+          - path_outline: concrete dedicated steps calibrated to their
+            actual level
+          - strengths: what their data shows they're already good at
+
+        Honesty rules: every claim must trace to submitted data. Never
+        invent stats. If data is thin, say what would change the assessment.
+        """
+        from backend.core.gemini import get_gemini_model, GeminiUnavailable
+
+        state = await self.get_journey_state(person_id)
+        aspiration = state.get("aspiration") or ""
+        stage = state.get("stage") or ""
+        user_type = stage  # stage holds the persona id (school/college/etc.)
+
+        # Gather all real evidence
+        verification = None
+        try:
+            verification = await self.store.get_verification(person_id)
+        except Exception:
+            pass
+
+        test_result = None
+        try:
+            latest_test = await self.store.get_latest_aspiration_test(person_id)
+            if latest_test:
+                test_id = latest_test.get("test_id") or latest_test.get("id")
+                if test_id:
+                    test_result = await self.store.get_test_result_for_test(
+                        person_id, test_id
+                    )
+        except Exception:
+            pass
+
+        verification_summary = ""
+        if verification:
+            vdata = verification.get("verification_data") or {}
+            vtype = verification.get("user_type") or user_type
+            items = [f"{k}: {v}" for k, v in vdata.items() if v not in (None, "", [])]
+            verification_summary = f"User type: {vtype}. Verified details: {'; '.join(items) if items else 'none provided'}. Status: {verification.get('status', 'UNKNOWN')}."
+
+        test_summary = ""
+        if test_result:
+            ev = test_result.get("evaluation") or test_result.get("evaluation_json") or {}
+            if isinstance(ev, str):
+                try:
+                    ev = json.loads(ev)
+                except Exception:
+                    ev = {}
+            score = test_result.get("score")
+            max_score = test_result.get("max_score")
+            pct = ev.get("percentage")
+            strengths = ev.get("strengths") or []
+            gaps = ev.get("gaps") or []
+            skill_breakdown = ev.get("skill_breakdown") or {}
+            test_summary = (
+                f"Aptitude test score: {score}/{max_score}"
+                + (f" ({pct}%)" if pct is not None else "")
+                + f". Strengths shown: {', '.join(strengths) if strengths else 'none identified'}."
+                + f" Gaps shown: {', '.join(gaps) if gaps else 'none identified'}."
+                + (f" Skill breakdown: {json.dumps(skill_breakdown)}." if skill_breakdown else "")
+            )
+
+        if not verification_summary and not test_summary:
+            return {
+                "potential": "",
+                "gaps": [],
+                "path_outline": [],
+                "strengths": [],
+                "uncertainty": [
+                    "No verification or test data yet — complete those steps for a grounded assessment."
+                ],
+                "source": "insufficient_data",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+        prompt = f"""You are PATHMIND, an honest career and learning navigator. A learner has provided REAL evidence about themselves. Assess their potential based ONLY on this evidence — not on wishful thinking.
+
+Aspiration: "{aspiration}"
+Stage: "{stage}"
+
+VERIFIED EVIDENCE (what they proved about themselves):
+{verification_summary or "None provided."}
+
+APTITUDE TEST RESULTS (how they performed):
+{test_summary or "No test taken yet."}
+
+Now assess, grounded strictly in the evidence above:
+
+Think about what "{aspiration}" actually requires as a career/path:
+- SPORT (cricket, football, etc.): physical readiness, technical foundation, competitive exposure, age window realism
+- MEDICINE/ACADEMIC: marks thresholds, entrance exam readiness, study discipline shown
+- TRADE/CRAFT: hands-on aptitude, apprenticeship readiness
+- TECH/CREATIVE: demonstrated skill, portfolio signals, learning speed shown in test
+- BUSINESS: acumen signals, risk awareness, domain understanding
+
+Return JSON with exactly these keys:
+{{
+  "potential": "3-4 sentences: honest assessment grounded in their actual marks/scores. Reference specific numbers from their evidence. Name the strongest signal in their favor and the biggest evidence-backed risk. No flattery, no generic encouragement.",
+  "strengths": ["Strength 1: tied to specific evidence, e.g. 'Scored 85% on cricket situational judgment — strong game awareness'", "Strength 2..."],
+  "gaps": ["Gap 1: specific and evidenced, e.g. 'Test showed 40% on technical skills; most academy entrants test at 70%+'", "Gap 2...", "Gap 3..."],
+  "path_outline": ["Step 1: concrete action for the next 30 days, calibrated to their actual level", "Step 2: 3-6 month milestone", "Step 3: 1-2 year target"],
+  "uncertainty": ["What additional evidence would sharpen this assessment"]
+}}
+
+Rules:
+- Every claim in potential/strengths/gaps MUST trace to the evidence above. If the evidence is thin, say so and keep the assessment short.
+- Never invent marks, scores, or experience the learner didn't provide.
+- Be direct about difficult truths the evidence reveals, but not cruel.
+- If verification status is NEEDS_REVIEW, note the uncertainty it creates.
+"""
+
+        result: Dict[str, Any] = {
+            "potential": "",
+            "strengths": [],
+            "gaps": [],
+            "path_outline": [],
+            "uncertainty": [],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "aspiration": aspiration,
+            "stage": stage,
+        }
+
+        try:
+            model = get_gemini_model()
+            resp = model.generate_content(prompt)
+            text = resp.text.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0].strip()
+            data = json.loads(text)
+            for key in ("potential", "strengths", "gaps", "path_outline", "uncertainty"):
+                if key in data:
+                    result[key] = data[key]
+            result["source"] = "gemini"
+        except GeminiUnavailable:
+            result["source"] = "unavailable"
+            result["uncertainty"] = ["AI assessment temporarily unavailable — your verification and test data are saved and will be assessed when the service recovers."]
+        except Exception as e:
+            result["source"] = "fallback"
+            result["uncertainty"] = [f"Assessment generation failed ({type(e).__name__}); your data is saved."]
+            print(f"[Orchestrator] grounded assessment failed: {e}")
+
+        # Persist on the journey state so it survives and feeds downstream steps
+        state["grounded_assessment"] = result
+        state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await self.store.save_journey_state(person_id, state)
+        return result
 
     async def submit_evidence_and_generate_blueprint(
         self,

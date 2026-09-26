@@ -85,7 +85,8 @@ async def counterfactual_exploration(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        active_person_id = req.person_id or person_id
+        # JWT identity is authoritative; ignore self-asserted body person_id.
+        active_person_id = person_id
         
         # Discover base paths
         discovery = await engine.discover_candidate_paths(person_id=active_person_id)

@@ -4,13 +4,17 @@ from typing import List, Dict, Any, Optional
 from backend.core.schemas import KnowledgeResponse, Occupation, ProviderContext
 from backend.providers.esco import EscoProvider
 from backend.providers.nco import NcoProvider
+from backend.providers.nptel_swayam import NptelSwayamProvider
 from backend.services.store import FirestoreStore
 
 class KnowledgeService:
     def __init__(self):
         self.providers = {
             "esco": EscoProvider(),
-            "nco": NcoProvider()
+            "nco": NcoProvider(),
+            # P1: NPTEL/SWAYAM slot. Currently SOURCE_UNAVAILABLE (no public
+            # API as of 2026-09-26); returns zero results, never fabricated.
+            "nptel_swayam": NptelSwayamProvider()
         }
         self.store = FirestoreStore()
 

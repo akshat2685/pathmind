@@ -12,6 +12,8 @@ if str(current_dir) not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from typing import Optional
 from backend.api.routes import router as health_router
 from backend.api.assessment_routes import router as assessment_router
 from backend.api.counseling_routes import router as counseling_router
@@ -30,6 +32,8 @@ from backend.api.execution_routes import router as execution_router
 from backend.api.opportunity_routes import router as opportunity_router
 from backend.api.orchestrator_routes import router as orchestrator_router
 from backend.api.market_routes import router as market_router
+from backend.api.verification_routes import router as verification_router
+from backend.api.test_routes import router as test_router
 from backend.core.security import SecurityHeadersMiddleware, StructuredErrorMiddleware
 from backend.core.config import settings
 import logging
@@ -39,7 +43,29 @@ if not settings.GEMINI_API_KEY:
     logging.critical("CRITICAL: GEMINI_API_KEY is missing. Production startup aborted.")
     if __name__ == "__main__":
         sys.exit(1)
-app = FastAPI(title="PATHMIND Production API")
+
+_accountability_scheduler: Optional["AccountabilityScheduler"] = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Startup: verify the datastore is reachable, then start the background
+    accountability scheduler (6-hour sweeps over active roadmaps).
+    Fails loudly on DB unreachability -- never silently skips.
+    Shutdown: stop the scheduler cleanly.
+    """
+    global _accountability_scheduler
+    from backend.services.accountability_scheduler import AccountabilityScheduler
+    _accountability_scheduler = AccountabilityScheduler()
+    await _accountability_scheduler.start()  # raises loudly if DB unreachable
+    try:
+        yield
+    finally:
+        if _accountability_scheduler is not None:
+            await _accountability_scheduler.shutdown()
+            _accountability_scheduler = None
+
+app = FastAPI(title="PATHMIND Production API", lifespan=lifespan)
 
 # Add Production Security Middleware
 app.add_middleware(StructuredErrorMiddleware)
@@ -86,6 +112,8 @@ app.include_router(execution_router)
 app.include_router(opportunity_router)
 app.include_router(orchestrator_router)
 app.include_router(market_router)
+app.include_router(verification_router)
+app.include_router(test_router)
 
 @app.get("/health/live")
 async def health_live():

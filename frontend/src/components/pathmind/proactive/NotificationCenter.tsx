@@ -9,6 +9,7 @@ import {
   ArrowRight,
   ShieldCheck
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface InterventionItem {
   intervention_id: string;
@@ -53,8 +54,8 @@ export function NotificationCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/proactive/interventions`, {
-        headers: { "X-Person-ID": personId }
+      const res = await authedFetch(`/api/proactive/interventions`, {
+        headers: {}
       });
       if (res.ok) {
         const data: InterventionItem[] = await res.json();
@@ -72,8 +73,8 @@ export function NotificationCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/proactive/preferences`, {
-        headers: { "X-Person-ID": personId }
+      const res = await authedFetch(`/api/proactive/preferences`, {
+        headers: {}
       });
       if (res.ok) {
         const data: NotificationPrefs = await res.json();
@@ -96,11 +97,10 @@ export function NotificationCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      await fetch(`${baseUrl}/api/proactive/interventions/${intvId}/act`, {
+      await authedFetch(`/api/proactive/interventions/${intvId}/act`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({ feedback_note: "Acted from Notification Center" })
       });
@@ -117,9 +117,9 @@ export function NotificationCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      await fetch(`${baseUrl}/api/proactive/interventions/${intvId}/dismiss`, {
+      await authedFetch(`/api/proactive/interventions/${intvId}/dismiss`, {
         method: "POST",
-        headers: { "X-Person-ID": personId }
+        headers: {}
       });
       await fetchInterventions();
     } catch (err) {
@@ -136,11 +136,10 @@ export function NotificationCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      await fetch(`${baseUrl}/api/proactive/preferences`, {
+      await authedFetch(`/api/proactive/preferences`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify(updated)
       });

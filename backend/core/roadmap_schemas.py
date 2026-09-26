@@ -89,11 +89,12 @@ class EvidenceSubmission(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 class MasteryDimensions(BaseModel):
-    understanding: float = 85.0
-    application: float = 80.0
-    transfer: float = 75.0
-    accuracy: float = 90.0
-    explanation: float = 85.0
+    # All None = not yet assessed by a real rubric. Never invent scores.
+    understanding: Optional[float] = None
+    application: Optional[float] = None
+    transfer: Optional[float] = None
+    accuracy: Optional[float] = None
+    explanation: Optional[float] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -102,7 +103,7 @@ class EvaluationResult(BaseModel):
     stage_id: str
     mission_id: Optional[str] = None
     status: str = "PASS"  # PASS, REINFORCE, INSUFFICIENT_EVIDENCE
-    mastery_dimensions: MasteryDimensions = Field(default_factory=MasteryDimensions)
+    mastery_dimensions: Optional[MasteryDimensions] = None
     demonstrated: List[str] = Field(default_factory=list)
     missing: List[str] = Field(default_factory=list)
     feedback: str

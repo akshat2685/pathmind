@@ -18,6 +18,7 @@ import {
   Check,
   X
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface ResourceItem {
   title: string;
@@ -201,9 +202,9 @@ export function ProgressiveJourney() {
         : `${baseUrl}/api/roadmap/current`;
 
       const [resRoadmap, resIntel, resVersions] = await Promise.all([
-        fetch(roadmapUrl, { headers: { "X-Person-ID": personId } }),
-        fetch(`${baseUrl}/api/adaptation/state`, { headers: { "X-Person-ID": personId } }),
-        fetch(`${baseUrl}/api/roadmap/versions`, { headers: { "X-Person-ID": personId } })
+        fetch(roadmapUrl, { headers: {} }),
+        authedFetch(`/api/adaptation/state`, { headers: {} }),
+        authedFetch(`/api/roadmap/versions`, { headers: {} })
       ]);
 
       if (!resRoadmap.ok) throw new Error("Failed to load roadmap");
@@ -249,11 +250,10 @@ export function ProgressiveJourney() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/roadmap/evidence/submit`, {
+      const res = await authedFetch(`/api/roadmap/evidence/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           person_id: personId,
@@ -298,11 +298,10 @@ export function ProgressiveJourney() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/adaptation/constraint-change`, {
+      const res = await authedFetch(`/api/adaptation/constraint-change`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           weekly_hours: weeklyHours,
@@ -329,11 +328,10 @@ export function ProgressiveJourney() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/adaptation/goal-change`, {
+      const res = await authedFetch(`/api/adaptation/goal-change`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           new_target_role: selectedGoal,
@@ -362,11 +360,10 @@ export function ProgressiveJourney() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/adaptation/decide`, {
+      const res = await authedFetch(`/api/adaptation/decide`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           adaptation_id: adaptationId,

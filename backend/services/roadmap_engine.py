@@ -668,18 +668,14 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
                 stage_id=submission.stage_id,
                 mission_id=submission.mission_id,
                 status="PASS",
-                mastery_dimensions=MasteryDimensions(
-                    understanding=90.0,
-                    application=88.0,
-                    transfer=82.0,
-                    accuracy=94.0,
-                    explanation=86.0
-                ),
+                # Honest: the keyword heuristic confirms substantive content, but
+                # no rubric has measured mastery yet. Scores stay None.
+                mastery_dimensions=None,
                 demonstrated=demonstrated_skills,
                 missing=[],
-                feedback=f"Excellent execution. Your submission demonstrates solid practical mastery of {target_stage.title}.",
+                feedback=f"Submission accepted by automated check for {target_stage.title}. Detailed mastery assessment pending rubric review.",
                 recommended_next_action=f"Unlock {next_stage.title}." if next_stage else "Complete final milestone capstone.",
-                confidence="HIGH",
+                confidence="LOW",
                 evaluated_at=datetime.now(timezone.utc).isoformat()
             )
 

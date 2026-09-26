@@ -15,6 +15,7 @@ import {
   BookOpen,
   Video
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface Observation {
   observation_id: string;
@@ -171,8 +172,8 @@ export function ArtifactPortfolioView() {
 
   const fetchArtifacts = useCallback(async () => {
     try {
-      const res = await fetch("/api/artifacts", {
-        headers: { "x-person-id": "" }
+      const res = await authedFetch("/api/artifacts", {
+        headers: {}
       });
       if (res.ok) {
         const data = await res.json();
@@ -190,8 +191,8 @@ export function ArtifactPortfolioView() {
 
   const fetchLearningGuide = useCallback(async () => {
     try {
-      const res = await fetch("/api/artifacts/learning-guide/stage_backend_foundation?stage_title=Python%20%26%20Backend%20Systems", {
-        headers: { "x-person-id": "" }
+      const res = await authedFetch("/api/artifacts/learning-guide/stage_backend_foundation?stage_title=Python%20%26%20Backend%20Systems", {
+        headers: {}
       });
       if (res.ok) {
         const data = await res.json();
@@ -212,11 +213,10 @@ export function ArtifactPortfolioView() {
     e.preventDefault();
     setIngesting(true);
     try {
-      const res = await fetch("/api/artifacts/ingest", {
+      const res = await authedFetch("/api/artifacts/ingest", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify({
           title: ingestForm.title || undefined,
@@ -247,11 +247,10 @@ export function ArtifactPortfolioView() {
     setStepVerifying(true);
     setStepResult(null);
     try {
-      const res = await fetch("/api/artifacts/verify-step", {
+      const res = await authedFetch("/api/artifacts/verify-step", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify({
           stage_id: learningGuide?.stage_id || "stage_backend_foundation",
@@ -278,9 +277,9 @@ export function ArtifactPortfolioView() {
   // Handle Start Defense
   const handleStartDefense = async (artifactId: string) => {
     try {
-      const res = await fetch(`/api/artifacts/${artifactId}/defense/start`, {
+      const res = await authedFetch(`/api/artifacts/${artifactId}/defense/start`, {
         method: "POST",
-        headers: { "x-person-id": "" }
+        headers: {}
       });
       if (res.ok) {
         const session = await res.json();
@@ -302,11 +301,10 @@ export function ArtifactPortfolioView() {
         answer_text: defenseAnswers[q.question_id] || ""
       }));
 
-      const res = await fetch(`/api/artifacts/${defenseSession.artifact_id}/defense/submit`, {
+      const res = await authedFetch(`/api/artifacts/${defenseSession.artifact_id}/defense/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify({
           session_id: defenseSession.session_id,
@@ -331,11 +329,10 @@ export function ArtifactPortfolioView() {
     if (!claimQuery.trim()) return;
     setValidatingClaim(true);
     try {
-      const res = await fetch("/api/artifacts/claim-validation", {
+      const res = await authedFetch("/api/artifacts/claim-validation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify({ claim_text: claimQuery })
       });

@@ -41,9 +41,10 @@ class ExecutionIntelligenceAgent:
 
         if self.gemini_available:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                from backend.core.gemini import get_gemini_model, GeminiUnavailable
+                model = get_gemini_model()
+                if model is None:
+                    raise GeminiUnavailable("Gemini API key not configured")
                 prompt = f"""You are the PATHMIND Execution Intelligence Agent.
 Action: {action.title} ({action.action_type})
 Blocker Type: {blocker_type}

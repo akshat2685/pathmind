@@ -243,6 +243,10 @@ class FirestoreStore:
                 raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
 
+    async def save_counseling_memory(self, person_id: str, memory_data: Dict[str, Any]) -> None:
+        """Persists a counseling episodic memory item via the personal memory store."""
+        await self.save_personal_memory(person_id, memory_data)
+
     async def get_personal_memories(
         self,
         person_id: str,
@@ -427,6 +431,48 @@ class FirestoreStore:
             if os.environ.get("RUNTIME_ENV") == "production":
                 raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
             pass
+
+    async def list_person_ids_with_active_roadmaps(self) -> List[str]:
+        """
+        Lists person_ids that currently have an active roadmap.
+        Used by the accountability scheduler to find learners to check.
+        Raises loudly on DB failure in production — never silently returns [].
+        """
+        ids: List[str] = [
+            pid for pid, bucket in self._in_memory_persons.items()
+            if bucket.get("active_roadmap")
+        ]
+        if not self._available:
+            return ids
+        try:
+            # Collection-group query catches persons whose parent doc was never
+            # created (subcollections can exist without a parent document).
+            group = self.db.collection_group("roadmap_state").stream()
+            async for doc in group:
+                if doc.id != "active":
+                    continue
+                ref = doc.reference
+                parent = ref.parent.parent  # persons/{pid}/roadmap_state/active
+                pid = parent.id if parent is not None else None
+                if pid and pid not in ids:
+                    ids.append(pid)
+        except Exception as e:
+            if os.environ.get("RUNTIME_ENV") == "production":
+                raise RuntimeError("PERSISTENCE_UNAVAILABLE") from e
+            # Dev fallback: also scan top-level person docs
+            try:
+                docs = self.db.collection("persons").stream()
+                async for doc in docs:
+                    pid = doc.id
+                    if pid in ids:
+                        continue
+                    active_ref = self.db.collection("persons").document(pid).collection("roadmap_state").document("active")
+                    snap = await asyncio.wait_for(active_ref.get(), timeout=2.0)
+                    if snap.exists:
+                        ids.append(pid)
+            except Exception:
+                pass
+        return ids
 
     async def get_roadmap_history(self, person_id: str) -> List[Dict[str, Any]]:
         if not self._available:

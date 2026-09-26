@@ -14,6 +14,7 @@ import {
   Cpu,
   RefreshCw
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface MemoryItemData {
   memory_id: string;
@@ -123,8 +124,8 @@ export function MemoryVault() {
         : "scholar-user";
 
       // 1. Personal Memories
-      const memRes = await fetch("/api/memory/personal", {
-        headers: { "X-Person-ID": personId }
+      const memRes = await authedFetch("/api/memory/personal", {
+        headers: {}
       });
       if (memRes.ok) {
         const memData = await memRes.json();
@@ -132,15 +133,15 @@ export function MemoryVault() {
       }
 
       // 2. Shared Patterns
-      const patRes = await fetch("/api/memory/shared-patterns");
+      const patRes = await authedFetch("/api/memory/shared-patterns");
       if (patRes.ok) {
         const patData = await patRes.json();
         setSharedPatterns(patData);
       }
 
       // 3. Cross Stage Bridge
-      const bridgeRes = await fetch("/api/memory/cross-stage?concept=Tree%20Traversal", {
-        headers: { "X-Person-ID": personId }
+      const bridgeRes = await authedFetch("/api/memory/cross-stage?concept=Tree%20Traversal", {
+        headers: {}
       });
       if (bridgeRes.ok) {
         const bData = await bridgeRes.json();
@@ -172,8 +173,8 @@ export function MemoryVault() {
         ...(simGoal ? { current_goal: simGoal } : {})
       });
 
-      const res = await fetch(`/api/memory/debug/proactive-context?${params.toString()}`, {
-        headers: { "X-Person-ID": personId }
+      const res = await authedFetch(`/api/memory/debug/proactive-context?${params.toString()}`, {
+        headers: {}
       });
 
       if (res.ok) {
@@ -198,11 +199,10 @@ export function MemoryVault() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch("/api/memory/query", {
+      const res = await authedFetch("/api/memory/query", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           query: q,
@@ -228,9 +228,9 @@ export function MemoryVault() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`/api/memory/personal/${memoryId}`, {
+      const res = await authedFetch(`/api/memory/personal/${memoryId}`, {
         method: "DELETE",
-        headers: { "X-Person-ID": personId }
+        headers: {}
       });
 
       if (res.ok) {

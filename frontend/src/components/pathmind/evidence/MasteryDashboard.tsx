@@ -13,6 +13,7 @@ import {
   HelpCircle,
   MessageSquare
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface SkillMasteryItem {
   skill_name: string;
@@ -115,8 +116,8 @@ export function MasteryDashboard() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/evidence/dashboard`, {
-        headers: { "X-Person-ID": personId }
+      const res = await authedFetch(`/api/evidence/dashboard`, {
+        headers: {}
       });
 
       if (!res.ok) throw new Error("Failed to fetch mastery dashboard");
@@ -150,11 +151,10 @@ export function MasteryDashboard() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/evidence/dispute`, {
+      const res = await authedFetch(`/api/evidence/dispute`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           attempt_id: selectedAttemptId,

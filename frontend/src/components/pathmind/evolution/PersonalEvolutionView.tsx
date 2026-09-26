@@ -10,6 +10,7 @@ import {
   Layers,
   Milestone
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface CapabilityItem {
   skill_name: string;
@@ -88,8 +89,8 @@ export function PersonalEvolutionView() {
         : "scholar-user";
 
       const [stateRes, insightsRes] = await Promise.all([
-        fetch(`${baseUrl}/api/longitudinal/state`, { headers: { "X-Person-ID": personId } }),
-        fetch(`${baseUrl}/api/longitudinal/insights`, { headers: { "X-Person-ID": personId } })
+        authedFetch(`/api/longitudinal/state`, { headers: {} }),
+        authedFetch(`/api/longitudinal/insights`, { headers: {} })
       ]);
 
       if (stateRes.ok) {
@@ -123,11 +124,10 @@ export function PersonalEvolutionView() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/longitudinal/temporal-query`, {
+      const res = await authedFetch(`/api/longitudinal/temporal-query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({ query_text: queryText.trim() })
       });
@@ -152,11 +152,10 @@ export function PersonalEvolutionView() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/longitudinal/insights/${selectedInsightId}/dispute`, {
+      const res = await authedFetch(`/api/longitudinal/insights/${selectedInsightId}/dispute`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({ dispute_reason: disputeReason.trim() })
       });

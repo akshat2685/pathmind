@@ -11,6 +11,7 @@ from backend.core.assessment_schemas import (
     AssessmentResult,
     CounselingMessage
 )
+from backend.core.memory_schemas import MemoryItem
 from backend.services.knowledge import KnowledgeService
 
 # --- Transparent, Configurable Evidence Weighting Matrix ---
@@ -537,19 +538,42 @@ Input Data:
             print(f"Gemini synthesis fallback to deterministic engine: {e}")
             return base_profile
 
+    @staticmethod
+    def _format_memory_context(memories: List[MemoryItem]) -> str:
+        """
+        Formats promoted memories for prompt injection, labeled by promotion
+        status so the LLM weights DURABLE patterns strongly and treats
+        CANDIDATE patterns as tentative.
+        """
+        if not memories:
+            return "- Long-term Memory: none recorded yet for this learner."
+        lines = ["- Relevant Long-term Memories (from the learner's personal vault):"]
+        for m in memories[:5]:
+            tag = "DURABLE — established pattern, weight strongly" if m.promotion_status == "DURABLE" else "CANDIDATE — tentative, do not assert as fact"
+            snippet = (m.summary or m.content or "")[:220]
+            lines.append(f"  [{tag}] {m.topic}: {m.title} — {snippet} (seen {m.observation_count}x, source: {m.source_reference})")
+        return "\n".join(lines)
+
     def counsel_chat(
         self,
         person_id: str,
         user_message: str,
         profile: CounselingProfile,
-        history: List[CounselingMessage] = None
+        history: List[CounselingMessage] = None,
+        memories: Optional[List[MemoryItem]] = None
     ) -> CounselingMessage:
         """
         Interactive counseling dialogue that explains findings, answers questions,
         and provides guidance without mutating source assessment records.
+
+        memories: promoted (CANDIDATE/DURABLE) long-term memories injected into
+        the prompt. DURABLE memories are repeatedly-observed patterns — weight
+        them strongly. CANDIDATE memories are emerging patterns — treat as
+        tentative and never present them as established fact.
         """
         history = history or []
-        
+        memory_block = self._format_memory_context(memories or [])
+
         # Polite mentor dialogue generation
         if self.model:
             try:
@@ -563,11 +587,13 @@ Active Profile Summary:
 - Candidate Directions: {candidate_dirs_str}
 - Contradictions: {json.dumps([c.model_dump() for c in profile.contradictions])}
 - Evidence Gaps: {json.dumps(profile.evidence_gaps)}
-
+{memory_block}
 GUIDELINES:
 - Warm, polite, supportive, mentor-like tone.
 - Explain evidence backing recommendations.
 - Clarify contradictions gently.
+- Memories marked DURABLE are established patterns in this learner's history: use them to personalize (e.g. reference known strengths, preferences, recurring struggles).
+- Memories marked CANDIDATE are tentative emerging patterns: you may probe them gently ("I've noticed... does that sound right?") but never assert them as fact.
 - Encourage sharing portfolio links or domain-specific artifacts to substantiate milestones.
 - Keep responses concise, clear, and actionable.
 """
@@ -586,6 +612,10 @@ GUIDELINES:
 
         # Deterministic fallback response
         parts = ["Thank you for sharing that."]
+        durable = [m for m in (memories or []) if m.promotion_status == "DURABLE"]
+        if durable:
+            top = durable[0]
+            parts.append(f"From your history, I remember a consistent pattern: {top.title} ({top.topic}). I'll keep that in mind.")
         if profile.strongest_interests:
             parts.append(f"Based on your assessment, your strongest measured interests are in {', '.join(profile.strongest_interests)}.")
         else:

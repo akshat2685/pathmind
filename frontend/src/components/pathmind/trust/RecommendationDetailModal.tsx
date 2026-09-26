@@ -10,6 +10,7 @@ import {
   ThumbsDown,
   Sparkles
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface TraceableClaimItem {
   claim_id: string;
@@ -84,8 +85,8 @@ export function RecommendationDetailModal({
       // 1. Fetch recommendations list if ID not provided
       let recId = recommendationId;
       if (!recId) {
-        const recsRes = await fetch(`${baseUrl}/api/trust/recommendations`, {
-          headers: { "X-Person-ID": personId }
+        const recsRes = await authedFetch(`/api/trust/recommendations`, {
+          headers: {}
         });
         if (recsRes.ok) {
           const recs: StructuredRecommendationItem[] = await recsRes.json();
@@ -97,8 +98,8 @@ export function RecommendationDetailModal({
       }
 
       if (recId) {
-        const expRes = await fetch(`${baseUrl}/api/trust/recommendations/${recId}/explain`, {
-          headers: { "X-Person-ID": personId }
+        const expRes = await authedFetch(`/api/trust/recommendations/${recId}/explain`, {
+          headers: {}
         });
         if (expRes.ok) {
           const exp: ExplanationItem = await expRes.json();
@@ -127,11 +128,10 @@ export function RecommendationDetailModal({
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      await fetch(`${baseUrl}/api/trust/recommendations/${recommendation.recommendation_id}/decide`, {
+      await authedFetch(`/api/trust/recommendations/${recommendation.recommendation_id}/decide`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({ user_choice: choice, notes: "Decision recorded by learner." })
       });
@@ -151,11 +151,10 @@ export function RecommendationDetailModal({
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      await fetch(`${baseUrl}/api/trust/recommendations/${recommendation.recommendation_id}/feedback`, {
+      await authedFetch(`/api/trust/recommendations/${recommendation.recommendation_id}/feedback`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({ feedback_type: feedbackType, notes: feedbackNote || null })
       });

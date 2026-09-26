@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { authedFetch } from "@/lib/api";
 import {
   Compass,
   CheckCircle2,
@@ -113,9 +114,7 @@ export function OpportunityNavigatorView() {
       if (roleSearch) params.append("role_filter", roleSearch);
       if (geoFilter !== "ALL") params.append("geography", geoFilter);
 
-      const res = await fetch(`/api/opportunities/matched?${params.toString()}`, {
-        headers: { "x-person-id": "" }
-      });
+      const res = await authedFetch(`/api/opportunities/matched?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setMatches(data);
@@ -146,11 +145,10 @@ export function OpportunityNavigatorView() {
     if (!selectedMatch) return;
     setPrepLoading(true);
     try {
-      const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.id}/preparation-plan`, {
+      const res = await authedFetch(`/api/opportunities/${selectedMatch.opportunity.id}/preparation-plan`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-person-id": ""
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({ spawn_actions_to_execution_engine: true })
       });
@@ -170,9 +168,7 @@ export function OpportunityNavigatorView() {
     if (!selectedMatch) return;
     setInterviewLoading(true);
     try {
-      const res = await fetch(`/api/opportunities/${selectedMatch.opportunity.id}/interview-prep`, {
-        headers: { "x-person-id": "" }
-      });
+      const res = await authedFetch(`/api/opportunities/${selectedMatch.opportunity.id}/interview-prep`);
       if (res.ok) {
         const data = await res.json();
         setInterviewPrep(data);

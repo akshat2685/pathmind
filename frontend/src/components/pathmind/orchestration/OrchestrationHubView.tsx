@@ -10,6 +10,7 @@ import {
   Ban,
   Wrench
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface AgentContractData {
   agent_id: string;
@@ -95,15 +96,15 @@ export function OrchestrationHubView() {
         : "scholar-user";
 
       // 1. Fetch Agents Registry
-      const agentRes = await fetch(`${baseUrl}/api/orchestrate/agents`);
+      const agentRes = await authedFetch(`/api/orchestrate/agents`);
       if (agentRes.ok) {
         const agentData = await agentRes.json();
         setAgents(agentData);
       }
 
       // 2. Fetch Traces
-      const traceRes = await fetch(`${baseUrl}/api/orchestrate/traces`, {
-        headers: { "X-Person-ID": personId }
+      const traceRes = await authedFetch(`/api/orchestrate/traces`, {
+        headers: {}
       });
       if (traceRes.ok) {
         const traceData = await traceRes.json();
@@ -111,8 +112,8 @@ export function OrchestrationHubView() {
       }
 
       // 3. Fetch Pending Action Proposals
-      const propRes = await fetch(`${baseUrl}/api/orchestrate/proposals?status=PENDING`, {
-        headers: { "X-Person-ID": personId }
+      const propRes = await authedFetch(`/api/orchestrate/proposals?status=PENDING`, {
+        headers: {}
       });
       if (propRes.ok) {
         const propData = await propRes.json();
@@ -146,11 +147,10 @@ export function OrchestrationHubView() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/orchestrate`, {
+      const res = await authedFetch(`/api/orchestrate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           intent,
@@ -178,9 +178,9 @@ export function OrchestrationHubView() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/orchestrate/proposals/${proposalId}/approve`, {
+      const res = await authedFetch(`/api/orchestrate/proposals/${proposalId}/approve`, {
         method: "POST",
-        headers: { "X-Person-ID": personId }
+        headers: {}
       });
 
       if (res.ok) {
@@ -199,9 +199,9 @@ export function OrchestrationHubView() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/orchestrate/proposals/${proposalId}/reject`, {
+      const res = await authedFetch(`/api/orchestrate/proposals/${proposalId}/reject`, {
         method: "POST",
-        headers: { "X-Person-ID": personId }
+        headers: {}
       });
 
       if (res.ok) {

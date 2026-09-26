@@ -51,9 +51,10 @@ class OpportunityReasoningAgent:
 
         if self.gemini_available:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                from backend.core.gemini import get_gemini_model, GeminiUnavailable
+                model = get_gemini_model()
+                if model is None:
+                    raise GeminiUnavailable("Gemini API key not configured")
                 prompt = f"""You are the PATHMIND Opportunity Preparation Agent.
 Target Role: {target_role}
 Opportunity: {opportunity_title} at {organization}
@@ -115,9 +116,10 @@ Respond ONLY with JSON:
 
         if self.gemini_available:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                from backend.core.gemini import get_gemini_model, GeminiUnavailable
+                model = get_gemini_model()
+                if model is None:
+                    raise GeminiUnavailable("Gemini API key not configured")
                 prompt = f"""You are the PATHMIND Interview Prep Agent.
 Opportunity: {opportunity_title} at {organization}
 Target Role: {target_role}

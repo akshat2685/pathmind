@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { authedFetch } from "@/lib/api";
 
 interface SkillGapItem {
   skill_name: string;
@@ -128,11 +129,10 @@ export function CareerExplorer() {
         return;
       }
 
-      const res = await fetch(`${baseUrl}/api/trajectories/discover`, {
+      const res = await authedFetch(`/api/trajectories/discover`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           person_id: personId,
@@ -172,11 +172,10 @@ export function CareerExplorer() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/trajectories/select`, {
+      const res = await authedFetch(`/api/trajectories/select`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           person_id: personId,
@@ -221,11 +220,10 @@ export function CareerExplorer() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/trajectories/counterfactual`, {
+      const res = await authedFetch(`/api/trajectories/counterfactual`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           person_id: personId,

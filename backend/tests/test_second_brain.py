@@ -89,10 +89,18 @@ async def test_hybrid_semantic_search_and_ranking(second_brain):
     })
 
     results = await second_brain.search_memories(person_id, "recursion call stack")
-    assert len(results) >= 2
-    # The critical verified breakthrough must rank first
+    # Promotion filter (spec §13): the LOW-importance "Casual Reading" memory is
+    # still OBSERVED, so it is too weak to drive behavior by default.
+    assert len(results) == 1
     assert results[0].memory.title == "Recursion Call Stack Breakthrough"
-    assert results[0].relevance_score > results[1].relevance_score
+
+    # Opting in surfaces the OBSERVED memory too, ranked below the critical one.
+    results_all = await second_brain.search_memories(
+        person_id, "recursion call stack", include_observed=True)
+    assert len(results_all) >= 2
+    # The critical verified breakthrough must rank first
+    assert results_all[0].memory.title == "Recursion Call Stack Breakthrough"
+    assert results_all[0].relevance_score > results_all[1].relevance_score
 
 @pytest.mark.asyncio
 async def test_temporal_validity_and_supersession(second_brain):
