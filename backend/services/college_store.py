@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Optional, Dict, Any, List
 from backend.services.supabase_adapter import get_supabase_adapter
 from backend.core.college_schemas import (
@@ -15,7 +16,8 @@ from backend.core.college_schemas import (
     CollegeActivity,
     CollegePlanPhase,
     LearningPlanSubject,
-    LearnerContextSubject
+    LearnerContextSubject,
+    TopicMasteryRecord
 )
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,15 @@ class CollegeStore:
         return self.adapter.client
         
     # --- Users ---
+
+    async def list_all_college_users(self) -> List[UserProfile]:
+        """Lists every registered learner. Reads the real learners table."""
+        try:
+            res = self.client.table("learners").select("*").execute()
+            return [UserProfile(**row) for row in (res.data or [])]
+        except Exception as e:
+            logger.error("Failed to list_all_college_users: %s", str(e))
+            return []
 
     async def get_or_create_college_user(self, uid: str, name: str, email: Optional[str] = None) -> Optional[UserProfile]:
         """
@@ -90,14 +101,27 @@ class CollegeStore:
 
     async def get_college_academic_context(self, uid: str) -> Optional[AcademicContext]:
         try:
-            res = self.client.table("learner_academic_contexts").select("*").eq("user_id", uid).execute()
+            # A user can hold several contexts (one per semester they've tried).
+            # Always serve the most recently saved one — data[0] without an
+            # ORDER BY is arbitrary and served stale contexts, breaking
+            # subject-part plan generation with SUBJECT_NOT_FOUND.
+            res = (
+                self.client.table("learner_academic_contexts")
+                .select("*")
+                .eq("user_id", uid)
+                .order("updated_at", desc=True)
+                .limit(1)
+                .execute()
+            )
             if not res.data:
                 return None
-            
+
             ctx = res.data[0]
             
             # Fetch relational subjects
-            sub_res = self.client.table("learner_context_subjects").select("subject_id").eq("context_id", ctx["context_id"]).eq("user_id", uid).execute()
+            # Fetch relational subjects. The mapping table carries no user_id
+            # column; ownership is enforced through the parent context FK + RLS.
+            sub_res = self.client.table("learner_context_subjects").select("subject_id").eq("context_id", ctx["context_id"]).execute()
             ctx["subjects"] = [s["subject_id"] for s in sub_res.data] if sub_res.data else []
             
             return AcademicContext(**ctx)
@@ -117,15 +141,47 @@ class CollegeStore:
             # Upsert context
             self.client.table("learner_academic_contexts").upsert(context_data, on_conflict="context_id").execute()
             
-            # Sync subjects (delete old, insert new)
-            self.client.table("learner_context_subjects").delete().eq("context_id", ctx_id).eq("user_id", uid).execute()
+            # Sync subjects (delete old, insert new). The mapping table has no
+            # user_id column; ownership is enforced via the parent context FK + RLS.
+            # Only link subject_ids that exist in subjects (FK-safe); warn on the rest.
+            self.client.table("learner_context_subjects").delete().eq("context_id", ctx_id).execute()
             if subjects:
-                subject_rows = [{"context_id": ctx_id, "user_id": uid, "subject_id": sid} for sid in subjects]
-                self.client.table("learner_context_subjects").insert(subject_rows).execute()
+                existing = self.client.table("subjects").select("subject_id").in_("subject_id", subjects).execute()
+                existing_ids = {s["subject_id"] for s in (existing.data or [])}
+                missing = [s for s in subjects if s not in existing_ids]
+                if missing:
+                    logger.warning("Skipping learner_context_subjects with no subjects row: %s", missing)
+                subject_rows = [{"context_id": ctx_id, "subject_id": sid} for sid in subjects if sid in existing_ids]
+                if subject_rows:
+                    self.client.table("learner_context_subjects").insert(subject_rows).execute()
                 
         except Exception as e:
             logger.error("Failed to save_college_academic_context: %s", str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    async def find_program_id(self, university_id: str, branch_values: List[str]) -> Optional[str]:
+        """Resolves the canonical program_id for a university + branch.
+
+        Returns None when the knowledge tables are unseeded; callers must not
+        invent a program id (no-fake-state rule).
+        """
+        try:
+            res = self.client.table("programs").select("program_id").eq("university_id", university_id).in_("branch", branch_values).limit(1).execute()
+            if res.data:
+                return res.data[0]["program_id"]
+            return None
+        except Exception as e:
+            logger.error("Failed to find_program_id: %s", str(e))
+            return None
+
+    async def get_context_subject_ids(self, context_id: str) -> List[str]:
+        """Returns subject_ids linked to an academic context (mapping table)."""
+        try:
+            res = self.client.table("learner_context_subjects").select("subject_id").eq("context_id", context_id).execute()
+            return [s["subject_id"] for s in (res.data or [])]
+        except Exception as e:
+            logger.error("Failed to get_context_subject_ids: %s", str(e))
+            return []
 
     # --- Goal ---
 
@@ -151,34 +207,51 @@ class CollegeStore:
 
     async def get_college_learning_plan(self, uid: str) -> Optional[CollegeLearningPlan]:
         try:
-            res = self.client.table("learning_plans").select("*").eq("user_id", uid).eq("status", "ACTIVE").order("created_at", desc=True).limit(1).execute()
+            # Newest ACTIVE plans first; a plan left half-written by a killed
+            # function (pre-DRAFT-era orphan, or a DRAFT that leaked through)
+            # must never shadow the learner's last good plan — skip phaseless
+            # rows and keep looking.
+            res = self.client.table("learning_plans").select("*").eq("user_id", uid).eq("status", "ACTIVE").order("created_at", desc=True).limit(5).execute()
             if not res.data:
                 return None
-                
-            plan_dict = res.data[0]
-            plan_id = plan_dict["plan_id"]
-            
-            # Fetch Plan Subjects
-            sub_res = self.client.table("learning_plan_subjects").select("*").eq("plan_id", plan_id).eq("user_id", uid).execute()
-            plan_dict["subjects"] = sub_res.data if sub_res.data else []
-            
-            # Fetch Phases
-            phases_res = self.client.table("learning_plan_phases").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
-            phases = phases_res.data if phases_res.data else []
-            
-            # Fetch Activities
-            act_res = self.client.table("learning_activities").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
-            activities = act_res.data if act_res.data else []
-            
-            # Assemble Hierarchy
-            for phase in phases:
-                phase["activities"] = [a for a in activities if a["phase_id"] == phase["phase_id"]]
-                
-            plan_dict["phases"] = phases
-            return CollegeLearningPlan(**plan_dict)
-            
+
+            for plan_dict in res.data:
+                plan_id = plan_dict["plan_id"]
+
+                # Fetch Plan Subjects
+                # Fetch Plan Subjects (mapping table has no user_id column)
+                sub_res = self.client.table("learning_plan_subjects").select("*").eq("plan_id", plan_id).execute()
+                plan_dict["subjects"] = sub_res.data if sub_res.data else []
+
+                # Fetch Phases
+                phases_res = self.client.table("learning_plan_phases").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
+                phases = phases_res.data if phases_res.data else []
+
+                if not phases:
+                    logger.warning(
+                        "Skipping phaseless ACTIVE plan %s for user %s "
+                        "(likely orphaned by an interrupted generation); "
+                        "falling back to the next newest plan.", plan_id, uid)
+                    continue
+
+                # Fetch Activities
+                act_res = self.client.table("learning_activities").select("*").eq("plan_id", plan_id).eq("user_id", uid).order("order").execute()
+                activities = act_res.data if act_res.data else []
+
+                # Assemble Hierarchy
+                for phase in phases:
+                    phase["activities"] = [a for a in activities if a["phase_id"] == phase["phase_id"]]
+
+                plan_dict["phases"] = phases
+                return CollegeLearningPlan(**plan_dict)
+
+            logger.warning("User %s has ACTIVE plan rows but none with phases.",
+                           uid)
+            return None
+
         except Exception as e:
-            logger.error("Failed to get_college_learning_plan: %s", str(e))
+            logger.error("Failed to get_college_learning_plan for user %s: %s",
+                         uid, str(e), exc_info=True)
             return None
 
     async def save_college_learning_plan(self, uid: str, plan_data: CollegeLearningPlan) -> None:
@@ -203,11 +276,22 @@ class CollegeStore:
             self.client.table("learning_plans").upsert(plan_dict, on_conflict="plan_id").execute()
             
             # 2. Insert Subjects
+            # 2. Insert Subjects (mapping table has no user_id column; FK-safe)
             if plan_data.subjects:
-                subs = [s.model_dump() for s in plan_data.subjects]
-                for s in subs: s["user_id"] = uid
-                self.client.table("learning_plan_subjects").delete().eq("plan_id", plan_id).eq("user_id", uid).execute()
-                self.client.table("learning_plan_subjects").insert(subs).execute()
+                # learning_plan_subjects is a pure mapping table (plan_id, subject_id):
+                # drop model-only fields that are not DB columns.
+                subs = [s.model_dump(exclude={"user_id", "created_at"}) for s in plan_data.subjects]
+                self.client.table("learning_plan_subjects").delete().eq("plan_id", plan_id).execute()
+                if subs:
+                    wanted = [s["subject_id"] for s in subs]
+                    existing = self.client.table("subjects").select("subject_id").in_("subject_id", wanted).execute()
+                    existing_ids = {s["subject_id"] for s in (existing.data or [])}
+                    missing = [s for s in wanted if s not in existing_ids]
+                    if missing:
+                        logger.warning("Skipping learning_plan_subjects with no subjects row: %s", missing)
+                    subs = [s for s in subs if s["subject_id"] in existing_ids]
+                    if subs:
+                        self.client.table("learning_plan_subjects").insert(subs).execute()
                 
             # 3. Insert Phases
             if plan_data.phases:
@@ -236,6 +320,54 @@ class CollegeStore:
                 self.client.table("learning_plans").delete().eq("plan_id", plan_id).eq("user_id", uid).execute()
             except Exception as rollback_e:
                 logger.error("Failed to rollback learning plan: %s", str(rollback_e))
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    async def activate_college_learning_plan(self, uid: str, plan_id: str) -> None:
+        """
+        Flip a fully-persisted plan from DRAFT to ACTIVE. Called only after
+        save_college_learning_plan completes, so a function killed mid-save
+        (serverless timeout) can never leave a half-written plan as the
+        newest ACTIVE row shadowing the learner's previous good plan.
+        """
+        try:
+            self.client.table("learning_plans").update({"status": "ACTIVE"}) \
+                .eq("plan_id", plan_id).eq("user_id", uid).execute()
+        except Exception as e:
+            logger.error("Failed to activate_college_learning_plan %s: %s",
+                         plan_id, str(e))
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    async def save_college_phase(self, uid: str, phase_data) -> None:
+        """
+        Upserts a single phase row (e.g. the ai_enriched flag) and replaces
+        its activities. Lighter than re-saving the whole plan hierarchy;
+        used by on-demand phase enrichment.
+        """
+        from backend.core.college_schemas import CollegePlanPhase
+        phase = (phase_data if isinstance(phase_data, CollegePlanPhase)
+                 else CollegePlanPhase(**phase_data))
+        try:
+            phase_dict = phase.model_dump(exclude={"activities"})
+            phase_dict["user_id"] = uid
+            self.client.table("learning_plan_phases").upsert(
+                phase_dict, on_conflict="phase_id").execute()
+            try:
+                self.client.table("learning_activities").delete().eq(
+                    "phase_id", phase.phase_id).execute()
+            except Exception as exc:
+                logger.warning("Could not clear old activities for %s: %s",
+                               phase.phase_id, exc)
+            acts = []
+            for act in phase.activities:
+                act_dict = act.model_dump(exclude={"resource", "pyq_question"})
+                act_dict["user_id"] = uid
+                acts.append(act_dict)
+            if acts:
+                self.client.table("learning_activities").upsert(
+                    acts, on_conflict="activity_id").execute()
+        except Exception as e:
+            logger.error("Failed to save_college_phase %s: %s",
+                         phase.phase_id, str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
 
     async def update_activity_status(self, uid: str, activity_id: str, status: str, evidence: dict = None) -> None:
@@ -318,7 +450,13 @@ class CollegeStore:
 
     async def update_college_commitment_status(self, uid: str, commitment_id: str, status: str) -> Optional[AccountabilityCommitment]:
         try:
-            res = self.client.table("accountability_commitments").update({"status": status}).eq("commitment_id", commitment_id).eq("user_id", uid).execute()
+            # Bump updated_at ourselves: PostgREST does not maintain it, and
+            # the streak engine derives consecutive-day streaks from it.
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc).isoformat()
+            res = self.client.table("accountability_commitments").update(
+                {"status": status, "updated_at": now}
+            ).eq("commitment_id", commitment_id).eq("user_id", uid).execute()
             if res.data:
                 return AccountabilityCommitment(**res.data[0])
             return None
@@ -389,5 +527,118 @@ class CollegeStore:
         except Exception as e:
             logger.error("Failed to update_long_memory_status: %s", str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    # --- Per-topic mastery (single source of truth for unlocks + baseline) ---
+
+    async def get_topic_mastery(
+        self, uid: str, subject_id: Optional[str], topic: str
+    ) -> Optional[TopicMasteryRecord]:
+        try:
+            res = (
+                self.client.table("learner_topic_mastery")
+                .select("*")
+                .eq("user_id", uid)
+                .eq("topic", topic)
+                .execute()
+            )
+            for row in res.data or []:
+                if row.get("subject_id") == subject_id:
+                    return TopicMasteryRecord(**row)
+            return None
+        except Exception as e:
+            logger.error("Failed to get_topic_mastery: %s", str(e))
+            return None
+
+    async def get_topic_masteries(
+        self, uid: str, subject_id: Optional[str] = None
+    ) -> List[TopicMasteryRecord]:
+        try:
+            query = (
+                self.client.table("learner_topic_mastery")
+                .select("*")
+                .eq("user_id", uid)
+            )
+            if subject_id is not None:
+                query = query.eq("subject_id", subject_id)
+            res = query.execute()
+            return [TopicMasteryRecord(**row) for row in (res.data or [])]
+        except Exception as e:
+            logger.error("Failed to get_topic_masteries: %s", str(e))
+            return []
+
+    async def upsert_topic_mastery(self, uid: str, record: TopicMasteryRecord) -> None:
+        try:
+            data = record.model_dump(mode="json")
+            data["user_id"] = uid
+            self.client.table("learner_topic_mastery").upsert(data).execute()
+        except Exception as e:
+            logger.error("Failed to upsert_topic_mastery: %s", str(e))
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+
+    # --- Chat sessions & messages (agent conversation persistence) ---
+
+    async def get_or_create_chat_session(
+        self, uid: str, session_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Returns the chat session row; creates one when needed."""
+        try:
+            if session_id:
+                res = (
+                    self.client.table("chat_sessions").select("*")
+                    .eq("user_id", uid).eq("session_id", session_id).execute()
+                )
+                if res.data:
+                    return res.data[0]
+            new_session_id = session_id or f"chat_{uuid.uuid4().hex[:12]}"
+            row = {
+                "session_id": new_session_id,
+                "user_id": uid,
+                "title": "College agent conversation",
+                "status": "ACTIVE",
+            }
+            res = self.client.table("chat_sessions").insert(row).execute()
+            return (res.data or [row])[0]
+        except Exception as e:
+            logger.error("Failed to get_or_create_chat_session: %s", str(e))
+            return None
+
+    async def save_chat_message(
+        self,
+        uid: str,
+        session_id: str,
+        role: str,
+        content: str,
+        source_refs: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Persists one chat turn. Never raises — persistence failures return None."""
+        try:
+            row = {
+                "message_id": f"msg_{uuid.uuid4().hex[:12]}",
+                "session_id": session_id,
+                "user_id": uid,
+                "role": role,
+                "content": content,
+                "source_refs": source_refs or [],
+            }
+            res = self.client.table("chat_messages").insert(row).execute()
+            return (res.data or [row])[0]
+        except Exception as e:
+            logger.error("Failed to save_chat_message: %s", str(e))
+            return None
+
+    async def get_chat_history(
+        self, uid: str, session_id: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        """Recent messages for a session, oldest first. Never raises."""
+        try:
+            res = (
+                self.client.table("chat_messages").select("*")
+                .eq("user_id", uid).eq("session_id", session_id)
+                .order("timestamp", desc=False).limit(limit).execute()
+            )
+            return list(res.data or [])
+        except Exception as e:
+            logger.error("Failed to get_chat_history: %s", str(e))
+            return []
 
 college_store = CollegeStore()

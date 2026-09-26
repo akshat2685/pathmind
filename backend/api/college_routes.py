@@ -14,6 +14,7 @@ from backend.core.college_schemas import (
     CurriculumRecord,
     AcademicContext,
     CollegeLearningPlan,
+    CollegePlanPhase,
     CollegeAssessment,
     CollegeAssessmentSubmission,
     CollegeAssessmentResult,
@@ -21,18 +22,26 @@ from backend.core.college_schemas import (
     AccountabilityCommitment,
     CommitmentStatus,
     EngineeringBranch,
+    PlanScope,
     CollegeShortMemory,
     CollegeLongMemory,
     LearningSignal,
     UserProfile
 )
+from backend.core.college_rules import build_learner_baseline
+from backend.core.college_logging import log_event
 from backend.services.academic_service import AcademicService
 from backend.services.college_learning_service import CollegeLearningService
 from backend.services.pyq_service import PYQService
+from backend.services.pyq_realtime_service import get_pyqs_scoped
+from backend.services.syllabus_service import get_syllabus_source
 from backend.services.college_assessment_service import CollegeAssessmentService
 from backend.services.college_accountability_service import CollegeAccountabilityService
 from backend.services.college_memory_service import CollegeMemoryService
 from backend.services.college_orchestrator import CollegeOrchestrator
+from backend.services.college_adk_runtime import run_agent_interact
+from backend.services.college_resource_pipeline import CollegeResourcePipeline
+from backend.services.college_store import college_store
 from backend.services.store import FirestoreStore
 
 router = APIRouter(prefix="/api/college", tags=["College Engineering MVP"])
@@ -120,16 +129,25 @@ async def save_academic_context(
     req: SaveAcademicContextRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
-    return await academic_service.save_learner_academic_context(
-        uid=person_id,
-        university_id=req.university_id,
-        branch=req.branch,
-        semester=req.semester,
-        subjects=req.subjects,
-        exam_window=req.exam_window,
-        available_hours_per_week=req.available_hours_per_week,
-        learning_style_preferences=req.learning_style_preferences
-    )
+    try:
+        context = await academic_service.save_learner_academic_context(
+            uid=person_id,
+            university_id=req.university_id,
+            branch=req.branch,
+            semester=req.semester,
+            subjects=req.subjects,
+            exam_window=req.exam_window,
+            available_hours_per_week=req.available_hours_per_week,
+            learning_style_preferences=req.learning_style_preferences
+        )
+        log_event("college.route.academic_context_saved", user_id=person_id,
+                  university_id=req.university_id, semester=req.semester,
+                  outcome="ok")
+        return context
+    except ValueError as ve:
+        log_event("college.route.academic_context_failed", user_id=person_id,
+                  outcome="error", error_code=str(ve).split(":")[0])
+        raise HTTPException(status_code=400, detail=str(ve))
 
 @router.get("/academic-context", response_model=Optional[AcademicContext])
 async def get_academic_context(person_id: str = Depends(get_authenticated_person)):
@@ -140,6 +158,7 @@ async def get_academic_context(person_id: str = Depends(get_authenticated_person
 class GeneratePlanRequest(BaseModel):
     goal_id: Optional[str] = "goal_semester_prep"
     target_subject_code_or_id: Optional[str] = None
+    scope: PlanScope = PlanScope.SEMESTER
 
 @router.post("/plans/generate", response_model=CollegeLearningPlan)
 async def generate_plan_endpoint(
@@ -147,13 +166,62 @@ async def generate_plan_endpoint(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await learning_service.generate_learning_plan(
+        plan = await learning_service.generate_learning_plan(
             uid=person_id,
             goal_id=req.goal_id or "goal_semester_prep",
-            target_subject_code_or_id=req.target_subject_code_or_id
+            target_subject_code_or_id=req.target_subject_code_or_id,
+            scope=req.scope,
         )
+        log_event("college.route.plan_generated", user_id=person_id,
+                  plan_id=plan.plan_id, scope=req.scope.value, outcome="ok")
+        return plan
     except ValueError as ve:
+        log_event("college.route.plan_failed", user_id=person_id,
+                  outcome="error", error_code=str(ve).split(":")[0])
         raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as exc:
+        # Never a bare 500: surface the error code so the cause is diagnosable.
+        code = f"PLAN_FAILED:{type(exc).__name__}"
+        log_event("college.route.plan_failed", user_id=person_id,
+                  outcome="error", error_code=code)
+        raise HTTPException(status_code=500, detail=code)
+
+@router.post("/plans/{plan_id}/phases/{phase_id}/activities/enrich",
+             response_model=CollegePlanPhase)
+async def enrich_phase_activities_endpoint(
+    plan_id: str,
+    phase_id: str,
+    person_id: str = Depends(get_authenticated_person),
+):
+    """
+    Upgrades one phase's activities to AI-personalized ones. Tail phases of
+    large (whole-program) plans ship with the deterministic static sequence
+    so generation fits the serverless window; this endpoint enriches any
+    single phase on demand.
+    """
+    try:
+        phase = await learning_service.enrich_phase_activities(
+            uid=person_id, plan_id=plan_id, phase_id=phase_id)
+        log_event("college.route.phase_enriched", user_id=person_id,
+                  plan_id=plan_id, phase_id=phase_id, outcome="ok")
+        return phase
+    except ValueError as ve:
+        detail = str(ve)
+        code = detail.split(":")[0]
+        status = 404 if code in ("PLAN_NOT_FOUND", "PHASE_NOT_FOUND",
+                                 "SUBJECT_NOT_FOUND", "UNIT_NOT_FOUND") else 400
+        if code == "AI_UNAVAILABLE":
+            status = 503
+        log_event("college.route.phase_enrich_failed", user_id=person_id,
+                  plan_id=plan_id, phase_id=phase_id, outcome="error",
+                  error_code=code)
+        raise HTTPException(status_code=status, detail=detail)
+    except Exception as exc:
+        code = f"ENRICH_FAILED:{type(exc).__name__}"
+        log_event("college.route.phase_enrich_failed", user_id=person_id,
+                  plan_id=plan_id, phase_id=phase_id, outcome="error",
+                  error_code=code)
+        raise HTTPException(status_code=500, detail=code)
 
 @router.get("/plans/current", response_model=Optional[CollegeLearningPlan])
 async def get_current_plan_endpoint(person_id: str = Depends(get_authenticated_person)):
@@ -169,20 +237,58 @@ async def complete_activity_endpoint(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await learning_service.complete_activity(
+        plan = await learning_service.complete_activity(
             uid=person_id,
             activity_id=activity_id,
             completion_evidence=req.evidence
         )
+        log_event("college.route.activity_completed", user_id=person_id,
+                  activity_id=activity_id, outcome="ok")
+        return plan
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
 
 # --- 4. Verified Previous Year Questions (PYQs) ---
 
 @router.get("/pyqs")
-async def get_pyqs_endpoint(university_id: str = Query(...), subject_id: str = Query(...)):
+async def get_pyqs_endpoint(
+    subject_id: str = Query(...),
+    university_id: Optional[str] = Query(None),
+):
     """Retrieves verified PYQs or returns explicit PYQ_NOT_AVAILABLE."""
     return await PYQService.get_pyqs(university_id, subject_id)
+
+@router.get("/pyq/search")
+async def search_pyq_endpoint(
+    university_id: str = Query(...),
+    branch: str = Query(...),
+    semester: int = Query(...),
+    subject_id: Optional[str] = Query(None),
+    subject_name: Optional[str] = Query(None),
+    scope: str = Query("subject", description="subject = this subject only; program = whole branch, progressive levels"),
+    level: int = Query(1, ge=1, le=3),
+):
+    """Learner-scoped PYQ retrieval. Seeded papers first, then real-time
+    retrieval from the university's official website (domain-restricted).
+    Every paper carries a direct download URL. Never invents papers."""
+    return await get_pyqs_scoped(
+        university_id=university_id, branch=branch, semester=semester,
+        subject_id=subject_id, subject_name=subject_name,
+        scope=scope, level=level,
+    )
+
+@router.get("/syllabus/source")
+async def syllabus_source_endpoint(
+    university_id: str = Query(...),
+    branch: str = Query(...),
+    semester: int = Query(...),
+):
+    """Syllabus source: seeded verified curriculum first, otherwise a
+    real-time dig through the university's official website for the
+    official syllabus document. Never invents syllabus content."""
+    return await get_syllabus_source(
+        university_id=university_id, branch=branch, semester=semester
+    )
 
 # --- 5. Checkpoint Assessments & Mastery ---
 
@@ -191,6 +297,7 @@ class GenerateAssessmentRequest(BaseModel):
     phase_id: str
     subject_id: str
     topic_title: str
+    topics: Optional[List[str]] = None
 
 @router.post("/assessments/generate", response_model=CollegeAssessment)
 async def generate_assessment_endpoint(
@@ -202,8 +309,56 @@ async def generate_assessment_endpoint(
         plan_id=req.plan_id,
         phase_id=req.phase_id,
         subject_id=req.subject_id,
-        topic_title=req.topic_title
+        topic_title=req.topic_title,
+        topics=req.topics,
     )
+
+@router.post("/assessments/diagnostic", response_model=CollegeAssessment)
+async def generate_diagnostic_endpoint(
+    person_id: str = Depends(get_authenticated_person)
+):
+    """
+    Onboarding diagnostic: authored from the learner's aspirations, branch and
+    subjects. Not tied to any plan phase. Results feed the per-topic mastery
+    store and the learner baseline.
+    """
+    try:
+        assessment = await assessment_service.generate_diagnostic_assessment(
+            uid=person_id)
+        log_event("college.route.diagnostic_generated", user_id=person_id,
+                  assessment_id=assessment.assessment_id, outcome="ok")
+        return assessment
+    except ValueError as ve:
+        detail = str(ve)
+        code = detail.split(":")[0]
+        status = 404 if code == "PROFILE_NOT_FOUND" else 400
+        if "UNAVAILABLE" in code:
+            status = 503
+        log_event("college.route.diagnostic_failed", user_id=person_id,
+                  outcome="error", error_code=code)
+        raise HTTPException(status_code=status, detail=detail)
+    except Exception as exc:
+        # Never a bare 500: surface the error code so the cause is diagnosable.
+        code = f"DIAGNOSTIC_FAILED:{type(exc).__name__}"
+        log_event("college.route.diagnostic_failed", user_id=person_id,
+                  outcome="error", error_code=code)
+        raise HTTPException(status_code=500, detail=code)
+
+@router.get("/baseline")
+async def get_baseline_endpoint(
+    person_id: str = Depends(get_authenticated_person)
+):
+    """
+    Learner baseline (strengths / weaknesses / gaps) derived from the
+    per-topic mastery store — the single source of truth.
+    """
+    from datetime import datetime, timezone
+    masteries = await store.get_topic_masteries(person_id)
+    baseline = build_learner_baseline(masteries)
+    baseline["updated_at"] = datetime.now(timezone.utc).isoformat()
+    log_event("college.route.baseline_served", user_id=person_id,
+              topic_count=baseline.get("topic_count", 0), outcome="ok")
+    return baseline
 
 @router.post("/assessments/submit", response_model=CollegeAssessmentResult)
 async def submit_assessment_endpoint(
@@ -211,7 +366,11 @@ async def submit_assessment_endpoint(
     person_id: str = Depends(get_authenticated_person)
 ):
     try:
-        return await assessment_service.evaluate_submission(uid=person_id, submission=submission)
+        result = await assessment_service.evaluate_submission(uid=person_id, submission=submission)
+        log_event("college.route.assessment_submitted", user_id=person_id,
+                  assessment_id=submission.assessment_id,
+                  mastery_status=result.mastery_status, outcome="ok")
+        return result
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
 
@@ -273,7 +432,7 @@ async def get_learner_memories_endpoint(person_id: str = Depends(get_authenticat
         "learning_signals": [s.model_dump(mode="json") for s in signals]
     }
 
-# --- 8. Agent Interaction ---
+# --- 8. Agent Interaction (real Google ADK Runner) ---
 
 class AgentInteractRequest(BaseModel):
     message: str
@@ -284,8 +443,53 @@ async def agent_interact_endpoint(
     req: AgentInteractRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
-    return await orchestrator.interact(
+    """
+    Served by the ADK Runner (CollegeRootAgent + six sub-agents, TRD §4–5).
+    Without a Gemini key it answers via the deterministic legacy path —
+    same {message, state, ui_blocks, sources} shape either way (TRD §23).
+    """
+    return await run_agent_interact(
         uid=person_id,
         user_message=req.message,
-        session_id=req.session_id
+        session_id=req.session_id,
+        store=college_store,
+    )
+
+# --- 9. Verified learning resources (resource pipeline) ---
+
+@router.get("/resources")
+async def get_verified_resources_endpoint(
+    subject_id: str = Query(...),
+    topic: Optional[str] = Query(None),
+    person_id: str = Depends(get_authenticated_person),
+):
+    """
+    Cached VERIFIED resources for a subject/topic. Never fabricates URLs:
+    when nothing verified is cached, returns RESOURCE_ENRICHMENT_PENDING so
+    the client can call POST /resources/enrich.
+    """
+    pipeline = CollegeResourcePipeline(college_store)
+    return await pipeline.get_verified_resources(subject_id, topic=topic)
+
+class EnrichResourcesRequest(BaseModel):
+    subject_id: str
+    topic: str
+    time_budget_seconds: int = 30
+
+@router.post("/resources/enrich")
+async def enrich_resources_endpoint(
+    req: EnrichResourcesRequest,
+    person_id: str = Depends(get_authenticated_person)
+):
+    """
+    Bounded live internet research for one topic (DuckDuckGo primary, Tavily
+    backup, YouTube API for videos). Only reachable URLs are persisted as
+    VERIFIED. Budgeted to stay under the 60s Vercel cap; the frontend may
+    poll GET /resources afterwards for the cached results.
+    """
+    pipeline = CollegeResourcePipeline(college_store)
+    return await pipeline.research_topic(
+        subject_id=req.subject_id,
+        topic=req.topic,
+        time_budget_seconds=min(max(req.time_budget_seconds, 5), 45),
     )

@@ -20,7 +20,7 @@ class FirestoreStore:
     def __init__(self):
         self.db = None
         self._available = False
-        self._data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+        self._data_dir = self._resolve_data_dir()
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._disk_path = self._data_dir / "college_database.json"
         
@@ -30,6 +30,25 @@ class FirestoreStore:
         from backend.services.supabase_adapter import get_supabase_adapter
         self.supabase = get_supabase_adapter()
         self._available = True
+
+    @staticmethod
+    def _resolve_data_dir() -> Path:
+        """Best-effort writable dir for the legacy disk cache.
+
+        Local dev: <repo>/data. Serverless (Vercel): the bundle filesystem
+        is read-only (only /tmp is writable), so fall back to /tmp there.
+        This runs at module import time in several routers, so it must
+        never raise.
+        """
+        import tempfile
+        candidate = Path(__file__).resolve().parent.parent.parent / "data"
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            fallback = Path(tempfile.gettempdir()) / "pathmind_data"
+            fallback.mkdir(parents=True, exist_ok=True)
+            return fallback
 
     def _load_from_disk(self) -> None:
         if self._disk_path.exists():
@@ -1560,12 +1579,17 @@ class FirestoreStore:
             print(f"Error updating state: {e}")
 
     async def list_all_college_users(self) -> list:
-        return []
+        from backend.services.college_store import college_store
+        return [u.model_dump(mode="json") for u in await college_store.list_all_college_users()]
 
     async def get_or_create_college_user(self, uid: str, name: str = "", email: str = None) -> dict:
         from backend.services.college_store import college_store
         res = await college_store.get_or_create_college_user(uid, name, email)
         return res.model_dump() if res else None
+
+    async def activate_college_learning_plan(self, uid: str, plan_id: str) -> None:
+        from backend.services.college_store import college_store
+        await college_store.activate_college_learning_plan(uid, plan_id)
 
     async def save_college_user_profile(self, uid: str, profile_data: dict) -> None:
         from backend.services.college_store import college_store
@@ -1585,11 +1609,23 @@ class FirestoreStore:
         res = await college_store.get_college_academic_context(uid)
         return res.model_dump() if res else None
 
+    async def find_program_id(self, university_id: str, branch_values: list) -> Optional[str]:
+        from backend.services.college_store import college_store
+        return await college_store.find_program_id(university_id, branch_values)
+
+    async def get_context_subject_ids(self, context_id: str) -> list:
+        from backend.services.college_store import college_store
+        return await college_store.get_context_subject_ids(context_id)
+
     async def save_college_learning_plan(self, uid: str, plan_data: dict) -> None:
         from backend.services.college_store import college_store
         from backend.core.college_schemas import CollegeLearningPlan
         plan = CollegeLearningPlan(**plan_data)
         await college_store.save_college_learning_plan(uid, plan)
+
+    async def save_college_phase(self, uid: str, phase_data: dict) -> None:
+        from backend.services.college_store import college_store
+        await college_store.save_college_phase(uid, phase_data)
 
     async def get_college_learning_plan(self, uid: str) -> dict:
         from backend.services.college_store import college_store
@@ -1643,6 +1679,8 @@ class FirestoreStore:
         return res.model_dump() if res else None
 
     async def save_college_short_memory(self, uid: str, memory_data: dict) -> None:
+        if not self._available:
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
         from backend.services.college_store import college_store
         await college_store.save_college_short_memory(uid, memory_data)
 
@@ -1652,6 +1690,8 @@ class FirestoreStore:
         return [r.model_dump() for r in res]
 
     async def save_college_long_memory(self, uid: str, memory_data: dict) -> None:
+        if not self._available:
+            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
         from backend.services.college_store import college_store
         await college_store.save_college_long_memory(uid, memory_data)
 
@@ -1672,3 +1712,14 @@ class FirestoreStore:
         from backend.services.college_store import college_store
         res = await college_store.get_college_learning_signals(uid)
         return [r.model_dump() for r in res]
+
+    async def get_topic_masteries(self, uid: str, subject_id: str = None) -> list:
+        from backend.services.college_store import college_store
+        res = await college_store.get_topic_masteries(uid, subject_id)
+        return [r.model_dump() for r in res]
+
+    async def upsert_topic_mastery(self, uid: str, record_data: dict) -> None:
+        from backend.services.college_store import college_store
+        from backend.core.college_schemas import TopicMasteryRecord
+        record = TopicMasteryRecord(**record_data)
+        await college_store.upsert_topic_mastery(uid, record)

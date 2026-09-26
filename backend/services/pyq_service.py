@@ -10,10 +10,12 @@ from backend.providers.curriculum_registry import get_pyqs_for_subject
 
 class PYQService:
     @staticmethod
-    async def get_pyqs(university_id: str, subject_id: str) -> Dict[str, Any]:
+    async def get_pyqs(university_id: Optional[str], subject_id: str) -> Dict[str, Any]:
         """
         Retrieves authentic previous year exam questions for a subject.
         Returns explicit status='PYQ_NOT_AVAILABLE' if unverified or unavailable.
+        university_id is optional: without it, the latest verified set for the
+        subject across universities is returned.
         """
         pyq_set = await get_pyqs_for_subject(university_id, subject_id)
         if not pyq_set or not pyq_set.questions:

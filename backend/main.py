@@ -56,6 +56,12 @@ for dev_origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    # Allow every Vercel preview deployment (*.vercel.app): each redeploy mints
+    # a new preview URL, and a single hardcoded origin would break the web app's
+    # API calls (the browser blocks them as CORS failures, surfacing as
+    # "Failed to fetch") after every deploy. Auth uses Bearer tokens, not
+    # cookies, so a foreign site cannot act without the user's token.
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -116,15 +122,17 @@ async def health_ready():
     store = FirestoreStore()
     firestore_status = await store.check_health()
     gemini_status = "CONFIGURED" if settings.GEMINI_API_KEY else "MISSING"
-    is_ready = firestore_status in ["CONNECTED", "IN_MEMORY_ACTIVE"]
+    is_ready = firestore_status == "CONNECTED"
 
-    return {
+    from fastapi.responses import JSONResponse
+    body = {
         "status": "ready" if is_ready else "not_ready",
         "dependencies": {
             "datastore": "healthy" if is_ready else "unhealthy",
             "ai_reasoning": "configured" if gemini_status == "CONFIGURED" else "degraded"
         }
     }
+    return JSONResponse(status_code=200 if is_ready else 503, content=body)
 
 @app.get("/health")
 async def health_check():

@@ -28,12 +28,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+      } catch (err) {
+        // Never leave the app wedged on the loading screen: treat auth as
+        // unauthenticated and let the route guards redirect to /login.
+        console.error("[auth] getSession failed:", err);
+        setSession(null);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     initializeAuth();

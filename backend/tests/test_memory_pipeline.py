@@ -6,18 +6,27 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
-from backend.services.supabase_adapter import get_supabase_adapter
+from backend.services import supabase_adapter  # lazy: testkit patches supabase_adapter.get_supabase_adapter
 from backend.services.store import FirestoreStore
 from backend.services.college_memory_service import CollegeMemoryService
 from backend.services.proactive_memory_service import ProactiveMemoryService
 from backend.services.college_orchestrator import CollegeOrchestrator
+from college_testkit import install_fake_adapter
 import pytest_asyncio
 
 pytestmark = pytest.mark.asyncio
 
+
+@pytest.fixture(scope="module", autouse=True)
+def fake_backend():
+    """Seeded in-memory Supabase stand-in: no network, no credentials."""
+    adapter, restore = install_fake_adapter()
+    yield adapter
+    restore()
+
 @pytest_asyncio.fixture(scope="function")
 async def test_user():
-    adapter = get_supabase_adapter()
+    adapter = supabase_adapter.get_supabase_adapter()
     email = f"testuser_{uuid.uuid4().hex[:6]}@example.com"
     user = adapter.client.auth.admin.create_user({
         "email": email,
@@ -33,7 +42,7 @@ async def test_user():
 
 @pytest_asyncio.fixture(scope="function")
 async def test_user_2():
-    adapter = get_supabase_adapter()
+    adapter = supabase_adapter.get_supabase_adapter()
     email = f"testuser_{uuid.uuid4().hex[:6]}@example.com"
     user = adapter.client.auth.admin.create_user({
         "email": email,
