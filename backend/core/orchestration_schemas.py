@@ -77,7 +77,7 @@ class StructuredAIOutput(BaseModel):
     lives in `state` and is persisted separately. Model text never becomes DB
     truth without validation.
     """
-    message: str
+    message: str = ""
     state: str = "OK"  # OK, NEEDS_USER_INPUT, NEEDS_CONTEXT, FAILED
     ui_blocks: List[Dict[str, Any]] = Field(default_factory=list)
     recommendations: List[Dict[str, Any]] = Field(default_factory=list)
