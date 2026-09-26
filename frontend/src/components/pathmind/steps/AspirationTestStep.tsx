@@ -11,6 +11,17 @@ export interface TestQuestion {
   options?: string[];
   points: number;
   skill_tag: string;
+  tier?: "VERIFIED" | "EXPERT_REVIEWED" | "AI_DRAFT";
+  source_name?: string;
+}
+
+export interface TestProvenance {
+  test_tier: "VERIFIED" | "EXPERT_REVIEWED" | "AI_DRAFT";
+  total: number;
+  verified_count: number;
+  expert_reviewed_count: number;
+  sources: string[];
+  label: string;
 }
 
 export interface TestEvaluation {
@@ -68,6 +79,7 @@ export function AspirationTestStep({
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number | string>>({});
   const [evaluation, setEvaluation] = useState<TestEvaluation | null>(null);
+  const [provenance, setProvenance] = useState<TestProvenance | null>(null);
 
   // ---- load or generate the test on mount ----
   useEffect(() => {
@@ -144,6 +156,7 @@ export function AspirationTestStep({
         setAspiration(data.aspiration || aspiration);
         setQuestions(data.questions || []);
         setTimeSuggestion(data.time_suggestion_minutes ?? null);
+        if (data.provenance) setProvenance(data.provenance as TestProvenance);
         setPhase("testing");
       } catch (e) {
         if (cancelled) return;
@@ -267,6 +280,29 @@ export function AspirationTestStep({
         </div>
       )}
 
+      {/* ---------- provenance banner ---------- */}
+      {provenance && (phase === "testing" || phase === "submitting") && (
+        <div
+          className={
+            "sketch-border p-4 flex items-start gap-3 " +
+            (provenance.test_tier === "VERIFIED"
+              ? "bg-emerald-500/10 border-emerald-500/30"
+              : provenance.test_tier === "EXPERT_REVIEWED"
+                ? "bg-sky-500/10 border-sky-500/30"
+                : "bg-amber-500/10 border-amber-500/30")
+          }
+        >
+          <span className="material-symbols-outlined text-xl mt-0.5">
+            {provenance.test_tier === "VERIFIED"
+              ? "verified"
+              : provenance.test_tier === "EXPERT_REVIEWED"
+                ? "rate_review"
+                : "science"}
+          </span>
+          <p className="font-body-sm text-on-surface">{provenance.label}</p>
+        </div>
+      )}
+
       {/* ---------- testing ---------- */}
       {(phase === "testing" || phase === "submitting") && current && (
         <div className="space-y-6">
@@ -305,6 +341,26 @@ export function AspirationTestStep({
                   {current.skill_tag.replace(/-/g, " ")} · {current.points} pts
                   {current.type === "self_assess" ? " · not scored" : ""}
                 </p>
+                {current.tier && current.tier !== "AI_DRAFT" && (
+                  <span
+                    className={
+                      "inline-flex items-center gap-1 text-[11px] font-label-md px-2 py-0.5 rounded-full border " +
+                      (current.tier === "VERIFIED"
+                        ? "text-emerald-600 border-emerald-500/40 bg-emerald-500/10"
+                        : "text-sky-600 border-sky-500/40 bg-sky-500/10")
+                    }
+                    title={
+                      current.tier === "VERIFIED"
+                        ? `Verified question from ${current.source_name || "an official source"}`
+                        : `Expert-reviewed question${current.source_name ? ` — ${current.source_name}` : ""}`
+                    }
+                  >
+                    <span className="material-symbols-outlined text-[13px]">
+                      {current.tier === "VERIFIED" ? "verified" : "rate_review"}
+                    </span>
+                    {current.tier === "VERIFIED" ? "Verified" : "Expert-reviewed"}
+                  </span>
+                )}
               </div>
             </div>
 

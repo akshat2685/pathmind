@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
 from datetime import datetime, timezone
 import json
 from backend.core.config import settings
@@ -35,11 +35,11 @@ from backend.services.career_agents import (
 from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
 from backend.services.knowledge import KnowledgeService
 from backend.services.requirement_graph_service import RequirementGraphService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class CareerReadinessEngine:
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
         self.knowledge_service = KnowledgeService()
         self.opportunity_matching_engine = OpportunityMatchingEngine(store=self.store, career_engine=self)
         self.requirement_graph_service = RequirementGraphService(self.knowledge_service)

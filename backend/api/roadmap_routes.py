@@ -11,14 +11,14 @@ from backend.core.roadmap_schemas import (
 )
 from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.personal_agent_engine import PersonalAgentEngine
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/roadmap", tags=["Progressive Roadmap & Adaptive Learning"])
 engine = RoadmapEngine()
 personal_agent = PersonalAgentEngine()
-store = FirestoreStore()
+store = get_pm_store()
 get_person_id = get_authenticated_person
 
 @router.post("/generate", response_model=DisclosedRoadmapView)

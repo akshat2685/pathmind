@@ -114,13 +114,15 @@ def _sanitize_questions(questions: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return out
 
 
-def _validate_and_normalize(raw: Dict[str, Any]) -> Dict[str, Any]:
+def _validate_and_normalize(
+    raw: Dict[str, Any], min_questions: int = 8
+) -> Dict[str, Any]:
     """Validate the LLM's test JSON; raise ValueError on unusable output."""
     questions = raw.get("questions")
-    if not isinstance(questions, list) or not (8 <= len(questions) <= 12):
+    if not isinstance(questions, list) or not (min_questions <= len(questions) <= 12):
         raise ValueError(
             f"LLM returned {len(questions) if isinstance(questions, list) else 'non-list'} "
-            "questions; need 8-12."
+            f"questions; need {min_questions}-12."
         )
     normalized: List[Dict[str, Any]] = []
     for i, q in enumerate(questions):
@@ -236,26 +238,221 @@ class AspirationTestService:
         stage = (stage or "").strip() or "unspecified"
         user_type = (user_type or "").strip() or "unspecified"
 
+        # Tiered bank-first flow:
+        #   1. normalize aspiration -> domain (deterministic alias match)
+        #   2. pull VERIFIED > EXPERT_REVIEWED > AI_DRAFT from the bank
+        #   3. Gemini tops up any shortfall (stored as AI_DRAFT, never "verified")
+        #   4. the test's tier = lowest tier among its questions (honest ceiling)
+        domain = await self.store.get_domain_for_aspiration(aspiration)
+        bank_rows = await self.store.get_bank_questions(domain, limit=12)
+        bank_questions = [self._bank_row_to_question(r) for r in bank_rows]
+
+        needed = max(0, 12 - len(bank_questions))
+        ai_questions: List[Dict[str, Any]] = []
+        if needed > 0:
+            ai_questions = await self._generate_ai_questions(
+                aspiration, stage, user_type, verification_data, needed
+            )
+            # Persist AI drafts so the audit map can reference them.
+            for q in ai_questions:
+                try:
+                    qid = await self.store.save_bank_question({
+                        "domain": domain,
+                        "aspiration_aliases": [aspiration.lower()[:80]],
+                        "question_type": q["type"],
+                        "question_text": q["question"],
+                        "options": q.get("options"),
+                        "correct_option": str(q.get("correct_option"))
+                        if q.get("correct_option") is not None else None,
+                        "rubric": q.get("rubric"),
+                        "skill_tag": q.get("skill_tag"),
+                        "difficulty": q.get("difficulty", 3),
+                        "points": q.get("points", 1),
+                        "source_type": "AI_GENERATED",
+                        "source_name": "PathMind AI draft",
+                        "source_detail": "Generated for this test; awaiting review",
+                        "verification_status": "AI_DRAFT",
+                        "created_by": "test-generator",
+                    })
+                    q["_bank_id"] = qid
+                    q["_tier"] = "AI_DRAFT"
+                except Exception:
+                    logger.warning("aspiration_test.bank_insert_failed person=%s", person_id[:8])
+
+        for r, q in zip(bank_rows, bank_questions):
+            q["_bank_id"] = r.get("question_id")
+            q["_tier"] = r.get("verification_status") or "AI_DRAFT"
+
+        questions = (bank_questions + ai_questions)[:12]
+        if len(questions) < 8:
+            raise GeminiUnavailable(
+                "Could not assemble a usable test: bank yielded "
+                f"{len(bank_questions)} and the generator produced "
+                f"{len(ai_questions)}. Try again shortly."
+            )
+
+        test_id = f"t_{uuid.uuid4().hex[:12]}"
+        test_tier = self._test_tier(questions)
+        provenance = self._test_provenance_label(questions, domain)
+
+        full_record = {
+            "test_id": test_id,
+            "aspiration": aspiration,
+            "stage": stage,
+            "user_type": user_type,
+            "domain": domain,
+            "test_tier": test_tier,
+            "provenance": provenance,
+            "verification_summary": _verification_summary(verification_data),
+            "questions": questions,  # WITH correct_option — backend only
+            "total_points": sum(q.get("points", 1) for q in questions),
+            "time_suggestion_minutes": max(10, len(questions) * 2),
+            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        await self.store.save_aspiration_test(person_id, full_record)
+
+        # Audit trail + usage rotation for bank questions.
+        try:
+            await self.store.record_test_questions(
+                test_id, [(q["_bank_id"], q["_tier"]) for q in questions if q.get("_bank_id")]
+            )
+            await self.store.bump_question_usage(
+                [q["_bank_id"] for q in questions if q.get("_bank_id")]
+            )
+        except Exception:
+            logger.warning("aspiration_test.audit_failed person=%s", person_id[:8])
+
+        sanitized = _sanitize_questions(questions)
+        for s, q in zip(sanitized, questions):
+            s["tier"] = q.get("_tier", "AI_DRAFT")
+            if q.get("_tier") in ("VERIFIED", "EXPERT_REVIEWED"):
+                s["source_name"] = q.get("source_name")
+
+        return {
+            "test_id": test_id,
+            "aspiration": aspiration,
+            "stage": stage,
+            "user_type": user_type,
+            "domain": domain,
+            "test_tier": test_tier,
+            "provenance": provenance,
+            "questions": sanitized,
+            "total_points": full_record["total_points"],
+            "time_suggestion_minutes": full_record["time_suggestion_minutes"],
+        }
+
+    # ------------------------------------------------------------------
+    # Bank-first helpers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _bank_row_to_question(row: Dict[str, Any]) -> Dict[str, Any]:
+        # Same schema as _validate_and_normalize output: id/type/question.
+        q: Dict[str, Any] = {
+            "id": f"bank_{row.get('question_id')}",
+            "type": row.get("question_type") or "mcq",
+            "question": row.get("question_text") or "",
+            "skill_tag": row.get("skill_tag") or "general",
+            "difficulty": row.get("difficulty") or 3,
+            "points": row.get("points") or 1,
+            "source_name": row.get("source_name"),
+            "source_detail": row.get("source_detail"),
+        }
+        if row.get("options"):
+            q["options"] = row["options"]
+        if row.get("correct_option") is not None and row.get("correct_option") != "":
+            # Bank stores TEXT; the scorer compares ints — coerce (letters tolerated).
+            raw_correct = str(row["correct_option"]).strip().upper()
+            if raw_correct in ("A", "B", "C", "D"):
+                q["correct_option"] = "ABCD".index(raw_correct)
+            else:
+                try:
+                    q["correct_option"] = int(raw_correct)
+                except (TypeError, ValueError):
+                    q["correct_option"] = row["correct_option"]
+        if row.get("rubric"):
+            q["rubric"] = row["rubric"]
+        return q
+
+    @staticmethod
+    def _test_tier(questions: List[Dict[str, Any]]) -> str:
+        """Honest ceiling: the test is only as verified as its weakest question."""
+        order = {"VERIFIED": 0, "EXPERT_REVIEWED": 1, "AI_DRAFT": 2}
+        worst = max(order.get(q.get("_tier", "AI_DRAFT"), 2) for q in questions)
+        return {0: "VERIFIED", 1: "EXPERT_REVIEWED", 2: "AI_DRAFT"}[worst]
+
+    @staticmethod
+    def _test_provenance_label(
+        questions: List[Dict[str, Any]], domain: str
+    ) -> Dict[str, Any]:
+        tiers = [q.get("_tier", "AI_DRAFT") for q in questions]
+        n_verified = sum(1 for t in tiers if t == "VERIFIED")
+        n_reviewed = sum(1 for t in tiers if t == "EXPERT_REVIEWED")
+        sources = sorted({
+            q.get("source_name")
+            for q in questions
+            if q.get("_tier") == "VERIFIED" and q.get("source_name")
+        })
+        total = len(questions)
+        if n_verified == total:
+            label = (
+                f"Verified test — all {total} questions from "
+                f"{', '.join(sources) if sources else 'official sources'}."
+            )
+        elif n_verified > 0 or n_reviewed > 0:
+            label = (
+                f"{n_verified + n_reviewed} of {total} questions from verified or "
+                f"expert-reviewed sources"
+                f"{' (' + ', '.join(sources) + ')' if sources else ''}; "
+                "the rest are AI-generated practice questions."
+            )
+        else:
+            label = (
+                "Practice test — AI-generated questions, not from any official "
+                "source. Warm-up only, not a verdict."
+                + (
+                    " No verified questions exist for this field yet."
+                    if domain not in ("general",) else ""
+                )
+            )
+        return {
+            "test_tier": AspirationTestService._test_tier(questions),
+            "total": total,
+            "verified_count": n_verified,
+            "expert_reviewed_count": n_reviewed,
+            "sources": sources,
+            "label": label,
+        }
+
+    async def _generate_ai_questions(
+        self,
+        aspiration: str,
+        stage: str,
+        user_type: str,
+        verification_data: Optional[Dict[str, Any]],
+        count: int,
+    ) -> List[Dict[str, Any]]:
+        """Generate `count` AI-draft questions via Gemini (honest 503 when down)."""
         prompt = _TEST_PROMPT_TEMPLATE.format(
             aspiration=aspiration,
             stage=stage,
             user_type=user_type,
             verification_summary=_verification_summary(verification_data),
             _DOMAIN_GUIDANCE=_DOMAIN_GUIDANCE,
+        ) + (
+            f"\nGenerate exactly {count} questions (not 8-12). "
+            "These are AI-generated practice questions — keep them diagnostic, "
+            "never claim official provenance."
         )
         started = time.time()
-        # generate_text_resilient is blocking; run off the event loop.
         text = await asyncio.to_thread(
             generate_text_resilient, prompt, feature="aspiration_test"
         )
         logger.info(
-            "aspiration_test.generated person=%s ms=%d",
-            person_id[:8], int((time.time() - started) * 1000),
+            "aspiration_test.ai_topup person=%s n=%d ms=%d",
+            aspiration[:16], count, int((time.time() - started) * 1000),
         )
-
         cleaned = text.strip()
         if cleaned.startswith("```"):
-            # tolerate fenced output even though the prompt forbids it
             parts = cleaned.split("```")
             cleaned = parts[1] if len(parts) > 1 else cleaned
             if cleaned.lstrip().startswith("json"):
@@ -264,32 +461,8 @@ class AspirationTestService:
             raw = json.loads(cleaned.strip())
         except json.JSONDecodeError as e:
             raise ValueError(f"Test generator returned invalid JSON: {e}") from e
-
-        norm = _validate_and_normalize(raw)
-        test_id = f"t_{uuid.uuid4().hex[:12]}"
-
-        full_record = {
-            "test_id": test_id,
-            "aspiration": aspiration,
-            "stage": stage,
-            "user_type": user_type,
-            "verification_summary": _verification_summary(verification_data),
-            "questions": norm["questions"],  # WITH correct_option — backend only
-            "total_points": norm["total_points"],
-            "time_suggestion_minutes": norm["time_suggestion_minutes"],
-            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }
-        await self.store.save_aspiration_test(person_id, full_record)
-
-        return {
-            "test_id": test_id,
-            "aspiration": aspiration,
-            "stage": stage,
-            "user_type": user_type,
-            "questions": _sanitize_questions(norm["questions"]),
-            "total_points": norm["total_points"],
-            "time_suggestion_minutes": norm["time_suggestion_minutes"],
-        }
+        norm = _validate_and_normalize(raw, min_questions=1)
+        return norm["questions"][:count]
 
     # ------------------------------------------------------------------
     async def evaluate_test(

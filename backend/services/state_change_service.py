@@ -1,15 +1,15 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone, timedelta
 from backend.core.adaptation_schemas import (
     StateChangeEvent,
     PauseResumeAnalysis,
     ConflictDetectionResult
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class StateChangeService:
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
 
     async def detect_goal_change(
         self,

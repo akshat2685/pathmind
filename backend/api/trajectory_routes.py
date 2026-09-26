@@ -11,12 +11,12 @@ from backend.core.trajectory_schemas import (
     TrajectoryPattern
 )
 from backend.core.assessment_schemas import CounselingProfile
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.trajectory_engine import TrajectoryEngine
 from backend.services.trajectory_corpus import TrajectoryCorpusService
 
 router = APIRouter(prefix="/api/trajectories", tags=["Trajectory Discovery"])
-store = FirestoreStore()
+store = get_pm_store()
 engine = TrajectoryEngine()
 corpus_service = TrajectoryCorpusService()
 

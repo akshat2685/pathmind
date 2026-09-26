@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone
 from backend.core.longitudinal_schemas import (
     TemporalQueryResponse,
@@ -7,7 +7,7 @@ from backend.core.longitudinal_schemas import (
 )
 from backend.services.progress_analysis_service import ProgressAnalysisService
 from backend.services.context_graph_service import ContextGraphService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class LearnerEvolutionAgent:
     """
@@ -17,11 +17,11 @@ class LearnerEvolutionAgent:
     """
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         progress_service: Optional[ProgressAnalysisService] = None,
         context_service: Optional[ContextGraphService] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.context_service = context_service or ContextGraphService(store=self.store)
         self.progress_service = progress_service or ProgressAnalysisService(store=self.store, context_service=self.context_service)
 

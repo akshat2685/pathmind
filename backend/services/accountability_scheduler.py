@@ -1,9 +1,9 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.proactive_intervention_engine import ProactiveInterventionEngine
 
 logger = logging.getLogger("pathmind.accountability_scheduler")
@@ -33,11 +33,11 @@ class AccountabilityScheduler:
 
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         engine: Optional[ProactiveInterventionEngine] = None,
         interval_hours: float = 6.0,
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.engine = engine or ProactiveInterventionEngine(store=self.store)
         self.interval_hours = interval_hours
         self.scheduler = AsyncIOScheduler()

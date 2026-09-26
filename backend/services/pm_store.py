@@ -1089,6 +1089,171 @@ class PmStore:
 
 
     # ------------------------------------------------------------------
+    # Verified question bank (pm_domains, pm_domain_aliases, pm_question_bank,
+    # pm_question_reviews, pm_test_question_map — migration 004)
+    #
+    # Tier order for serving: VERIFIED > EXPERT_REVIEWED > AI_DRAFT.
+    # The word "verified" is never shown to users unless
+    # verification_status == VERIFIED with an official source + key.
+    # ------------------------------------------------------------------
+    _BANK_TIER_ORDER = {"VERIFIED": 0, "EXPERT_REVIEWED": 1, "AI_DRAFT": 2}
+
+    async def get_domain_for_aspiration(self, text: str) -> str:
+        """Deterministic alias match: free-text aspiration -> domain slug.
+
+        Returns 'general' when nothing matches (the honest uncharted path).
+        """
+        if not text:
+            return "general"
+        lowered = text.lower()
+
+        def _lookup():
+            rows = (
+                self._db().table("pm_domain_aliases").select("alias,domain_slug").execute()
+            ).data or []
+            return rows
+
+        try:
+            rows = await asyncio.to_thread(_lookup)
+        except Exception:
+            return "general"
+        # Longest alias first so "electronics mechanic" beats "mechanic"
+        for row in sorted(rows, key=lambda r: len(r.get("alias") or ""), reverse=True):
+            alias = (row.get("alias") or "").lower()
+            if alias and alias in lowered:
+                return row["domain_slug"]
+        return "general"
+
+    async def get_bank_questions(
+        self, domain: str, limit: int = 12,
+        tiers: tuple = ("VERIFIED", "EXPERT_REVIEWED", "AI_DRAFT"),
+    ) -> List[Dict[str, Any]]:
+        """Fetch active bank questions for a domain, tier-ordered, least-used first."""
+        def _q():
+            return (
+                self._db().table("pm_question_bank")
+                .select("*")
+                .eq("domain", domain)
+                .eq("status", "active")
+                .in_("verification_status", list(tiers))
+                .execute()
+            ).data or []
+
+        try:
+            rows = await asyncio.to_thread(_q)
+        except Exception:
+            return []
+        order = self._BANK_TIER_ORDER
+        rows.sort(key=lambda r: (
+            order.get(r.get("verification_status"), 9),
+            r.get("usage_count") or 0,
+            r.get("last_used_at") or "",
+        ))
+        return rows[:limit]
+
+    async def save_bank_question(self, q: Dict[str, Any]) -> str:
+        """Insert one bank question. Returns question_id."""
+        def _ins():
+            payload = dict(q)
+            payload.pop("question_id", None)
+            return (
+                self._db().table("pm_question_bank").insert(payload).execute()
+            ).data[0]["question_id"]
+
+        return await asyncio.to_thread(_ins)
+
+    async def record_test_questions(
+        self, test_id: str, items: List[tuple]
+    ) -> None:
+        """Audit trail: which bank questions a test served, and their tier at serve time."""
+        def _ins():
+            rows = [
+                {"test_id": test_id, "question_id": qid, "tier_at_time": tier}
+                for qid, tier in items
+            ]
+            if rows:
+                self._db().table("pm_test_question_map").insert(rows).execute()
+
+        await asyncio.to_thread(_ins)
+
+    async def bump_question_usage(self, question_ids: List[str]) -> None:
+        """Increment usage_count + last_used_at for rotation."""
+        if not question_ids:
+            return
+
+        def _upd():
+            now = datetime.now(timezone.utc).isoformat()
+            for qid in question_ids:
+                try:
+                    row = (
+                        self._db().table("pm_question_bank")
+                        .select("usage_count").eq("question_id", qid).single().execute()
+                    ).data or {}
+                    self._db().table("pm_question_bank").update({
+                        "usage_count": (row.get("usage_count") or 0) + 1,
+                        "last_used_at": now,
+                        "updated_at": now,
+                    }).eq("question_id", qid).execute()
+                except Exception:
+                    continue
+
+        await asyncio.to_thread(_upd)
+
+    async def save_question_review(
+        self, question_id: str, reviewer: str, verdict: str, notes: str = ""
+    ) -> None:
+        """Record an expert review verdict; promotes/demotes the question tier."""
+        def _run():
+            self._db().table("pm_question_reviews").insert({
+                "question_id": question_id,
+                "reviewer": reviewer,
+                "verdict": verdict,
+                "notes": notes,
+            }).execute()
+            if verdict == "approved":
+                self._db().table("pm_question_bank").update({
+                    "verification_status": "EXPERT_REVIEWED",
+                    "verified_by": reviewer,
+                    "verified_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("question_id", question_id).execute()
+            elif verdict == "rejected":
+                self._db().table("pm_question_bank").update({
+                    "verification_status": "DEPRECATED",
+                    "status": "deprecated",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("question_id", question_id).execute()
+
+        await asyncio.to_thread(_run)
+
+
+    async def save_domain_request(self, person_id: str, aspiration_text: str) -> str:
+        """Record an uncharted aspiration for later research/promotion."""
+        import re as _re
+        slug = _re.sub(r"[^a-z0-9]+", "_", (aspiration_text or "").lower()).strip("_")[:60]
+        slug = slug or "unknown"
+
+        def _ins():
+            existing = (
+                self._db().table("pm_domain_requests")
+                .select("request_id").eq("normalized_slug", slug)
+                .eq("status", "pending").limit(1).execute()
+            ).data
+            if existing:
+                return existing[0]["request_id"]
+            return (
+                self._db().table("pm_domain_requests").insert({
+                    "person_id": person_id,
+                    "aspiration_text": aspiration_text,
+                    "normalized_slug": slug,
+                    "status": "pending",
+                }).execute()
+            ).data[0]["request_id"]
+
+        return await asyncio.to_thread(_ins)
+
+
+    # ------------------------------------------------------------------
     # User verification (pm_verifications — explicit columns, migration 002)
     # One active verification per person; resubmission upserts the row.
     # ------------------------------------------------------------------

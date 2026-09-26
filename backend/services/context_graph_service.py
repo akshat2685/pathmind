@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone
 from backend.core.context_schemas import (
     PersonalContextGraph,
@@ -6,7 +6,7 @@ from backend.core.context_schemas import (
     DecisionRecord,
     TaskContextPackage
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.memory_engine import MemoryEngine
 from backend.services.career_readiness_engine import CareerReadinessEngine
@@ -23,13 +23,13 @@ class ContextGraphService:
     """
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         roadmap_engine: Optional[RoadmapEngine] = None,
         memory_engine: Optional[MemoryEngine] = None,
         readiness_engine: Optional[CareerReadinessEngine] = None,
         mastery_engine: Optional[MasteryEngine] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.roadmap_engine = roadmap_engine or RoadmapEngine()
         self.memory_engine = memory_engine or MemoryEngine()
         self.readiness_engine = readiness_engine or CareerReadinessEngine()

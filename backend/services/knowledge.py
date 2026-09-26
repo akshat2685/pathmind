@@ -5,7 +5,7 @@ from backend.core.schemas import KnowledgeResponse, Occupation, ProviderContext
 from backend.providers.esco import EscoProvider
 from backend.providers.nco import NcoProvider
 from backend.providers.nptel_swayam import NptelSwayamProvider
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class KnowledgeService:
     def __init__(self):
@@ -16,7 +16,7 @@ class KnowledgeService:
             # API as of 2026-09-26); returns zero results, never fabricated.
             "nptel_swayam": NptelSwayamProvider()
         }
-        self.store = FirestoreStore()
+        self.store = get_pm_store()
 
     def _generate_cache_key(self, method: str, kwargs: Dict[str, Any]) -> str:
         key_str = f"{method}:{json.dumps(kwargs, sort_keys=True)}"

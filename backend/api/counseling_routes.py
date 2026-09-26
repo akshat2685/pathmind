@@ -11,12 +11,12 @@ from backend.core.assessment_schemas import (
     CounselingMessage,
     CounselingMemoryItem
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.counseling import CounselingAgent
 from backend.services.second_brain_service import SecondBrainService
 
 router = APIRouter(prefix="/api/counseling", tags=["Counseling"])
-store = FirestoreStore()
+store = get_pm_store()
 agent = CounselingAgent()
 second_brain = SecondBrainService(store=store)
 

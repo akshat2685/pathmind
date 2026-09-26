@@ -1,12 +1,12 @@
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
 from datetime import datetime, timezone
 from backend.core.trust_schemas import (
     ProvenanceRecord,
     TraceableClaim,
     SafetyGuardrailResult
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class TrustProvenanceService:
     """
@@ -14,8 +14,8 @@ class TrustProvenanceService:
     Ensures every factual claim has verifiable source provenance, strictly separates
     FACT vs INFERENCE vs UNKNOWN, and enforces deterministic safety policies.
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
 
         # Forbidden Safety Violation Patterns
         self.clinical_diagnosis_patterns = [

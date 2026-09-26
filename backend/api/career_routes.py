@@ -15,14 +15,14 @@ from backend.core.career_schemas import (
 from backend.core.opportunity_schemas import CanonicalOpportunity
 from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/career", tags=["Career Intelligence & Execution Layer"])
 engine = CareerReadinessEngine()
 opp_service = OpportunityMatchingEngine(career_engine=engine)
-store = FirestoreStore()
+store = get_pm_store()
 get_person_id = get_authenticated_person
 
 @router.post("/profile", response_model=UniversalCareerProfile)

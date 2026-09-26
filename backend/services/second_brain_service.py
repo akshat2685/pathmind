@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Any
 from datetime import datetime, timezone
 import re
 import uuid
@@ -12,7 +12,7 @@ from backend.core.memory_schemas import (
 )
 from backend.core.deterministic_rules import promote_memory
 from backend.services.memory_reasoning_agent import MemoryReasoningAgent
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class SecondBrainService:
     """
@@ -22,10 +22,10 @@ class SecondBrainService:
     """
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         agent: Optional[MemoryReasoningAgent] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.agent = agent or MemoryReasoningAgent()
 
     async def ingest_memory(

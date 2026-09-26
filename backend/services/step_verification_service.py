@@ -1,5 +1,5 @@
 import ast
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone
 
 from backend.core.learning_resource_schemas import (
@@ -10,7 +10,7 @@ from backend.core.learning_resource_schemas import (
     VerifiedResource
 )
 from backend.providers.resource_registry import VerifiedResourceRegistry
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class StepVerificationService:
     """
@@ -19,8 +19,8 @@ class StepVerificationService:
     2. Follows each and every step of the learner with zero blind trust: verifies code AST, test assertions, and architecture.
     3. Feeds verified learner outcomes into the Personal Agent Learning Loop.
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
         self.registry = VerifiedResourceRegistry()
 
     def generate_learning_guide(self, stage_id: str, stage_title: str) -> PhaseLearningGuide:

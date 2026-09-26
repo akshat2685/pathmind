@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone, timedelta
 from backend.core.event_schemas import (
     EventRecord,
@@ -8,7 +8,7 @@ from backend.core.event_schemas import (
 )
 from backend.services.event_bus_service import EventBusService
 from backend.services.context_graph_service import ContextGraphService
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 class ProactiveInterventionEngine:
     """
@@ -18,11 +18,11 @@ class ProactiveInterventionEngine:
     """
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         event_bus: Optional[EventBusService] = None,
         context_service: Optional[ContextGraphService] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.event_bus = event_bus or EventBusService(store=self.store)
         self.context_service = context_service or ContextGraphService(store=self.store)
 

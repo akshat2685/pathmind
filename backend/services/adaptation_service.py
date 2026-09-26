@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Any
 from datetime import datetime, timezone
 from backend.core.adaptation_schemas import (
     StateChangeEvent,
@@ -16,14 +16,14 @@ from backend.services.state_change_service import StateChangeService
 from backend.services.impact_analysis_service import ImpactAnalysisService
 from backend.services.adaptive_planning_agent import AdaptivePlanningAgent
 from backend.services.roadmap_engine import RoadmapEngine
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.memory_engine import MemoryEngine
 from backend.services.personal_agent_engine import PersonalAgentEngine
 
 class AdaptationService:
     def __init__(
         self,
-        store: Optional[FirestoreStore] = None,
+        store: Optional[Any] = None,
         state_change_service: Optional[StateChangeService] = None,
         impact_service: Optional[ImpactAnalysisService] = None,
         agent: Optional[AdaptivePlanningAgent] = None,
@@ -31,7 +31,7 @@ class AdaptationService:
         memory_engine: Optional[MemoryEngine] = None,
         personal_agent: Optional[PersonalAgentEngine] = None
     ):
-        self.store = store or FirestoreStore()
+        self.store = store or get_pm_store()
         self.state_change_service = state_change_service or StateChangeService(self.store)
         self.impact_service = impact_service or ImpactAnalysisService()
         self.agent = agent or AdaptivePlanningAgent()
