@@ -545,4 +545,3 @@ async def seed_curriculum_units_endpoint(
             ins_res = client.table("curriculum_units").insert(rows[i : i + 100]).execute()
             inserted += len(ins_res.data or [])
     return {"deleted": deleted, "inserted": inserted, "pairs": len(pairs)}
- (college-mvp: TEMPORARY admin seed endpoint for RTU syllabus enrichment (remove after use, never merge))
