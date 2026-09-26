@@ -208,7 +208,7 @@ def test_resume_validator_rejects_unverified_inferences():
 
 
 @pytest.mark.asyncio
-async def test_deterministic_context_graph_scoring():
+async def test_deterministic_context_graph_scoring(requires_live_db):
     """Verifies that context graph requirement match score is strictly deterministic and categorical."""
     service = ContextGraphService()
     graph = await service.assemble_context_graph(person_id="scholar-test-user")
