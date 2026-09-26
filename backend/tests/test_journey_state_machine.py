@@ -9,7 +9,7 @@ client = TestClient(app)
 def clean_store():
     return FirestoreStore()
 
-def test_complete_guided_journey_state_machine(clean_store):
+def test_complete_guided_journey_state_machine(requires_live_db, clean_store):
     """
     Validates the end-to-end continuous journey state machine:
     1. NAME -> Canonical person ID created & persisted immediately
