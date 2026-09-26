@@ -227,7 +227,7 @@ async def test_tenant_isolation_opportunities(matching_engine):
     assert len(alex_actions) >= 0
     assert len(bob_actions) == 0
 
-def test_fastapi_opportunity_endpoints(matching_engine):
+def test_fastapi_opportunity_endpoints(requires_live_db, matching_engine):
     from backend.api import opportunity_routes
     original_engine = opportunity_routes.matching_engine
     opportunity_routes.matching_engine = matching_engine
