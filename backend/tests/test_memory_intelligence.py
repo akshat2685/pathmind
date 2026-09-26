@@ -17,7 +17,7 @@ def store():
     return FirestoreStore()
 
 @pytest.mark.asyncio
-async def test_memory_extraction_and_types(memory_engine, store):
+async def test_memory_extraction_and_types(requires_live_db, memory_engine, store):
     person_id = "scholar-memory-test-1"
     
     # Ingest diverse real events
@@ -68,7 +68,7 @@ async def test_strict_cross_person_isolation(memory_engine, store):
     assert "mem_alice_custom_private_001" not in mems_b_ids
 
 @pytest.mark.asyncio
-async def test_natural_memory_recall_engine(memory_engine, store):
+async def test_natural_memory_recall_engine(requires_live_db, memory_engine, store):
     person_id = "scholar-recall-test"
     
     # Save real test memory (promoted: it must be CANDIDATE+ to drive recall)
@@ -102,7 +102,7 @@ async def test_natural_memory_recall_engine(memory_engine, store):
     assert "do not have a recorded memory" in rec_unknown.answer.lower()
 
 @pytest.mark.asyncio
-async def test_past_to_present_cross_stage_transfer(memory_engine, store):
+async def test_past_to_present_cross_stage_transfer(requires_live_db, memory_engine, store):
     person_id = "scholar-bridge-test"
     
     # Save real past memory (promoted: it must be CANDIDATE+ to bridge stages)
