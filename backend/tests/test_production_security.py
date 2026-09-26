@@ -28,11 +28,14 @@ def test_malformed_identity_rejected():
     ]
     for bad_id in malicious_ids:
         assert validate_person_id_format(bad_id) is False
+    # New auth: the x_person_id self-assertion vector is gone. Malformed or
+    # missing Authorization headers are rejected with 401.
+    for bad_auth in (None, "", "Bearer <redacted>", "Token abc123"):
         with pytest.raises(HTTPException) as exc_info:
-            get_authenticated_person(x_person_id=bad_id)
-        assert exc_info.value.status_code == 400
+            get_authenticated_person(authorization=bad_auth)
+        assert exc_info.value.status_code == 401
 
-def test_valid_identity_accepted():
+def test_valid_identity_accepted(monkeypatch):
     valid_ids = [
         "scholar-user",
         "alice.smith_2026",
@@ -41,7 +44,12 @@ def test_valid_identity_accepted():
     ]
     for good_id in valid_ids:
         assert validate_person_id_format(good_id) is True
-        assert get_authenticated_person(x_person_id=good_id) == good_id
+    # New auth: a verified Supabase JWT yields the user id (verification mocked).
+    from backend.services.supabase_adapter import SupabaseAdapter
+    monkeypatch.setattr(
+        SupabaseAdapter, "verify_jwt", lambda self, token: "scholar-user"
+    )
+    assert get_authenticated_person(authorization="Bearer <redacted>") == "scholar-user"
 
 def test_idor_protection():
     # Matching identity succeeds
