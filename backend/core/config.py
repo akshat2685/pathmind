@@ -10,6 +10,11 @@ class Settings(BaseSettings):
     # gemini-2.5-flash was retired by Google (returns HTTP 404 for newer
     # API keys); gemini-3.5-flash is the current stable replacement.
     GEMINI_MODEL: str = Field(default="gemini-3.5-flash", validation_alias="GEMINI_MODEL")
+    # Optional fallback model id. Each model carries its own free-tier quota,
+    # so setting this (Vercel dashboard, no code deploy) multiplies effective
+    # AI capacity: generate_text_resilient() tries the primary first, then
+    # this one when the primary's quota is exhausted. Empty = disabled.
+    GEMINI_FALLBACK_MODEL: str = Field(default="", validation_alias="GEMINI_FALLBACK_MODEL")
     
     # ESCO Configuration
     ESCO_API_URL: str = "https://ec.europa.eu/esco/api"

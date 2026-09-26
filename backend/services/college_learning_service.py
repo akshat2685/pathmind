@@ -545,8 +545,12 @@ Return ONLY a valid JSON array of activities in the best learning order. Each ac
 }}
 Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_PYQ).
 """
-            response = model.generate_content(prompt)
-            text = response.text.strip()
+            from backend.core.gemini import generate_text_resilient
+            # Resilient gateway: absorbs per-minute throttling, fails fast
+            # honestly on daily exhaustion; the except below falls back to
+            # static activities. Runs in a thread (blocking) via the caller.
+            text = generate_text_resilient(prompt, feature="plan.activities")
+            text = text.strip()
             if text.startswith("```json"):
                 text = text[7:]
             if text.startswith("```"):

@@ -92,8 +92,10 @@ Maximum marks: {marks}
 
 Return ONLY a JSON object, no other text:
 {{"score": <number from 0 to {marks}>, "confidence": "high|medium|low", "reasoning": "<1-2 sentences: which rubric points were met or missed>"}}"""
-    response = await asyncio.to_thread(model.generate_content, prompt)
-    text = response.text.strip()
+    from backend.core.gemini import generate_text_resilient
+    text = await asyncio.to_thread(
+        generate_text_resilient, prompt, feature="assessment.grading")
+    text = text.strip()
     if text.startswith("```"):
         text = text.strip("`")
         if text.lower().startswith("json"):
@@ -122,19 +124,30 @@ class CollegeAssessmentService:
 
     @staticmethod
     def _generate_content_or_unavailable(model, prompt: str, feature: str):
-        """
-        Calls model.generate_content, converting ANY provider failure
-        (retired model id, bad key, quota, network) into an honest
+        """Calls Gemini via the resilient gateway, converting ANY provider
+        failure (retired model id, bad key, quota, network) into an honest
         ValueError the route maps to 503 — never a bare 500.
+
+        The `model` argument is kept for signature compatibility but the
+        gateway builds its own model (primary + optional fallback) so all
+        college AI paths share one retry/fallback policy.
         """
+        from backend.core.gemini import generate_text_resilient, GeminiUnavailable
         try:
-            return model.generate_content(prompt)
-        except Exception as exc:
+            text = generate_text_resilient(prompt, feature=f"assessment.{feature.lower()}")
+
+            class _Resp:
+                def __init__(self, t: str):
+                    self.text = t
+
+            return _Resp(text)
+        except GeminiUnavailable as exc:
             log_event(f"college.assessment.{feature.lower()}_llm_failed",
-                      outcome="error", error_code=type(exc).__name__)
+                      outcome="error",
+                      error_code=f"{type(exc).__name__}:{exc.quota_scope or 'non_quota'}")
             raise ValueError(
                 f"{feature}_UNAVAILABLE: the AI service could not be reached "
-                f"({type(exc).__name__}); try again later instead of "
+                f"(quota_scope={exc.quota_scope or 'unknown'}); try again later instead of "
                 f"receiving invented questions")
 
     # ------------------------------------------------------------------
@@ -313,8 +326,15 @@ Return ONLY a valid JSON array of exactly 3 questions in this format:
 }}]
 Make the first two MCQs and the last one SHORT_ANSWER.
 """
-            response = model.generate_content(prompt)
-            text = response.text.strip()
+            from backend.core.gemini import (
+                generate_text_resilient, GeminiUnavailable)
+            try:
+                text = generate_text_resilient(
+                    prompt, feature="assessment.checkpoint")
+            except GeminiUnavailable:
+                # Static fallback questions take over below; never invent.
+                return []
+            text = text.strip()
             if text.startswith("```json"):
                 text = text[7:]
             if text.startswith("```"):

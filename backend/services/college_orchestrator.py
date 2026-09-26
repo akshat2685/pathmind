@@ -96,44 +96,42 @@ class CollegeOrchestrator:
         {{"action": "supersede", "old_memory_id": "ID", "title": "New Title", "content": "New content"}}
         ```
         """
-        last_exc: Optional[Exception] = None
-        for attempt in range(3):
-            try:
-                # generate_content is blocking: keep it off the event loop.
-                resp = await asyncio.to_thread(model.generate_content, prompt)
-                text = (getattr(resp, "text", None) or "").strip()
-                if not text:
-                    raise RuntimeError("LLM returned an empty response")
+        from backend.core.gemini import generate_text_resilient, GeminiUnavailable
 
-                # Extract Memory Actions
-                json_match = re.search(r'```json\n(.*?)\n```', text, re.DOTALL)
-                if json_match:
-                    try:
-                        action_data = json.loads(json_match.group(1))
-                        if action_data.get("action") == "promote":
-                            await proactive_mem_service.promote_to_long_term_memory(
-                                uid, action_data.get("title", ""),
-                                action_data.get("content", ""))
-                        elif action_data.get("action") == "supersede":
-                            await proactive_mem_service.supersede_memory(
-                                uid, action_data.get("old_memory_id", ""),
-                                action_data.get("title", ""),
-                                action_data.get("content", ""))
-                        text = text.replace(json_match.group(0), "").strip()
-                    except Exception as e:
-                        logger.warning(f"Failed to parse memory action: {e}")
-                if not text:
-                    raise RuntimeError(
-                        "LLM response contained only a memory action block")
-                return text
-            except Exception as exc:
-                last_exc = exc
-                logger.warning("Mentor LLM attempt %d/3 failed: %s",
-                               attempt + 1, type(exc).__name__)
-                if attempt < 2:
-                    await asyncio.sleep(2 ** attempt)
-        assert last_exc is not None
-        raise last_exc
+        try:
+            # Resilient gateway (blocking): keep it off the event loop.
+            # Absorbs per-minute throttling, fails fast on daily exhaustion,
+            # optionally falls back to GEMINI_FALLBACK_MODEL. Raises
+            # GeminiUnavailable on terminal failure so the caller answers
+            # honestly instead of fabricating a reply.
+            text = await asyncio.to_thread(
+                generate_text_resilient, prompt, feature="mentor.reply")
+        except GeminiUnavailable as exc:
+            logger.error("Mentor LLM failed after retries: %s (quota_scope=%s)",
+                         type(exc).__name__, exc.quota_scope)
+            raise
+
+        # Extract Memory Actions
+        json_match = re.search(r'```json\n(.*?)\n```', text, re.DOTALL)
+        if json_match:
+            try:
+                action_data = json.loads(json_match.group(1))
+                if action_data.get("action") == "promote":
+                    await proactive_mem_service.promote_to_long_term_memory(
+                        uid, action_data.get("title", ""),
+                        action_data.get("content", ""))
+                elif action_data.get("action") == "supersede":
+                    await proactive_mem_service.supersede_memory(
+                        uid, action_data.get("old_memory_id", ""),
+                        action_data.get("title", ""),
+                        action_data.get("content", ""))
+                text = text.replace(json_match.group(0), "").strip()
+            except Exception as e:
+                logger.warning(f"Failed to parse memory action: {e}")
+        if not text:
+            raise RuntimeError(
+                "LLM response contained only a memory action block")
+        return text
 
     async def interact(self, uid: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
