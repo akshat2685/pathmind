@@ -292,7 +292,7 @@ async def test_user_memory_update_and_deletion(second_brain):
     remaining = await second_brain.store.get_personal_memories(person_id)
     assert not any(m["memory_id"] == mem.memory_id for m in remaining)
 
-def test_fastapi_second_brain_endpoints():
+def test_fastapi_second_brain_endpoints(requires_live_db):
     client = TestClient(app)
     headers = {"x-person-id": "test-scholar-api"}
 
