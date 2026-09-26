@@ -7,7 +7,7 @@ from backend.services.store import FirestoreStore
 from backend.core.evidence_schemas import CanonicalEvidence
 
 @pytest.mark.asyncio
-async def test_evidence_submission_and_quality_verification():
+async def test_evidence_submission_and_quality_verification(requires_live_db):
     """
     Submitting executable Python code with unit tests & type hints must be deterministically
     verified as VERIFIED_STRONG and achieve PASS status.
@@ -59,7 +59,7 @@ def test_parse_stream():
     assert len(attempt.evaluation_detail.recommendation) > 0
 
 @pytest.mark.asyncio
-async def test_locked_stage_rejects_premature_submission():
+async def test_locked_stage_rejects_premature_submission(requires_live_db):
     """
     Submitting evidence for a locked downstream stage without satisfying prerequisites must raise PermissionError.
     """
@@ -82,7 +82,7 @@ async def test_locked_stage_rejects_premature_submission():
     assert "UNLOCK_REJECTED" in str(exc_info.value)
 
 @pytest.mark.asyncio
-async def test_insufficient_evidence_triggers_reinforcement():
+async def test_insufficient_evidence_triggers_reinforcement(requires_live_db):
     """
     Submitting minimal/incomplete code fails quality criteria and triggers reinforcement.
     """
@@ -124,7 +124,7 @@ async def test_mastery_regression_flagged_without_erasing_history():
     assert "memory leaks" in profile.regression_reason
 
 @pytest.mark.asyncio
-async def test_transfer_validation_across_novel_domains():
+async def test_transfer_validation_across_novel_domains(requires_live_db):
     """
     Submitting evidence for a transfer task marks transfer_validated as True.
     """
@@ -193,7 +193,7 @@ async def test_dispute_and_challenge_flow():
     assert resolved is True
 
 @pytest.mark.asyncio
-async def test_mastery_dashboard_state_generation():
+async def test_mastery_dashboard_state_generation(requires_live_db):
     """
     MasteryDashboardState accurately populates 'What I Can Do', 'What I Am Working On',
     'What I Need To Prove', and locked stages.
