@@ -71,7 +71,7 @@ async def test_safety_guardrails_block_clinical_and_guarantee_claims():
     assert res3.safety_category == "PASSED"
 
 @pytest.mark.asyncio
-async def test_why_this_and_why_not_explainability():
+async def test_why_this_and_why_not_explainability(requires_live_db):
     """
     RecommendationExplanationService provides grounded 'Why This?' and 'Why Not?' explanations.
     """
@@ -112,7 +112,7 @@ async def test_why_this_and_why_not_explainability():
     assert len(explanation.unknowns_summary) > 0
 
 @pytest.mark.asyncio
-async def test_user_autonomy_decision_and_feedback():
+async def test_user_autonomy_decision_and_feedback(requires_live_db):
     """
     Learner can accept, decline, or choose alternatives, and provide structured feedback.
     """
