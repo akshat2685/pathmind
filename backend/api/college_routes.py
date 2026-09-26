@@ -508,13 +508,29 @@ SEED_ADMIN_USER_ID = "5da71f61-eb88-4290-9060-70315ff9ba94"
 async def seed_curriculum_units_endpoint(
     units: List[Dict[str, Any]] = Body(...),
     person_id: str = Depends(get_authenticated_person),
+    mode: str = Query("replace"),
 ):
-    """Replace placeholder curriculum_units rows with verified syllabus units."""
+    """Replace placeholder curriculum_units rows with verified syllabus units.
+    mode=delete: body is a list of {"curriculum_id":..., "subject_id":...}
+    dicts; only deletes, inserts nothing (for stale placeholder cleanup)."""
     if person_id != SEED_ADMIN_USER_ID:
         raise HTTPException(status_code=403, detail="FORBIDDEN")
     if not units:
         raise HTTPException(status_code=400, detail="EMPTY_PAYLOAD")
     client = college_store.client
+    deleted = 0
+    inserted = 0
+    if mode == "delete":
+        for u in units:
+            del_res = (
+                client.table("curriculum_units")
+                .delete()
+                .eq("curriculum_id", u["curriculum_id"])
+                .eq("subject_id", u["subject_id"])
+                .execute()
+            )
+            deleted += len(del_res.data or [])
+        return {"deleted": deleted, "inserted": 0, "pairs": len(units)}
     pairs: Dict[tuple, List[Dict[str, Any]]] = {}
     for u in units:
         pairs.setdefault((u["curriculum_id"], u["subject_id"]), []).append(u)
