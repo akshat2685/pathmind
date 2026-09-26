@@ -30,7 +30,7 @@ def _roadmap(pid: str):
 
 
 @pytest.mark.asyncio
-async def test_sweep_generates_intervention_for_struggling_learner(clean_store):
+async def test_sweep_generates_intervention_for_struggling_learner(requires_live_db, clean_store):
     pid = "sweep-learner"
     await clean_store.save_roadmap(pid, _roadmap(pid))
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
@@ -49,7 +49,7 @@ async def test_sweep_generates_intervention_for_struggling_learner(clean_store):
 
 
 @pytest.mark.asyncio
-async def test_sweep_is_idempotent_across_runs(clean_store):
+async def test_sweep_is_idempotent_across_runs(requires_live_db, clean_store):
     pid = "sweep-learner-2"
     await clean_store.save_roadmap(pid, _roadmap(pid))
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
@@ -67,7 +67,7 @@ async def test_sweep_is_idempotent_across_runs(clean_store):
 
 
 @pytest.mark.asyncio
-async def test_dedup_retires_duplicate_of_recent_live_intervention(clean_store):
+async def test_dedup_retires_duplicate_of_recent_live_intervention(requires_live_db, clean_store):
     pid = "sweep-learner-3"
     await clean_store.save_roadmap(pid, _roadmap(pid))
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
@@ -109,7 +109,7 @@ async def test_sweep_skips_persons_without_roadmaps(clean_store):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_start_fails_loudly_when_db_unreachable(clean_store):
+async def test_scheduler_start_fails_loudly_when_db_unreachable(requires_live_db, clean_store):
     class DeadStore(FirestoreStore):
         async def check_health(self):
             return "SOURCE_UNAVAILABLE"
@@ -121,7 +121,7 @@ async def test_scheduler_start_fails_loudly_when_db_unreachable(clean_store):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_job_runs_every_six_hours(clean_store):
+async def test_scheduler_job_runs_every_six_hours(requires_live_db, clean_store):
     sched = AccountabilityScheduler(store=clean_store, interval_hours=6)
     jobs = sched.scheduler.get_jobs()
     assert len(jobs) == 1
