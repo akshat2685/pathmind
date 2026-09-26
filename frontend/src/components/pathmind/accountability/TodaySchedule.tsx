@@ -83,7 +83,7 @@ export function TodaySchedule() {
   if (loading) {
     return (
       <div className="sketch-border p-6 bg-surface-container-low/90 text-center">
-        <p className="font-body-sm text-on-surface-variant">Loading today's plan…</p>
+        <p className="font-body-sm text-on-surface-variant">Loading today&apos;s plan…</p>
       </div>
     );
   }
