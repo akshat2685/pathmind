@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 from backend.main import app
-from backend.services.supabase_adapter import get_authenticated_person
+from backend.core.security import get_authenticated_person
 from backend.services.store import FirestoreStore
 
 client = TestClient(app)
@@ -13,7 +13,7 @@ def clean_store():
     store = FirestoreStore()
     return store
 
-def test_canonical_product_journey_e2e(clean_store):
+def test_canonical_product_journey_e2e(clean_store, requires_live_db):
     """
     Validates the complete 14-step Canonical Product Journey:
     1. Authenticate & System Readiness
