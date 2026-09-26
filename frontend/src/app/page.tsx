@@ -4,6 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { TopBar } from "@/components/layout/TopBar";
 import { validateMeaningfulText } from "@/components/pathmind/steps/GoalStep";
+import { VerificationStep } from "@/components/pathmind/steps/VerificationStep";
+import { AspirationTestStep } from "@/components/pathmind/steps/AspirationTestStep";
+import { authedFetch } from "@/lib/api";
+import type { TestEvaluation } from "@/components/pathmind/steps/AspirationTestStep";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -87,6 +91,16 @@ export interface EvidenceRequirements {
   evaluation_criteria?: string[];
 }
 
+export interface GroundedAssessment {
+  potential: string;
+  strengths: string[];
+  gaps: string[];
+  path_outline: string[];
+  uncertainty: string[];
+  source?: string;
+  generated_at?: string;
+}
+
 export interface EvaluationResult {
   competence_score: number;
   depth_rating: string;
@@ -107,6 +121,7 @@ const PERSONAS = [
   { id: "school", title: "School Student", icon: "school", desc: "Exploring foundational horizons & career clarity" },
   { id: "college", title: "College Student", icon: "account_balance", desc: "Navigating major specialization & practical readiness" },
   { id: "professional", title: "Professional", icon: "work", desc: "Advancing senior craft and domain leadership" },
+  { id: "business", title: "Business Owner", icon: "storefront", desc: "Running my own venture and growing it" },
   { id: "switcher", title: "Career Switcher", icon: "alt_route", desc: "Transitioning toward a completely new discipline" },
   { id: "lifelong", title: "Lifelong Scholar", icon: "menu_book", desc: "Pursuing rigorous, self-directed intellectual mastery" },
 ];
@@ -114,10 +129,12 @@ const PERSONAS = [
 const JOURNEY_STEPS = [
   { id: 0, title: "Initiation", subtitle: "Name & Identity" },
   { id: 1, title: "Aspiration", subtitle: "Goal & Stage" },
-  { id: 2, title: "Evidence", subtitle: "Proof Intake" },
-  { id: 3, title: "Assessment", subtitle: "Diagnostic Engine" },
-  { id: 4, title: "Trajectory", subtitle: "Grounded Pathways" },
-  { id: 5, title: "Roadmap", subtitle: "Active Phase" },
+  { id: 2, title: "Verification", subtitle: "Prove It's You" },
+  { id: 3, title: "Aptitude Test", subtitle: "Aspiration Diagnostic" },
+  { id: 4, title: "Evidence", subtitle: "Proof Intake" },
+  { id: 5, title: "Assessment", subtitle: "Diagnostic Engine" },
+  { id: 6, title: "Trajectory", subtitle: "Grounded Pathways" },
+  { id: 7, title: "Roadmap", subtitle: "Active Phase" },
 ];
 
 export default function GuidedJourneyPage() {
@@ -141,6 +158,10 @@ export default function GuidedJourneyPage() {
   // Evidence
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [evidenceRequirements, setEvidenceRequirements] = useState<EvidenceRequirements | null>(null);
+  const [verificationData, setVerificationData] = useState<Record<string, unknown> | null>(null);
+  const [testResult, setTestResult] = useState<TestEvaluation | null>(null);
+  const [groundedAssessment, setGroundedAssessment] = useState<GroundedAssessment | null>(null);
+  const [assessmentLoading, setAssessmentLoading] = useState(false);
   const [activeEvTab, setActiveEvTab] = useState<"projects" | "links" | "files">("projects");
   const [projectTitle, setProjectTitle] = useState("");
   const [projectDesc, setProjectDesc] = useState("");
@@ -167,15 +188,12 @@ export default function GuidedJourneyPage() {
   useEffect(() => {
     const rehydrate = async () => {
       if (typeof window === "undefined") return;
-      const storedId = localStorage.getItem("pathmind_person_id");
-      if (!storedId) return;
 
       try {
         setLoading(true);
         setLoadingMessage("Rehydrating your longitudinal scholar session...");
-        const res = await fetch(`${API_BASE}/api/orchestrate/journey/state`, {
-          headers: { "X-Person-ID": storedId },
-        });
+        // Backend derives identity from the Supabase JWT; no stored ID needed.
+        const res = await authedFetch(`/api/orchestrate/journey/state`);
 
         if (res.ok) {
           const state = await res.json();
@@ -185,6 +203,7 @@ export default function GuidedJourneyPage() {
           if (state.stage) setStage(state.stage);
           if (state.evidence) setEvidenceList(state.evidence);
           if (state.evidence_requirements) setEvidenceRequirements(state.evidence_requirements);
+          if (state.grounded_assessment) setGroundedAssessment(state.grounded_assessment);
           if (state.assessment_blueprint) setBlueprint(state.assessment_blueprint);
           if (state.assessment_evaluation) setEvaluationResult(state.assessment_evaluation);
           if (state.candidate_paths && state.candidate_paths.length > 0) setCandidatePaths(state.candidate_paths);
@@ -193,15 +212,24 @@ export default function GuidedJourneyPage() {
 
           // Map backend step to frontend step
           if (state.active_roadmap) {
-            setCurrentStep(5);
+            setCurrentStep(7);
           } else if (state.candidate_paths && state.candidate_paths.length > 0) {
-            setCurrentStep(4);
+            setCurrentStep(6);
           } else if (state.assessment_blueprint) {
-            setCurrentStep(3);
+            setCurrentStep(5);
           } else if (state.evidence_requirements) {
-            setCurrentStep(2);
+            // Evidence requirements are issued at aspiration time; the
+            // verification (step 2) and aptitude test (step 3) gates sit
+            // between aspiration and evidence.
+            const verified =
+              typeof window !== "undefined" &&
+              localStorage.getItem("pathmind_verification_complete") === "1";
+            const tested =
+              typeof window !== "undefined" &&
+              localStorage.getItem("pathmind_test_complete") === "1";
+            setCurrentStep(!verified ? 2 : !tested ? 3 : 4);
           } else if (state.aspiration) {
-            setCurrentStep(1);
+            setCurrentStep(2);
           } else {
             setCurrentStep(1);
           }
@@ -228,7 +256,7 @@ export default function GuidedJourneyPage() {
     setErrorMessage("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/orchestrate/journey/init`, {
+      const res = await authedFetch(`/api/orchestrate/journey/init`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim() }),
@@ -269,11 +297,10 @@ export default function GuidedJourneyPage() {
     setErrorMessage("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/orchestrate/journey/aspiration`, {
+      const res = await authedFetch(`/api/orchestrate/journey/aspiration`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId,
         },
         body: JSON.stringify({
           aspiration: aspiration.trim(),
@@ -289,6 +316,7 @@ export default function GuidedJourneyPage() {
 
       const data = await res.json();
       setEvidenceRequirements(data.evidence_requirements);
+
       localStorage.setItem("pathmind_user_goal", aspiration.trim());
       localStorage.setItem("pathmind_user_identity", stage);
       setCurrentStep(2);
@@ -300,8 +328,51 @@ export default function GuidedJourneyPage() {
     }
   };
 
+  // STEP 2: VERIFICATION COMPLETE -> EVIDENCE INTAKE
+  const handleVerificationNext = (data: Record<string, unknown>) => {
+    setVerificationData(data);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("pathmind_verification_complete", "1");
+      } catch {
+        // storage unavailable — verification still counts for this session
+      }
+    }
+    setCurrentStep(3);
+  };
+
+  // STEP 3: APTITUDE TEST COMPLETE -> GROUNDED ASSESSMENT -> EVIDENCE INTAKE
+  // AJ's core loop: potential/gaps/path are computed AFTER the learner has
+  // proven themselves (verification + test), grounded in real evidence.
+  const handleTestNext = async (result: TestEvaluation) => {
+    setTestResult(result);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("pathmind_test_complete", "1");
+      } catch {
+        // storage unavailable — test still counts for this session
+      }
+    }
+    // Fetch the grounded assessment (verification + test evidence)
+    setAssessmentLoading(true);
+    try {
+      const resp = await authedFetch("/api/orchestrate/journey/grounded-assessment", {
+        method: "POST",
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        setGroundedAssessment(data);
+      }
+    } catch {
+      // assessment fetch failed — evidence step still works
+    } finally {
+      setAssessmentLoading(false);
+    }
+    setCurrentStep(4);
+  };
+
   // --------------------------------------------------------------------------
-  // STEP 2: EVIDENCE SUBMISSION -> EVALUATION & BLUEPRINT (Req 8, 9)
+  // STEP 4: EVIDENCE SUBMISSION -> EVALUATION & BLUEPRINT (Req 8, 9)
   // --------------------------------------------------------------------------
   const handleAddProjectEvidence = (e: React.FormEvent) => {
     e.preventDefault();
@@ -363,11 +434,10 @@ export default function GuidedJourneyPage() {
     setErrorMessage("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/orchestrate/journey/evidence`, {
+      const res = await authedFetch(`/api/orchestrate/journey/evidence`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId,
         },
         body: JSON.stringify({ evidence: evidenceList }),
       });
@@ -379,7 +449,7 @@ export default function GuidedJourneyPage() {
 
       const data = await res.json();
       setBlueprint(data.assessment_blueprint);
-      setCurrentStep(3);
+      setCurrentStep(5);
     } catch (err: unknown) {
       const e = err as Error;
       setErrorMessage(e.message || "Failed to generate assessment blueprint.");
@@ -389,7 +459,7 @@ export default function GuidedJourneyPage() {
   };
 
   // --------------------------------------------------------------------------
-  // STEP 3: ACTUAL ASSESSMENT SUBMISSION -> BASELINE PROFILE (Req 8, 9)
+  // STEP 4: ACTUAL ASSESSMENT SUBMISSION -> BASELINE PROFILE (Req 8, 9)
   // --------------------------------------------------------------------------
   const handleAssessmentAnswerChange = (itemId: string, val: string | number) => {
     setAssessmentResponses((prev) => ({ ...prev, [itemId]: val }));
@@ -409,11 +479,10 @@ export default function GuidedJourneyPage() {
     setErrorMessage("");
 
     try {
-      const res = await fetch(`${API_BASE}/api/orchestrate/journey/assessment`, {
+      const res = await authedFetch(`/api/orchestrate/journey/assessment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId,
         },
         body: JSON.stringify({ responses: formattedResponses }),
       });
@@ -428,9 +497,9 @@ export default function GuidedJourneyPage() {
 
       // Immediately discover grounded candidate pathways
       setLoadingMessage("Discovering transparent empirical candidate pathways...");
-      const pathRes = await fetch(`${API_BASE}/api/orchestrate/journey/discover-paths`, {
+      const pathRes = await authedFetch(`/api/orchestrate/journey/discover-paths`, {
         method: "POST",
-        headers: { "X-Person-ID": personId },
+        headers: {},
       });
 
       if (!pathRes.ok) {
@@ -439,7 +508,7 @@ export default function GuidedJourneyPage() {
 
       const pathData = await pathRes.json();
       setCandidatePaths(pathData.candidate_paths || []);
-      setCurrentStep(4);
+      setCurrentStep(6);
     } catch (err: unknown) {
       const e = err as Error;
       setErrorMessage(e.message || "Diagnostic evaluation encountered an error.");
@@ -449,7 +518,7 @@ export default function GuidedJourneyPage() {
   };
 
   // --------------------------------------------------------------------------
-  // STEP 4: USER CHOICE -> PROGRESSIVE HIDDEN ROADMAP (Req 8, 10)
+  // STEP 5: USER CHOICE -> PROGRESSIVE HIDDEN ROADMAP (Req 8, 10)
   // --------------------------------------------------------------------------
   const handleSelectPathway = async (pathId: string) => {
     if (!personId) return;
@@ -460,11 +529,10 @@ export default function GuidedJourneyPage() {
     setSelectedPathId(pathId);
 
     try {
-      const res = await fetch(`${API_BASE}/api/orchestrate/journey/select-path`, {
+      const res = await authedFetch(`/api/orchestrate/journey/select-path`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId,
         },
         body: JSON.stringify({ selected_path_id: pathId }),
       });
@@ -476,7 +544,7 @@ export default function GuidedJourneyPage() {
 
       const data = await res.json();
       setRoadmap(data.roadmap);
-      setCurrentStep(5);
+      setCurrentStep(7);
     } catch (err: unknown) {
       const e = err as Error;
       setErrorMessage(e.message || "Failed to select pathway.");
@@ -486,7 +554,7 @@ export default function GuidedJourneyPage() {
   };
 
   // --------------------------------------------------------------------------
-  // STEP 5: SUBMIT PHASE EVIDENCE FOR UNLOCK GATE (Req 10)
+  // STEP 6: SUBMIT PHASE EVIDENCE FOR UNLOCK GATE (Req 10)
   // --------------------------------------------------------------------------
   const handlePhaseEvidenceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,11 +571,10 @@ export default function GuidedJourneyPage() {
     setPhaseEvalResult(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/orchestrate/journey/submit-phase-evidence`, {
+      const res = await authedFetch(`/api/orchestrate/journey/submit-phase-evidence`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId,
         },
         body: JSON.stringify({
           stage_id: roadmap.active_stage.stage_id,
@@ -819,9 +886,33 @@ export default function GuidedJourneyPage() {
         )}
 
         {/* ================================================================= */}
-        {/* STEP 2: EVIDENCE REQUIREMENTS & SUBMISSION (Req 8, 9, 10)         */}
+        {/* STEP 2: IDENTITY VERIFICATION (genuine-user gate)                  */}
         {/* ================================================================= */}
         {!loading && currentStep === 2 && (
+          <VerificationStep
+            userType={stage}
+            onNext={handleVerificationNext}
+            onBack={() => setCurrentStep(1)}
+          />
+        )}
+
+        {/* ================================================================= */}
+        {/* STEP 3: ASPIRATION APTITUDE TEST (domain-aware diagnostic)        */}
+        {/* ================================================================= */}
+        {!loading && currentStep === 3 && (
+          <AspirationTestStep
+            aspiration={aspiration}
+            stage={stage}
+            userType={stage}
+            onNext={handleTestNext}
+            onBack={() => setCurrentStep(2)}
+          />
+        )}
+
+        {/* ================================================================= */}
+        {/* STEP 4: EVIDENCE REQUIREMENTS & SUBMISSION (Req 8, 9, 10)         */}
+        {/* ================================================================= */}
+        {!loading && currentStep === 4 && (
           <motion.div
             key="step-2"
             initial={{ opacity: 0, x: 20 }}
@@ -829,9 +920,76 @@ export default function GuidedJourneyPage() {
             exit={{ opacity: 0, x: -20 }}
             className="w-full max-w-3xl space-y-6"
           >
+            {/* GROUNDED ASSESSMENT: potential/gaps/path based on verification + test */}
+            {assessmentLoading && (
+              <div className="sketch-border p-5 bg-surface-container-low/70 flex items-center gap-3">
+                <span className="material-symbols-outlined animate-spin text-secondary">progress_activity</span>
+                <p className="text-sm text-on-surface-variant">Analyzing your marks, verification and test results...</p>
+              </div>
+            )}
+            {!assessmentLoading && groundedAssessment && groundedAssessment.potential && (
+              <div className="sketch-border p-5 bg-surface-container-low/70 space-y-4">
+                <div className="flex items-center gap-2 text-secondary font-headline-sm text-sm">
+                  <span className="material-symbols-outlined text-base">psychology</span>
+                  <span>Your potential, based on what you've proven:</span>
+                </div>
+
+                <p className="font-body-md text-sm text-on-surface leading-relaxed">
+                  {groundedAssessment.potential}
+                </p>
+
+                {groundedAssessment.strengths && groundedAssessment.strengths.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="font-headline-sm text-xs text-secondary uppercase tracking-wide">What your evidence shows you're good at</p>
+                    <ul className="space-y-1">
+                      {groundedAssessment.strengths.map((s: string, idx: number) => (
+                        <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
+                          <span className="material-symbols-outlined text-sm text-secondary shrink-0">check_circle</span>
+                          <span>{s}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {groundedAssessment.gaps && groundedAssessment.gaps.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="font-headline-sm text-xs text-tertiary uppercase tracking-wide">Where you're lacking</p>
+                    <ul className="space-y-1">
+                      {groundedAssessment.gaps.map((gap: string, idx: number) => (
+                        <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
+                          <span className="material-symbols-outlined text-sm text-tertiary shrink-0">priority_high</span>
+                          <span>{gap}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {groundedAssessment.path_outline && groundedAssessment.path_outline.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="font-headline-sm text-xs text-secondary uppercase tracking-wide">Your dedicated path</p>
+                    <ol className="space-y-1">
+                      {groundedAssessment.path_outline.map((step: string, idx: number) => (
+                        <li key={idx} className="flex gap-2 text-xs text-on-surface-variant">
+                          <span className="font-bold text-secondary shrink-0">{idx + 1}.</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {groundedAssessment.uncertainty && groundedAssessment.uncertainty.length > 0 && (
+                  <p className="text-[11px] text-on-surface-variant/70 italic">
+                    Note: {groundedAssessment.uncertainty.join(" ")}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="text-center space-y-2">
               <span className="font-note-handwritten text-xl text-tertiary sketchy-chip px-3 py-1 inline-block">
-                Chapter III: Grounded Evidence
+                Chapter IV: Grounded Evidence
               </span>
               <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface">
                 Provide proof of prior work or exploration
@@ -841,6 +999,7 @@ export default function GuidedJourneyPage() {
               </p>
             </div>
 
+            {/* Immediate Aspiration Intelligence: potential, gaps, path, questions */}
             {/* Dynamic Grounded Guidance from Backend */}
             {evidenceRequirements && (
               <div className="sketch-border p-5 bg-surface-container-low/70 space-y-3">
@@ -1000,7 +1159,7 @@ export default function GuidedJourneyPage() {
               <div className="flex justify-between items-center pt-4 border-t border-outline/20">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(1)}
+                  onClick={() => setCurrentStep(3)}
                   className="ink-wash-btn px-6 py-2 text-lg cursor-pointer"
                 >
                   Back
@@ -1019,9 +1178,9 @@ export default function GuidedJourneyPage() {
         )}
 
         {/* ================================================================= */}
-        {/* STEP 3: DYNAMIC DIAGNOSTIC ASSESSMENT (Req 8, 9)                   */}
+        {/* STEP 4: DYNAMIC DIAGNOSTIC ASSESSMENT (Req 8, 9)                   */}
         {/* ================================================================= */}
-        {!loading && currentStep === 3 && blueprint && (
+        {!loading && currentStep === 5 && blueprint && (
           <motion.div
             key="step-3"
             initial={{ opacity: 0, x: 20 }}
@@ -1031,7 +1190,7 @@ export default function GuidedJourneyPage() {
           >
             <div className="text-center space-y-2">
               <span className="font-note-handwritten text-xl text-tertiary sketchy-chip px-3 py-1 inline-block">
-                Chapter IV: Diagnostic Calibration
+                Chapter V: Diagnostic Calibration
               </span>
               <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface">
                 {blueprint.domain} Diagnostic
@@ -1092,7 +1251,7 @@ export default function GuidedJourneyPage() {
               <div className="flex justify-between items-center pt-2">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(2)}
+                  onClick={() => setCurrentStep(4)}
                   className="ink-wash-btn px-6 py-2 text-lg cursor-pointer"
                 >
                   Back
@@ -1110,9 +1269,9 @@ export default function GuidedJourneyPage() {
         )}
 
         {/* ================================================================= */}
-        {/* STEP 4: BASELINE & CANDIDATE PATHWAYS (Req 8, 12, 13)             */}
+        {/* STEP 5: BASELINE & CANDIDATE PATHWAYS (Req 8, 12, 13)             */}
         {/* ================================================================= */}
-        {!loading && currentStep === 4 && (
+        {!loading && currentStep === 6 && (
           <motion.div
             key="step-4"
             initial={{ opacity: 0, x: 20 }}
@@ -1122,7 +1281,7 @@ export default function GuidedJourneyPage() {
           >
             <div className="text-center space-y-2">
               <span className="font-note-handwritten text-xl text-tertiary sketchy-chip px-3 py-1 inline-block">
-                Chapter V: Verified Baseline &amp; Trajectories
+                Chapter VI: Verified Baseline &amp; Trajectories
               </span>
               <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface">
                 Candidate Pathways Discovered
@@ -1241,9 +1400,9 @@ export default function GuidedJourneyPage() {
         )}
 
         {/* ================================================================= */}
-        {/* STEP 5: HIDDEN ROADMAP & EVIDENCE-GATED ACTIVE PHASE (Req 8, 10)  */}
+        {/* STEP 6: HIDDEN ROADMAP & EVIDENCE-GATED ACTIVE PHASE (Req 8, 10)  */}
         {/* ================================================================= */}
-        {!loading && currentStep === 5 && roadmap && (
+        {!loading && currentStep === 7 && roadmap && (
           <motion.div
             key="step-5"
             initial={{ opacity: 0, x: 20 }}
@@ -1253,7 +1412,7 @@ export default function GuidedJourneyPage() {
           >
             <div className="text-center space-y-2">
               <span className="font-note-handwritten text-xl text-tertiary sketchy-chip px-3 py-1 inline-block">
-                Chapter VI: Progressive Disclosure Roadmap
+                Chapter VII: Progressive Disclosure Roadmap
               </span>
               <h2 className="font-headline-lg text-3xl sm:text-4xl text-on-surface">
                 {roadmap.target_outcome}

@@ -108,11 +108,16 @@ class ProactiveMemoryService:
         current_decision: Optional[str] = None,
         constraints: Optional[Dict[str, Any]] = None,
         explicit_user_input: Optional[str] = None,
-        target_direction: Optional[str] = None
+        target_direction: Optional[str] = None,
+        include_observed: bool = False
     ) -> ProactiveMemoryContext:
         """
         Proactively retrieves the smallest useful set of relevant personal memories
         for a given task context.
+
+        Promotion filter (spec §13): only CANDIDATE/DURABLE memories drive
+        proactive behavior. OBSERVED memories are single unconfirmed sightings —
+        pass include_observed=True to opt in (e.g. for debugging).
         """
         raw_mems = await self.store.get_personal_memories(person_id)
         all_memories = [MemoryItem(**m) for m in raw_mems]
@@ -135,6 +140,21 @@ class ProactiveMemoryService:
                 retrieved_memories=[],
                 status="UNVERIFIED_MEMORY_ONLY",
                 proactive_summary="Resume generation relies strictly on canonical verified profile facts. Memory inferences are excluded from resume generation."
+            )
+
+        # Promotion filter (spec §13): only CANDIDATE/DURABLE memories drive
+        # proactive behavior. Applied after the safety checks above so they
+        # keep their exact statuses regardless of promotion state.
+        if not include_observed:
+            all_memories = [m for m in all_memories if m.promotion_status in ("CANDIDATE", "DURABLE")]
+
+        if not all_memories:
+            return ProactiveMemoryContext(
+                person_id=person_id,
+                task_type=task_type,
+                retrieved_memories=[],
+                status="NO_RELEVANT_MEMORY",
+                proactive_summary=""
             )
 
         active_goal = current_goal or target_direction

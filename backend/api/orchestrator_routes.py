@@ -146,7 +146,7 @@ async def record_aspiration(
     person_id: str = Depends(get_person_id)
 ):
     """
-    Records aspiration and learner stage, returns grounded evidence requirements.
+    Records aspiration and learner stage. Returns evidence requirements PLUS immediate aspiration intelligence (potential, gaps, path outline, clarifying questions).
     """
     try:
         return await orchestrator.record_aspiration_and_stage(
@@ -159,6 +159,30 @@ async def record_aspiration(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to record aspiration: {str(e)}")
+
+@router.post("/journey/grounded-assessment")
+async def grounded_assessment(
+    person_id: str = Depends(get_person_id)
+):
+    """
+    Generates the grounded potential assessment (potential, strengths,
+    gaps, path outline) based on the learner's REAL evidence: verification
+    data (marks, results, experience) + aptitude test results.
+
+    Call this AFTER verification and test are complete — the assessment
+    is only meaningful when grounded in what the learner has proven.
+    """
+    try:
+        state = await orchestrator.get_journey_state(person_id)
+        if not state.get("aspiration"):
+            raise HTTPException(status_code=400, detail="No aspiration recorded yet.")
+        return await orchestrator.generate_grounded_assessment(
+            person_id=person_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate assessment: {str(e)}")
 
 @router.post("/journey/evidence")
 async def submit_evidence(

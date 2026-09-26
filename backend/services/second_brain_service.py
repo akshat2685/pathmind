@@ -10,6 +10,7 @@ from backend.core.memory_schemas import (
     SecondBrainQueryResponse,
     ConsolidateMemoriesResponse
 )
+from backend.core.deterministic_rules import promote_memory
 from backend.services.memory_reasoning_agent import MemoryReasoningAgent
 from backend.services.store import FirestoreStore
 
@@ -30,11 +31,19 @@ class SecondBrainService:
     async def ingest_memory(
         self,
         person_id: str,
-        payload: Dict[str, Any]
+        payload: Dict[str, Any],
+        skip_dedup: bool = False
     ) -> MemoryItem:
         """
         Ingests and validates a memory item with write-validation and source linking.
         Enforces evidence ceiling rule (unverified evidence cannot claim verified status).
+
+        Promotion wiring (spec §13): before creating a new record, checks for an
+        existing similar memory (same person + topic + similar title). If found,
+        increments its observation_count and re-runs the pure promote_memory()
+        rule — promoting OBSERVED -> CANDIDATE -> DURABLE instead of creating a
+        duplicate. New memories start as OBSERVED (or CANDIDATE when marked
+        HIGH/CRITICAL importance, per the promotion rule).
         """
         # 1. Verify source entities where referenced
         source_type = payload.get("source_type", "ROADMAP_STAGE")
@@ -84,16 +93,62 @@ class SecondBrainService:
         elif nature == "PREFERENCE" and "importance" not in payload:
             importance = "MEDIUM"
 
+        title = payload.get("title", "Milestone Memory")
+        topic = payload.get("topic", "General")
+        content = payload.get("content") or payload.get("summary", "")
+
+        # 2. Dedup + promotion: serialize per person so concurrent ingests of the
+        #    same observation increment one record instead of creating duplicates.
+        #    The lock covers check-and-insert so the pair is atomic.
+        lock = self.store.get_person_lock(person_id) if not skip_dedup else None
+        if lock is not None:
+            await lock.acquire()
+        try:
+            if not skip_dedup:
+                existing = await self._find_similar_memory(person_id, topic, title, content)
+                if existing is not None:
+                    return await self._reinforce_memory(existing, payload, ev_status)
+
+            return await self._create_memory(
+                person_id, payload, mem_type, nature, importance,
+                title, topic, content, source_type, source_ref, ev_status
+            )
+        finally:
+            if lock is not None:
+                lock.release()
+
+    async def _create_memory(
+        self,
+        person_id: str,
+        payload: Dict[str, Any],
+        mem_type: str,
+        nature: str,
+        importance: str,
+        title: str,
+        topic: str,
+        content: str,
+        source_type: str,
+        source_ref: str,
+        ev_status: str
+    ) -> MemoryItem:
+        """Creates a brand-new memory record (no similar memory exists)."""
+        """Creates a brand-new memory record (no similar memory exists)."""
         mem_id = payload.get("memory_id") or f"mem_{int(datetime.now(timezone.utc).timestamp()*1000)}_{uuid.uuid4().hex[:6]}"
+        initial_status = promote_memory(
+            current_status=payload.get("promotion_status", "OBSERVED"),
+            observation_count=int(payload.get("observation_count", 1)),
+            importance=importance,
+            evidence_verified=(ev_status == "VERIFIED"),
+        )
         mem = MemoryItem(
             memory_id=mem_id,
             person_id=person_id,
             memory_type=mem_type,
             nature=nature,
-            title=payload.get("title", "Milestone Memory"),
-            content=payload.get("content") or payload.get("summary", ""),
+            title=title,
+            content=content,
             summary=payload.get("summary") or payload.get("content", ""),
-            topic=payload.get("topic", "General"),
+            topic=topic,
             related_concepts=payload.get("related_concepts", []),
             source_type=source_type,
             source_reference=source_ref,
@@ -103,8 +158,10 @@ class SecondBrainService:
             related_artifact_ids=payload.get("related_artifact_ids", []),
             related_decision_ids=payload.get("related_decision_ids", []),
             confidence=payload.get("confidence", "HIGH"),
-            importance=payload.get("importance", "HIGH"),
+            importance=importance,
             lifecycle_status=payload.get("lifecycle_status", "CURRENT"),
+            promotion_status=initial_status,
+            observation_count=int(payload.get("observation_count", 1)),
             parent_memory_id=payload.get("parent_memory_id"),
             superseded_by=payload.get("superseded_by"),
             supersedes_reason=payload.get("supersedes_reason"),
@@ -115,22 +172,110 @@ class SecondBrainService:
         await self.store.save_personal_memory(person_id, mem.model_dump(mode="json"))
         return mem
 
+    @staticmethod
+    def _normalize_text(text: str) -> str:
+        return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", " ", (text or "").lower())).strip()
+
+    @classmethod
+    def _titles_similar(cls, a: str, b: str) -> bool:
+        """
+        Deterministic title similarity: exact normalized match, containment,
+        or high token overlap. Conservative on purpose — false negatives only
+        create a duplicate, false positives would merge distinct memories.
+        """
+        na, nb = cls._normalize_text(a), cls._normalize_text(b)
+        if not na or not nb:
+            return False
+        if na == nb:
+            return True
+        if na in nb or nb in na:
+            return True
+        ta, tb = set(na.split()), set(nb.split())
+        if not ta or not tb:
+            return False
+        jaccard = len(ta & tb) / len(ta | tb)
+        return jaccard >= 0.6
+
+    async def _find_similar_memory(
+        self,
+        person_id: str,
+        topic: str,
+        title: str,
+        content: str
+    ) -> Optional[MemoryItem]:
+        """
+        Internal lookup (bypasses the promotion read-filter on purpose):
+        finds an existing CURRENT memory with the same topic and similar title
+        so repeated observations reinforce it instead of duplicating it.
+        """
+        raw_mems = await self.store.get_personal_memories(person_id)
+        topic_norm = self._normalize_text(topic)
+        for m in raw_mems:
+            try:
+                mem = MemoryItem(**m)
+            except Exception:
+                continue
+            if mem.lifecycle_status != "CURRENT":
+                continue
+            if self._normalize_text(mem.topic) != topic_norm:
+                continue
+            if self._titles_similar(mem.title, title):
+                return mem
+        return None
+
+    async def _reinforce_memory(
+        self,
+        existing: MemoryItem,
+        payload: Dict[str, Any],
+        ev_status: str
+    ) -> MemoryItem:
+        """Re-observes an existing memory: bumps count, re-runs promotion rule."""
+        existing.observation_count = int(existing.observation_count or 0) + 1
+        new_status = promote_memory(
+            current_status=existing.promotion_status,
+            observation_count=existing.observation_count,
+            importance=payload.get("importance", existing.importance),
+            evidence_verified=(
+                existing.evidence_verification_status == "VERIFIED" or ev_status == "VERIFIED"
+            ),
+        )
+        existing.promotion_status = new_status
+        # Merge forward: keep the strongest importance seen, union related concepts.
+        rank = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+        new_imp = payload.get("importance")
+        if new_imp and rank.get(new_imp, 0) > rank.get(existing.importance, 0):
+            existing.importance = new_imp
+        for c in payload.get("related_concepts", []):
+            if c not in existing.related_concepts:
+                existing.related_concepts.append(c)
+        existing.updated_at = datetime.now(timezone.utc).isoformat()
+        await self.store.save_personal_memory(existing.person_id, existing.model_dump(mode="json"))
+        return existing
+
     async def search_memories(
         self,
         person_id: str,
         query: str,
         current_task_context: Optional[str] = None,
         target_role: Optional[str] = None,
-        status_filter: Optional[str] = None
+        status_filter: Optional[str] = None,
+        include_observed: bool = False
     ) -> List[MemorySearchResultItem]:
         """
         Hybrid semantic + metadata retrieval strictly scoped to person_id.
         Multi-factor ranking:
           score = (semantic_match) * importance_weight * temporal_weight + task_context_bonus + evidence_bonus
+
+        Promotion filter (spec §13): OBSERVED memories are single unconfirmed
+        observations — too weak to drive behavior. Only CANDIDATE/DURABLE
+        memories are returned unless include_observed=True opts in.
         """
         # Server-side person isolation
         raw_mems = await self.store.get_personal_memories(person_id)
         memories = [MemoryItem(**m) for m in raw_mems]
+
+        if not include_observed:
+            memories = [m for m in memories if m.promotion_status in ("CANDIDATE", "DURABLE")]
 
         if status_filter:
             memories = [m for m in memories if m.lifecycle_status == status_filter]
@@ -254,7 +399,8 @@ class SecondBrainService:
             person_id=person_id,
             query=req.query,
             current_task_context=req.current_task_context,
-            target_role=req.target_role
+            target_role=req.target_role,
+            include_observed=req.include_observed
         )
 
         if not search_results:
@@ -327,8 +473,9 @@ class SecondBrainService:
         new_memory_payload["parent_memory_id"] = old_mem.memory_id
         new_memory_payload["lifecycle_status"] = "CURRENT"
 
-        # Ingest new memory
-        new_mem = await self.ingest_memory(person_id, new_memory_payload)
+        # Ingest new memory (skip dedup: the replacement intentionally resembles
+        # the record it supersedes, and must not merge back into it).
+        new_mem = await self.ingest_memory(person_id, new_memory_payload, skip_dedup=True)
 
         # Update old memory to SUPERSEDED
         old_mem.lifecycle_status = "SUPERSEDED"

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { authedFetch } from "@/lib/api";
 
 interface FactItem {
   category: "OBSERVED" | "ASSESSED" | "INFERRED" | "UNKNOWN" | "RECOMMENDATION" | string;
@@ -71,14 +72,12 @@ export function CounselingDashboard({ profile }: CounselingDashboardProps) {
     setIsSending(true);
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = String(profile.person_id || "");
 
-      const res = await fetch(`${baseUrl}/api/counseling/chat`, {
+      const res = await authedFetch(`/api/counseling/chat`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "X-Person-ID": personId
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           person_id: personId,

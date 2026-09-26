@@ -297,7 +297,7 @@ class TailoredResume(BaseModel):
 
 class AccountabilityStatus(BaseModel):
     status: str = "ON_TRACK"  # ON_TRACK, AT_RISK, DELAYED, BLOCKED, COMPLETED, PAUSED, REPLANNING
-    current_streak_days: int = 4
+    current_streak_days: Optional[int] = None  # None = not computed from real activity; never invent
     weekly_commitment_hours: int = 10
     mentor_observation: str
     suggested_adjustment: Optional[str] = None

@@ -14,6 +14,7 @@ import {
   Compass,
   Layers
 } from "lucide-react";
+import { authedFetch } from "@/lib/api";
 
 interface Blocker {
   blocker_id: string;
@@ -140,12 +141,11 @@ export function ExecutionMissionView() {
 
   const fetchData = useCallback(async () => {
     try {
-      const headers = { "x-person-id": "" };
-      const [planRes, actionsRes, accRes, appRes] = await Promise.all([
-        fetch("/api/execution/daily", { headers }),
-        fetch("/api/execution/actions", { headers }),
-        fetch("/api/execution/accountability", { headers }),
-        fetch("/api/execution/applications", { headers })
+            const [planRes, actionsRes, accRes, appRes] = await Promise.all([
+        authedFetch("/api/execution/daily"),
+        authedFetch("/api/execution/actions"),
+        authedFetch("/api/execution/accountability"),
+        authedFetch("/api/execution/applications")
       ]);
 
       if (planRes.ok) setPlan(await planRes.json());
@@ -166,9 +166,9 @@ export function ExecutionMissionView() {
   // Action handlers
   const handleStart = async (actionId: string) => {
     try {
-      const res = await fetch(`/api/execution/actions/${actionId}/start`, {
+      const res = await authedFetch(`/api/execution/actions/${actionId}/start`, {
         method: "POST",
-        headers: { "x-person-id": "" }
+        headers: {}
       });
       if (res.ok) fetchData();
       else {
@@ -184,11 +184,10 @@ export function ExecutionMissionView() {
     e.preventDefault();
     if (!completeActionId) return;
     try {
-      const res = await fetch(`/api/execution/actions/${completeActionId}/complete`, {
+      const res = await authedFetch(`/api/execution/actions/${completeActionId}/complete`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify(completeForm)
       });
@@ -205,11 +204,10 @@ export function ExecutionMissionView() {
     e.preventDefault();
     if (!rescheduleActionId) return;
     try {
-      const res = await fetch(`/api/execution/actions/${rescheduleActionId}/reschedule`, {
+      const res = await authedFetch(`/api/execution/actions/${rescheduleActionId}/reschedule`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify(rescheduleForm)
       });
@@ -226,11 +224,10 @@ export function ExecutionMissionView() {
     e.preventDefault();
     if (!blockActionId) return;
     try {
-      const res = await fetch(`/api/execution/actions/${blockActionId}/block`, {
+      const res = await authedFetch(`/api/execution/actions/${blockActionId}/block`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify(blockForm)
       });
@@ -245,9 +242,9 @@ export function ExecutionMissionView() {
 
   const handleResolveBlocker = async (actionId: string) => {
     try {
-      const res = await fetch(`/api/execution/actions/${actionId}/resolve-blocker`, {
+      const res = await authedFetch(`/api/execution/actions/${actionId}/resolve-blocker`, {
         method: "POST",
-        headers: { "x-person-id": "" }
+        headers: {}
       });
       if (res.ok) fetchData();
     } catch (err) {
@@ -264,7 +261,6 @@ export function ExecutionMissionView() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify(body)
       });
@@ -277,11 +273,10 @@ export function ExecutionMissionView() {
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/execution/actions", {
+      const res = await authedFetch("/api/execution/actions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify(createForm)
       });
@@ -298,11 +293,10 @@ export function ExecutionMissionView() {
   const handleCreateApp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("/api/execution/applications", {
+      const res = await authedFetch("/api/execution/applications", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-person-id": ""
         },
         body: JSON.stringify(appForm)
       });

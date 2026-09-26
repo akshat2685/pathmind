@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { RecommendationDetailModal } from "@/components/pathmind/trust/RecommendationDetailModal";
+import { authedFetch } from "@/lib/api";
 
 interface NextActionItem {
   action_id: string;
@@ -101,8 +102,8 @@ export function ContextCommandCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/context/command-center`, {
-        headers: { "X-Person-ID": personId }
+      const res = await authedFetch(`/api/context/command-center`, {
+        headers: {}
       });
 
       if (!res.ok) throw new Error("Failed to fetch context command center");
@@ -136,11 +137,10 @@ export function ContextCommandCenter() {
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
 
-      const res = await fetch(`${baseUrl}/api/context/decisions/${selectedDecisionId}/outcome`, {
+      const res = await authedFetch(`/api/context/decisions/${selectedDecisionId}/outcome`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Person-ID": personId
         },
         body: JSON.stringify({
           outcome_state: outcomeState,

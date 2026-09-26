@@ -640,10 +640,10 @@ class AccountabilityAgent:
         if missed_milestones == 0 and completed_stages >= 1:
             return AccountabilityStatus(
                 status="ON_TRACK",
-                current_streak_days=4,
+                current_streak_days=None,  # computed from real activity elsewhere; never invented
                 weekly_commitment_hours=weekly_hours,
                 mentor_observation=(
-                    "You completed your recent milestone on schedule with verified test assertions. "
+                    "Milestone progress recorded. "
                     f"Your current pacing of {weekly_hours} hours/week remains well-aligned with your target timeline."
                 ),
                 suggested_adjustment=None,
@@ -653,7 +653,7 @@ class AccountabilityAgent:
         elif missed_milestones >= 2:
             return AccountabilityStatus(
                 status="AT_RISK",
-                current_streak_days=1,
+                current_streak_days=None,  # computed from real activity elsewhere; never invented
                 weekly_commitment_hours=weekly_hours,
                 mentor_observation=(
                     "It looks like the last two milestones encountered challenging prerequisite concepts. "
@@ -666,7 +666,7 @@ class AccountabilityAgent:
         else:
             return AccountabilityStatus(
                 status="REPLANNING",
-                current_streak_days=2,
+                current_streak_days=None,  # computed from real activity elsewhere; never invented
                 weekly_commitment_hours=weekly_hours,
                 mentor_observation=(
                     "You are making steady conceptual progress. Consider committing small functional iterations to your repository "

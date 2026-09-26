@@ -13,10 +13,12 @@ from backend.core.assessment_schemas import (
 )
 from backend.services.store import FirestoreStore
 from backend.services.counseling import CounselingAgent
+from backend.services.second_brain_service import SecondBrainService
 
 router = APIRouter(prefix="/api/counseling", tags=["Counseling"])
 store = FirestoreStore()
 agent = CounselingAgent()
+second_brain = SecondBrainService(store=store)
 
 class SynthesizeRequest(BaseModel):
     person_id: Optional[str] = "scholar-user"
@@ -48,7 +50,9 @@ async def synthesize_profile(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        active_person_id = (body.person_id if body and body.person_id else None) or person_id
+        # JWT identity is authoritative: body person_id is never trusted (same
+        # impersonation class as the removed X-Person-ID header).
+        active_person_id = person_id
         goals = body.goals if body and body.goals else []
         constraints = body.constraints if body and body.constraints else []
         evidence = body.evidence if body and body.evidence else []
@@ -126,7 +130,8 @@ async def counseling_chat(
     person_id: str = Depends(get_person_id)
 ):
     try:
-        active_person_id = req.person_id or person_id
+        # JWT identity is authoritative; ignore self-asserted body person_id.
+        active_person_id = person_id
         profile_data = await store.get_counseling_profile(active_person_id)
         
         if profile_data:
@@ -141,11 +146,22 @@ async def counseling_chat(
                 evidence_items=[]
             )
 
+        # Inject promoted long-term memories (CANDIDATE/DURABLE only — OBSERVED
+        # memories are too weak to drive counseling behavior). The agent weights
+        # DURABLE patterns strongly and treats CANDIDATE patterns as tentative.
+        mem_results = await second_brain.search_memories(
+            person_id=active_person_id,
+            query=req.message,
+            include_observed=False
+        )
+        injected_memories = [r.memory for r in mem_results[:3]]
+
         reply = agent.counsel_chat(
             person_id=active_person_id,
             user_message=req.message,
             profile=profile,
-            history=req.history or []
+            history=req.history or [],
+            memories=injected_memories
         )
 
         # Store episodic interaction memory fact

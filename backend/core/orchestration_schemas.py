@@ -68,13 +68,33 @@ class OrchestrationRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
+class StructuredAIOutput(BaseModel):
+    """
+    Spec §27: Structured AI output contract.
+
+    Every AI-generated response at the orchestrator boundary must conform to
+    this shape. Free-form model text goes in `message` only; application state
+    lives in `state` and is persisted separately. Model text never becomes DB
+    truth without validation.
+    """
+    message: str
+    state: str = "OK"  # OK, NEEDS_USER_INPUT, NEEDS_CONTEXT, FAILED
+    ui_blocks: List[Dict[str, Any]] = Field(default_factory=list)
+    recommendations: List[Dict[str, Any]] = Field(default_factory=list)
+    next_action: Dict[str, Any] = Field(default_factory=dict)
+    sources: List[Dict[str, Any]] = Field(default_factory=list)
+    uncertainty: List[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class OrchestrationResponse(BaseModel):
     workflow_id: str
     person_id: str
     task_type: str
     status: str  # SUCCESS, PARTIAL, FAILED, WAITING_FOR_USER_APPROVAL, TIMEOUT
     final_answer: str
-    structured_result: Dict[str, Any] = Field(default_factory=dict)
+    structured_result: StructuredAIOutput = Field(default_factory=StructuredAIOutput)
     action_proposals: List[ActionProposal] = Field(default_factory=list)
     requires_approval: bool = False
     trace: OrchestrationTrace

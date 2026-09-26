@@ -71,7 +71,7 @@ async def test_strict_cross_person_isolation(memory_engine, store):
 async def test_natural_memory_recall_engine(memory_engine, store):
     person_id = "scholar-recall-test"
     
-    # Save real test memory
+    # Save real test memory (promoted: it must be CANDIDATE+ to drive recall)
     mem = MemoryItem(
         memory_id="mem_rec_001",
         person_id=person_id,
@@ -80,7 +80,9 @@ async def test_natural_memory_recall_engine(memory_engine, store):
         summary="Solved recursion difficulty using visual frame diagrams.",
         topic="Recursion",
         related_concepts=["Call Stack", "Trees"],
-        source="Stage 01"
+        source="Stage 01",
+        promotion_status="CANDIDATE",
+        observation_count=2,
     )
     await store.save_personal_memory(person_id, mem.model_dump(mode="json"))
     
@@ -103,7 +105,7 @@ async def test_natural_memory_recall_engine(memory_engine, store):
 async def test_past_to_present_cross_stage_transfer(memory_engine, store):
     person_id = "scholar-bridge-test"
     
-    # Save real past memory
+    # Save real past memory (promoted: it must be CANDIDATE+ to bridge stages)
     mem = MemoryItem(
         memory_id="mem_past_001",
         person_id=person_id,
@@ -111,7 +113,9 @@ async def test_past_to_present_cross_stage_transfer(memory_engine, store):
         title="Recursion & Call Stack Frames",
         summary="Mastered base conditions and frame tracing.",
         topic="Recursion",
-        source="Stage 01: Python Foundations"
+        source="Stage 01: Python Foundations",
+        promotion_status="DURABLE",
+        observation_count=3,
     )
     await store.save_personal_memory(person_id, mem.model_dump(mode="json"))
 

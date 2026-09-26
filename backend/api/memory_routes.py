@@ -130,10 +130,14 @@ async def update_memory(
 @router.get("/cross-stage", response_model=CrossStageBridgeResponse)
 async def get_cross_stage_bridge(
     concept: Optional[str] = "Tree Traversal & Depth-First Search",
+    include_observed: bool = Query(False),
     person_id: str = Depends(get_person_id)
 ):
     try:
-        return await engine.get_cross_stage_bridge(person_id, current_concept=concept or "Tree Traversal")
+        return await engine.get_cross_stage_bridge(
+            person_id, current_concept=concept or "Tree Traversal",
+            include_observed=include_observed
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve cross-stage bridge: {str(e)}")
 
@@ -163,6 +167,7 @@ async def get_debug_proactive_context(
     current_concept: Optional[str] = Query(None),
     current_goal: Optional[str] = Query(None),
     target_direction: Optional[str] = Query(None),
+    include_observed: bool = Query(False),
     person_id: str = Depends(get_person_id)
 ):
     """
@@ -176,7 +181,8 @@ async def get_debug_proactive_context(
             task_type=task_type or "NEXT_LEARNING_ACTION",
             current_concept=current_concept,
             current_goal=current_goal,
-            target_direction=target_direction
+            target_direction=target_direction,
+            include_observed=include_observed
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate proactive memory context: {str(e)}")

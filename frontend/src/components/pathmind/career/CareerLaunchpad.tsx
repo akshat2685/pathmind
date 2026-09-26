@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { authedFetch } from "@/lib/api";
 import Link from "next/link";
 import {
   Target,
@@ -208,12 +209,6 @@ interface CareerReadinessReportData {
   tailored_resume_preview?: TailoredResumeData | null;
   error_state?: string | null;
 }
-const getPersonId = (): string => {
-  if (typeof window === "undefined") return "scholar-user";
-  const name = localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-");
-  return name || "scholar-user";
-};
-
 export function CareerLaunchpad() {
   const [report, setReport] = useState<CareerReadinessReportData | null>(null);
   const [checkpoints, setCheckpoints] = useState<CareerCheckpointData[]>([]);
@@ -225,19 +220,13 @@ export function CareerLaunchpad() {
   const fetchReadiness = useCallback(async () => {
     setLoading(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = getPersonId();
       const stateVal = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_identity") || "college_student")
         : "college_student";
 
       const [resReport, resCheckpoints] = await Promise.all([
-        fetch(`${baseUrl}/api/career/readiness?current_state=${encodeURIComponent(stateVal)}`, {
-          headers: { "X-Person-ID": personId }
-        }),
-        fetch(`${baseUrl}/api/career/checkpoints`, {
-          headers: { "X-Person-ID": personId }
-        })
+        authedFetch(`/api/career/readiness?current_state=${encodeURIComponent(stateVal)}`),
+        authedFetch(`/api/career/checkpoints`)
       ]);
 
       if (resReport.ok) {
@@ -265,12 +254,8 @@ export function CareerLaunchpad() {
     setIsRecordingCheckpoint(true);
     setCheckpointSuccess(false);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = getPersonId();
-
-      const res = await fetch(`${baseUrl}/api/career/checkpoint`, {
-        method: "POST",
-        headers: { "X-Person-ID": personId }
+      const res = await authedFetch(`/api/career/checkpoint`, {
+        method: "POST"
       });
       if (res.ok) {
         const newChk = await res.json();

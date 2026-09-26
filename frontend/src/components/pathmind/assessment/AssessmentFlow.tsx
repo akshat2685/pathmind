@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { QuestionCard } from "./QuestionCard";
 import { CounselingDashboard } from "./CounselingDashboard";
 import { EvidenceItem } from "@/components/pathmind/steps/EvidenceStep";
+import { authedFetch } from "@/lib/api";
 
 interface AssessmentItemDef {
   id: string;
@@ -253,7 +254,7 @@ export function AssessmentFlow() {
       // Fetch dynamic assessment if goal exists
       if (savedGoal) {
         setIsLoadingAssessment(true);
-        fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com"}/api/assessments/dynamic/generate`, {
+        authedFetch(`/api/assessments/dynamic/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ goal: savedGoal })
@@ -361,9 +362,6 @@ export function AssessmentFlow() {
       setIsSynthesizing(true);
       
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-        const personId = userName ? userName.toLowerCase().replace(/\s+/g, "-") : "scholar-user";
-        
         // Extract dynamic items
         const dynamicItems = assessmentBattery.filter(q => q.id.startsWith('dyn_'));
         const dynamicResp = dynamicItems.map(q => ({
@@ -392,14 +390,12 @@ export function AssessmentFlow() {
           response_value: newResponses[k] || ""
         }));
 
-        const res = await fetch(`${baseUrl}/api/counseling/synthesize`, {
+        const res = await authedFetch(`/api/counseling/synthesize`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "X-Person-ID": personId
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            person_id: personId,
             goals: userGoal ? [userGoal] : [],
             constraints: userIdentity ? [`Status: ${userIdentity}`] : [],
             evidence: evidenceList,

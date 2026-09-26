@@ -45,19 +45,8 @@ async def get_progress_insights(person_id: str = Depends(get_person_id)):
     try:
         raw = await progress_service.store.get_progress_insights(person_id, status="ACTIVE")
         if not raw:
-            # Generate initial active growth insight
-            state = await progress_service.assemble_longitudinal_state(person_id)
-            ins = ProgressInsight(
-                person_id=person_id,
-                type="GROWTH_OBSERVATION",
-                claim=f"Demonstrated steady milestone progress across {state.current_state_summary.get('completed_stages', 0)} stages in {state.current_state_summary.get('active_target_role')}.",
-                supporting_events=["Stage progression and verified artifact evaluations."],
-                supporting_evidence=[],
-                time_range="Active Enrollment",
-                confidence="HIGH"
-            )
-            await progress_service.store.save_progress_insight(person_id, ins.model_dump())
-            return [ins]
+            # Honest empty state: no insights exist yet. Never invent one.
+            return []
         return [ProgressInsight(**i) for i in raw]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch insights: {str(e)}")

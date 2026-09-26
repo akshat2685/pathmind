@@ -31,6 +31,10 @@ class MemoryItem(BaseModel):
     confidence: str = "HIGH"  # HIGH, MEDIUM, LOW, UNKNOWN
     importance: str = "HIGH"  # LOW, MEDIUM, HIGH, CRITICAL
     lifecycle_status: str = "CURRENT"  # CURRENT, HISTORICAL, SUPERSEDED, EXPIRED, UNKNOWN (also accepts ACTIVE)
+    # Promotion lifecycle (spec §13): OBSERVED -> CANDIDATE -> DURABLE.
+    # New memories start as OBSERVED; only promoted ones drive behavior.
+    promotion_status: str = "OBSERVED"  # OBSERVED, CANDIDATE, DURABLE
+    observation_count: int = 1  # times this pattern has been observed
     valid_from: Optional[str] = None
     valid_until: Optional[str] = None
     parent_memory_id: Optional[str] = None
@@ -75,6 +79,7 @@ class MemoryRecallQuery(BaseModel):
     person_id: str = "scholar-user"
     query: str
     current_concept: Optional[str] = None
+    include_observed: bool = False  # opt in to unconfirmed OBSERVED memories
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -111,6 +116,7 @@ class SecondBrainQueryRequest(BaseModel):
     query: str
     current_task_context: Optional[str] = None
     target_role: Optional[str] = None
+    include_observed: bool = False  # opt in to unconfirmed OBSERVED memories
 
     model_config = ConfigDict(populate_by_name=True)
 

@@ -53,7 +53,8 @@ class MemoryEngine:
             person_id=query.person_id,
             req=SecondBrainQueryRequest(
                 query=query.query,
-                current_task_context=query.current_concept
+                current_task_context=query.current_concept,
+                include_observed=query.include_observed
             )
         )
 
@@ -69,14 +70,18 @@ class MemoryEngine:
     async def get_cross_stage_bridge(
         self,
         person_id: str,
-        current_concept: Optional[str] = None
+        current_concept: Optional[str] = None,
+        include_observed: bool = False
     ) -> CrossStageBridgeResponse:
         """
         Past → Present Concept Bridge:
         Identifies and explains how past mastered concepts scaffold into new learning contexts from real memories.
+        Only promoted (CANDIDATE/DURABLE) memories bridge stages unless include_observed=True.
         """
         raw_mems = await self.store.get_personal_memories(person_id)
         memories = [MemoryItem(**m) for m in raw_mems]
+        if not include_observed:
+            memories = [m for m in memories if m.promotion_status in ("CANDIDATE", "DURABLE")]
 
         if not current_concept:
             # Check active roadmap stage

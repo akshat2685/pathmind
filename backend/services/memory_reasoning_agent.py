@@ -50,9 +50,10 @@ class MemoryReasoningAgent:
 
         if self.gemini_available:
             try:
-                import google.generativeai as genai
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                from backend.core.gemini import get_gemini_model, GeminiUnavailable
+                model = get_gemini_model()
+                if model is None:
+                    raise GeminiUnavailable("Gemini API key not configured")
 
                 prompt = f"""You are PATHMIND's Personal Second Brain Reasoning Agent.
 You answer the user's question about their own learning, project, or career history.

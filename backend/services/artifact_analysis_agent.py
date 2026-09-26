@@ -48,9 +48,10 @@ class ArtifactAnalysisAgent:
         dimensions: ArtifactQualityDimensions
     ) -> Optional[ArtifactAnalysisResult]:
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            from backend.core.gemini import get_gemini_model, GeminiUnavailable
+            model = get_gemini_model()
+            if model is None:
+                raise GeminiUnavailable("Gemini API key not configured")
 
             obs_summary = "\n".join([f"- [{o.category}] {'(Demonstrated)' if o.is_demonstrated else '(Mentioned Only)'} {o.detail}" for o in observations])
             prompt = f"""You are the PATHMIND Artifact Intelligence Agent.

@@ -231,7 +231,9 @@ class PersonalAgentEngine:
 
         # Map to canonical LearningSignal
         if evaluation.status == "PASS":
-            sig_type = "TRANSFER_DEMONSTRATED" if evaluation.mastery_dimensions.transfer >= 75.0 else "MASTERY_DEMONSTRATED"
+            _md = evaluation.mastery_dimensions
+            _transfer = _md.transfer if _md and _md.transfer is not None else 0.0
+            sig_type = "TRANSFER_DEMONSTRATED" if _transfer >= 75.0 else "MASTERY_DEMONSTRATED"
             signal = LearningSignal(
                 person_id=person_id,
                 type=sig_type,
@@ -247,7 +249,9 @@ class PersonalAgentEngine:
             updated_model = await self.get_or_create_agent_model(person_id)
             if concept not in updated_model.strengths:
                 updated_model.strengths.append(concept)
-            updated_model.skill_evidence[concept] = f"Demonstrated in {stage_id} with score {evaluation.mastery_dimensions.accuracy}%"
+            _acc = _md.accuracy if _md and _md.accuracy is not None else None
+            _acc_text = f" with score {_acc}%" if _acc is not None else " (mastery not yet rubric-assessed)"
+            updated_model.skill_evidence[concept] = f"Demonstrated in {stage_id}{_acc_text}"
             updated_model.longitudinal_memories.append(
                 LongitudinalMemory(
                     person_id=person_id,

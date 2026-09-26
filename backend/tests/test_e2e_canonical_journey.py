@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.services.supabase_adapter import get_authenticated_person
 from backend.services.store import FirestoreStore
 
 client = TestClient(app)
@@ -31,7 +32,11 @@ def test_canonical_product_journey_e2e(clean_store):
     14. Longitudinal Model State Assembly
     """
     person_id = "evaluator-engineer-2026"
-    headers = {"X-Person-ID": person_id}
+    # New auth: Bearer JWT verified via Supabase. Override dependency for E2E.
+    async def _mock_auth():
+        return person_id
+    app.dependency_overrides[get_authenticated_person] = _mock_auth
+    headers = {"Authorization": "Bearer e2e-test-token"}
 
     # 1. AUTHENTICATE & SYSTEM READINESS
     health_res = client.get("/health/ready")
@@ -249,3 +254,4 @@ def test_canonical_product_journey_e2e(clean_store):
     assert longitudinal_state["person_id"] == person_id
     assert "current_state_summary" in longitudinal_state
     assert "capability_history" in longitudinal_state
+    app.dependency_overrides.pop(get_authenticated_person, None)

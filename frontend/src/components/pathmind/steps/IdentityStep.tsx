@@ -12,6 +12,7 @@ const personas = [
   { id: "school", title: "School Student", icon: "school", desc: "Exploring future horizons and possibilities" },
   { id: "college", title: "College Student", icon: "account_balance", desc: "Choosing a major and preparing for graduation" },
   { id: "professional", title: "Professional", icon: "work", desc: "Advancing within my current field and craft" },
+  { id: "business", title: "Business Owner", icon: "storefront", desc: "Running my own venture and growing it" },
   { id: "switcher", title: "Career Switcher", icon: "alt_route", desc: "Transitioning toward a completely new discipline" },
   { id: "lifelong", title: "Lifelong Scholar", icon: "menu_book", desc: "Pursuing self-directed intellectual mastery" },
 ];
