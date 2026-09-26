@@ -420,8 +420,21 @@ Make the first two MCQs and the last one SHORT_ANSWER.
                 student_ans = (submission.answers.get(q.question_id) or "").strip()
                 marks = float(q.marks or 0)
                 if q.question_type == "MCQ":
+                    correct = q.correct_answer
+                    # The generator stores the correct answer as a letter
+                    # (A/B/C/D) while the frontend submits the selected
+                    # option text. Resolve letters to option text on both
+                    # sides so real student answers actually score.
+                    def _resolve_mcq(ans: str) -> str:
+                        a = (ans or "").strip()
+                        if len(a) == 1 and a.upper() in "ABCD" and q.options:
+                            idx = "ABCD".index(a.upper())
+                            if 0 <= idx < len(q.options):
+                                return q.options[idx]
+                        return a
                     graded[i] = (
-                        score_mcq_answer(student_ans, q.correct_answer, marks),
+                        score_mcq_answer(_resolve_mcq(student_ans),
+                                         _resolve_mcq(correct), marks),
                         CONFIDENCE_DETERMINISTIC, False,
                         "Deterministic exact-match scoring.")
                 else:
