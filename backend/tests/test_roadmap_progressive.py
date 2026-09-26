@@ -21,7 +21,7 @@ def store():
     return FirestoreStore()
 
 @pytest.mark.asyncio
-async def test_roadmap_generation_and_progressive_disclosure(engine):
+async def test_roadmap_generation_and_progressive_disclosure(requires_live_db, engine):
     person_id = "scholar-roadmap-test-1"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -47,7 +47,7 @@ async def test_roadmap_generation_and_progressive_disclosure(engine):
     assert len(locked_stage_2.resources) == 0
 
 @pytest.mark.asyncio
-async def test_backend_lock_enforcement(engine):
+async def test_backend_lock_enforcement(requires_live_db, engine):
     person_id = "scholar-lock-enforce-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -64,7 +64,7 @@ async def test_backend_lock_enforcement(engine):
         await engine.evaluate_evidence_and_progress(person_id, sub_locked)
 
 @pytest.mark.asyncio
-async def test_successful_evidence_evaluation_and_unlock_loop(engine, personal_agent):
+async def test_successful_evidence_evaluation_and_unlock_loop(requires_live_db, engine, personal_agent):
     person_id = "scholar-unlock-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -105,7 +105,7 @@ async def test_successful_evidence_evaluation_and_unlock_loop(engine, personal_a
     assert len(agent_model.longitudinal_memories) >= 2
 
 @pytest.mark.asyncio
-async def test_reinforcement_path_on_insufficient_evidence(engine):
+async def test_reinforcement_path_on_insufficient_evidence(requires_live_db, engine):
     person_id = "scholar-reinforce-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -137,7 +137,7 @@ async def test_reinforcement_path_on_insufficient_evidence(engine):
     assert any("reinf" in m.mission_id for m in stage_1.missions)
 
 @pytest.mark.asyncio
-async def test_constraint_adaptation_preserves_progress(engine):
+async def test_constraint_adaptation_preserves_progress(requires_live_db, engine):
     person_id = "scholar-adapt-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -152,7 +152,7 @@ async def test_constraint_adaptation_preserves_progress(engine):
     assert "Adjusted roadmap pacing for 5 hours/week" in adapted_roadmap.revision_reason
 
 @pytest.mark.asyncio
-async def test_person_isolation_and_cross_stage_memory(personal_agent):
+async def test_person_isolation_and_cross_stage_memory(requires_live_db, personal_agent):
     person_a = "person-alice-1"
     person_b = "person-bob-2"
     
