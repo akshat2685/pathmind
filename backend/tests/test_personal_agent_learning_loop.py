@@ -24,7 +24,7 @@ def adaptation_service(store, personal_agent):
     return AdaptationService(store=store, personal_agent=personal_agent)
 
 @pytest.mark.asyncio
-async def test_strong_evidence_advances_mastery_and_updates_personal_model(mastery_engine, personal_agent):
+async def test_strong_evidence_advances_mastery_and_updates_personal_model(requires_live_db, mastery_engine, personal_agent):
     """Test #1 & #15: Strong evidence advances mastery and updates personal model without LLM mechanics."""
     person_id = "test-learner-loop-1"
     await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -56,7 +56,7 @@ async def test_strong_evidence_advances_mastery_and_updates_personal_model(maste
     assert "Python Foundations & Object-Oriented Engineering" in model.demonstrated_capabilities
 
 @pytest.mark.asyncio
-async def test_plan_stability_on_isolated_failure(mastery_engine, adaptation_service):
+async def test_plan_stability_on_isolated_failure(requires_live_db, mastery_engine, adaptation_service):
     """Test #3: One failed attempt triggers micro-adaptation, not an entire roadmap rewrite."""
     person_id = "test-learner-loop-2"
     rm1 = await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -83,7 +83,7 @@ async def test_plan_stability_on_isolated_failure(mastery_engine, adaptation_ser
     assert micros[0]["adaptation_type"] in ["INJECT_REINFORCEMENT", "EXPLANATION_STYLE"]
 
 @pytest.mark.asyncio
-async def test_misconception_lifecycle(personal_agent):
+async def test_misconception_lifecycle(requires_live_db, personal_agent):
     """Test #6: Misconception detected -> tracked -> resolved upon verified demonstration."""
     person_id = "test-learner-loop-3"
     
@@ -120,7 +120,7 @@ async def test_misconception_lifecycle(personal_agent):
     assert model2.recurring_misconceptions[0].resolution_evidence_id == "sub_2"
 
 @pytest.mark.asyncio
-async def test_regression_risk_detection(mastery_engine, personal_agent):
+async def test_regression_risk_detection(requires_live_db, mastery_engine, personal_agent):
     """Test #7: Subsequent failure on previously mastered prerequisite flags REGRESSION_RISK."""
     person_id = "test-learner-loop-4"
     await mastery_engine.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -160,7 +160,7 @@ async def test_regression_risk_detection(mastery_engine, personal_agent):
     assert "Python Foundations & Object-Oriented Engineering" in model2.regression_risks
 
 @pytest.mark.asyncio
-async def test_rejection_memory_suppresses_recommendation(personal_agent, adaptation_service):
+async def test_rejection_memory_suppresses_recommendation(requires_live_db, personal_agent, adaptation_service):
     """Test #13: Rejected recommendation is stored and not endlessly re-proposed."""
     person_id = "test-learner-loop-5"
     

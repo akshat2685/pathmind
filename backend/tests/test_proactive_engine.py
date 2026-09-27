@@ -56,7 +56,7 @@ async def test_event_deduplication_within_cooldown():
     assert evt2.processed_state == "DEDUPLICATED"
 
 @pytest.mark.asyncio
-async def test_repeated_evidence_failures_trigger_reinforcement():
+async def test_repeated_evidence_failures_trigger_reinforcement(requires_live_db):
     """
     Two consecutive failed attempts on active stage generate a REVIEW_REINFORCEMENT intervention.
     """
@@ -92,7 +92,7 @@ async def test_repeated_evidence_failures_trigger_reinforcement():
     assert "pytest" in reinforce_intv.what_should_i_do
 
 @pytest.mark.asyncio
-async def test_action_and_dismissal_lifecycle():
+async def test_action_and_dismissal_lifecycle(requires_live_db):
     """
     Interventions transition status to ACTED_ON when acted on and DISMISSED when dismissed.
     """
@@ -124,7 +124,7 @@ async def test_action_and_dismissal_lifecycle():
     assert updated["status"] == "ACTED_ON"
 
 @pytest.mark.asyncio
-async def test_notification_preferences_suppress_disabled_categories():
+async def test_notification_preferences_suppress_disabled_categories(requires_live_db):
     """
     Disabling reinforcement alerts in preferences suppresses intervention generation.
     """

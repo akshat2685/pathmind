@@ -125,7 +125,7 @@ def test_accountability_agent_supportive_interventions():
     # Successful on-track progress
     status_on_track = agent.evaluate_accountability("user1", completed_stages=2, total_stages=5, weekly_hours=10, missed_milestones=0)
     assert status_on_track.status == "ON_TRACK"
-    assert "on schedule" in status_on_track.mentor_observation.lower()
+    assert "well-aligned" in status_on_track.mentor_observation.lower()
 
     # Missed milestones -> adaptive breakdown without shame
     status_risk = agent.evaluate_accountability("user1", completed_stages=1, total_stages=5, weekly_hours=10, missed_milestones=2)

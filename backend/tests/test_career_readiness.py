@@ -18,7 +18,7 @@ def store():
     return FirestoreStore()
 
 @pytest.mark.asyncio
-async def test_universal_career_profile_and_target_goal(career_engine, store):
+async def test_universal_career_profile_and_target_goal(requires_live_db, career_engine, store):
     person_id = "test-scholar-universal-profile"
     
     # 1. Canonical Profile — should be empty (no hardcoded defaults)
@@ -36,7 +36,7 @@ async def test_universal_career_profile_and_target_goal(career_engine, store):
     assert goal.priority == "HIGH"
 
 @pytest.mark.asyncio
-async def test_career_requirement_graph_and_gaps(career_engine):
+async def test_career_requirement_graph_and_gaps(requires_live_db, career_engine):
     person_id = "test-scholar-requirement-graph"
     report = await career_engine.generate_career_readiness_report(person_id, current_state_type="college_student")
     
@@ -52,7 +52,7 @@ async def test_career_requirement_graph_and_gaps(career_engine):
     assert "EVIDENCE" in gap_types
 
 @pytest.mark.asyncio
-async def test_transferable_skills_for_switchers_and_students(career_engine):
+async def test_transferable_skills_for_switchers_and_students(requires_live_db, career_engine):
     person_mech = "test-mech-switcher"
     profile_mech = await career_engine.get_or_create_canonical_profile(person_mech, current_state_type="mechanical_engineer")
     
@@ -80,7 +80,7 @@ async def test_credential_agent_decision_logic(career_engine):
         assert "git" in c.strategic_advice.lower() or "repository" in c.strategic_advice.lower() or "project" in c.strategic_advice.lower()
 
 @pytest.mark.asyncio
-async def test_experience_gap_engine_and_roadmap_linkage(career_engine):
+async def test_experience_gap_engine_and_roadmap_linkage(requires_live_db, career_engine):
     profile = await career_engine.get_or_create_canonical_profile("test-exp-person")
     graph = career_engine.build_requirement_graph("Applied Machine Learning Systems Engineer", profile.skills)
     
@@ -92,7 +92,7 @@ async def test_experience_gap_engine_and_roadmap_linkage(career_engine):
         assert len(exp.evidence_to_prove) > 10
 
 @pytest.mark.asyncio
-async def test_career_checkpoint_recording_and_history(career_engine, store):
+async def test_career_checkpoint_recording_and_history(requires_live_db, career_engine, store):
     person_id = "test-scholar-checkpoint"
     checkpoint = await career_engine.record_career_checkpoint(person_id)
     
@@ -106,7 +106,7 @@ async def test_career_checkpoint_recording_and_history(career_engine, store):
     assert history[0]["person_id"] == person_id
 
 @pytest.mark.asyncio
-async def test_career_data_person_isolation(career_engine, store):
+async def test_career_data_person_isolation(requires_live_db, career_engine, store):
     person_a = "career-alice-iso"
     person_b = "career-bob-iso"
     

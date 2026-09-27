@@ -100,7 +100,7 @@ async def test_learning_strategy_evaluation():
     assert proj_strat.successful_evaluations == 1
 
 @pytest.mark.asyncio
-async def test_temporal_queries_with_grounded_provenance():
+async def test_temporal_queries_with_grounded_provenance(requires_live_db):
     """
     LearnerEvolutionAgent answers temporal questions with exact timestamps and falls back cleanly.
     """
@@ -134,7 +134,7 @@ async def test_temporal_queries_with_grounded_provenance():
     assert res2.status == "INSUFFICIENT_HISTORY"
 
 @pytest.mark.asyncio
-async def test_progress_insight_dispute_lifecycle():
+async def test_progress_insight_dispute_lifecycle(requires_live_db):
     """
     Learner can dispute an insight, updating its status to DISPUTED with reason.
     """

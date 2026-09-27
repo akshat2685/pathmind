@@ -166,7 +166,7 @@ async def test_scenario_e_sales_to_product_manager_transition():
     assert "pytorch" not in all_text
 
 @pytest.mark.asyncio
-async def test_scenario_f_honest_insufficient_information_state():
+async def test_scenario_f_honest_insufficient_information_state(requires_live_db):
     """
     Scenario F: Honest Insufficient Information Handling.
     When a production user has no configured goal or profile, the system must NOT

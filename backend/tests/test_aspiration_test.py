@@ -88,6 +88,13 @@ class FakeStore:
                 return r
         return None
 
+    async def get_domain_for_aspiration(self, text):
+        return "general"
+
+    async def get_bank_questions(self, domain, limit=12, tiers=("VERIFIED", "EXPERT_REVIEWED", "AI_DRAFT")):
+        # Bank starts empty in tests: forces the honest AI-generation path.
+        return []
+
 
 @pytest.fixture
 def questions():

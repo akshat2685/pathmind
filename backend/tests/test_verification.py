@@ -71,10 +71,10 @@ def test_unknown_user_type_rejected():
 
 
 def test_salary_and_revenue_never_required():
-    for ut in ("professional", "business"):
-        fields = {f["name"]: f for f in get_requirements(ut)["fields"]}
-    assert fields["salary_range"]["required"] is False
-    assert fields["revenue_range"]["required"] is False
+    prof_fields = {f["name"]: f for f in get_requirements("professional")["fields"]}
+    assert prof_fields["salary_range"]["required"] is False
+    biz_fields = {f["name"]: f for f in get_requirements("business")["fields"]}
+    assert biz_fields["revenue_range"]["required"] is False
     for ut in USER_TYPES:
         for f in get_requirements(ut)["fields"]:
             if f["type"] == "file":

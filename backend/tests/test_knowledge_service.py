@@ -3,7 +3,7 @@ from backend.services.knowledge import KnowledgeService
 from backend.core.schemas import KnowledgeResponse
 
 @pytest.mark.asyncio
-async def test_knowledge_service_health():
+async def test_knowledge_service_health(requires_live_db):
     service = KnowledgeService()
     status = await service.get_health_status()
     
@@ -12,7 +12,7 @@ async def test_knowledge_service_health():
     assert "firestore_cache" in status
 
 @pytest.mark.asyncio
-async def test_knowledge_service_search_graceful_fallback():
+async def test_knowledge_service_search_graceful_fallback(requires_live_db):
     service = KnowledgeService()
     # Ensure it doesn't crash on invalid queries or when external APIs are unavailable
     response = await service.search_occupations("test query", limit=1)

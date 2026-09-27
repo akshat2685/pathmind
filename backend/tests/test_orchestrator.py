@@ -218,7 +218,7 @@ async def test_idempotency_cache(orchestrator):
     # Identical workflow_id returned from cache
     assert res1.workflow_id == res2.workflow_id
 
-def test_fastapi_orchestrator_endpoints():
+def test_fastapi_orchestrator_endpoints(requires_live_db):
     client = TestClient(app)
     headers = {"x-person-id": "test-scholar-orchestrator"}
 

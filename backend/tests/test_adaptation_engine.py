@@ -9,7 +9,7 @@ from backend.services.store import FirestoreStore
 from backend.core.adaptation_schemas import UserAdaptationDecision, StateChangeEvent
 
 @pytest.mark.asyncio
-async def test_goal_change_creates_versioned_proposal_and_requires_approval():
+async def test_goal_change_creates_versioned_proposal_and_requires_approval(requires_live_db):
     """
     Changing target goal must trigger impact analysis, formulate a Roadmap v2 proposal,
     preserve foundational milestones, and require explicit user approval.
@@ -105,7 +105,7 @@ async def test_mastery_risk_triggers_reinforcement_not_downstream_unlock():
     assert "reinforcement" in impact.what_changed.lower()
 
 @pytest.mark.asyncio
-async def test_constraint_change_smoothly_recalibrates():
+async def test_constraint_change_smoothly_recalibrates(requires_live_db):
     """
     Reducing available study hours adjusts pacing smoothly without destroying completed stages.
     """
@@ -130,7 +130,7 @@ async def test_constraint_change_smoothly_recalibrates():
     assert agent_model.learning_preferences["weekly_hours"] == 6
 
 @pytest.mark.asyncio
-async def test_opportunity_driven_adaptation():
+async def test_opportunity_driven_adaptation(requires_live_db):
     """
     Verified opportunity matching triggers review to prioritize relevant milestone projects.
     """
@@ -208,7 +208,7 @@ async def test_conflict_detection_surfaces_evidence_discrepancy():
     assert conflict.recommended_verification_task is not None
 
 @pytest.mark.asyncio
-async def test_roadmap_history_and_isolation():
+async def test_roadmap_history_and_isolation(requires_live_db):
     """
     Past roadmap versions remain retrievable and Person A cannot access Person B's adaptations.
     """
