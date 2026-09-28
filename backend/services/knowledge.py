@@ -8,7 +8,7 @@ from backend.providers.nptel_swayam import NptelSwayamProvider
 from backend.services.pm_store import get_pm_store
 
 class KnowledgeService:
-    def __init__(self):
+    def __init__(self, store=None):
         self.providers = {
             "esco": EscoProvider(),
             "nco": NcoProvider(),
@@ -16,7 +16,7 @@ class KnowledgeService:
             # API as of 2026-09-26); returns zero results, never fabricated.
             "nptel_swayam": NptelSwayamProvider()
         }
-        self.store = get_pm_store()
+        self.store = store or get_pm_store()
 
     def _generate_cache_key(self, method: str, kwargs: Dict[str, Any]) -> str:
         key_str = f"{method}:{json.dumps(kwargs, sort_keys=True)}"
