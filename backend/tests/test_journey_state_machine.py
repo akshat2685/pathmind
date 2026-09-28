@@ -3,13 +3,29 @@ from fastapi.testclient import TestClient
 from backend.main import app
 from backend.services.store import FirestoreStore
 
+
+@pytest.fixture(autouse=True)
+def _mock_route_auth():
+    """Test-only auth override: production routes reject self-asserted
+    x-person-id headers (anti-impersonation). Route tests honor the header."""
+    from fastapi import Header
+    from backend.main import app as _route_app
+    from backend.core.security import get_authenticated_person
+
+    async def _test_auth(x_person_id: str = Header(None)):
+        return x_person_id or "test-route-person"
+
+    _route_app.dependency_overrides[get_authenticated_person] = _test_auth
+    yield
+    _route_app.dependency_overrides.pop(get_authenticated_person, None)
+
 client = TestClient(app)
 
 @pytest.fixture
 def clean_store():
     return FirestoreStore()
 
-def test_complete_guided_journey_state_machine(requires_live_db, clean_store):
+def test_complete_guided_journey_state_machine(clean_store):
     """
     Validates the end-to-end continuous journey state machine:
     1. NAME -> Canonical person ID created & persisted immediately
