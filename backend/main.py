@@ -135,36 +135,48 @@ async def health_live():
 async def health_ready():
     """
     Readiness Check: validates core dependencies can service traffic without leaking internal details.
+    Uses the trust-layer PmStore (Supabase) — a real DB round-trip, no silent in-memory fallbacks.
     """
     from backend.core.config import settings
-    from backend.services.store import FirestoreStore
-    
-    store = FirestoreStore()
-    firestore_status = await store.check_health()
-    gemini_status = "CONFIGURED" if settings.GEMINI_API_KEY else "MISSING"
-    is_ready = firestore_status in ["CONNECTED", "IN_MEMORY_ACTIVE"]
+    from backend.services.pm_store import get_pm_store
+
+    try:
+        store = get_pm_store()
+        await store.check_health()
+        datastore_ok = True
+    except Exception:
+        datastore_ok = False
+    gemini_ok = bool(settings.GEMINI_API_KEY)
 
     return {
-        "status": "ready" if is_ready else "not_ready",
+        "status": "ready" if datastore_ok else "not_ready",
         "dependencies": {
-            "datastore": "healthy" if is_ready else "unhealthy",
-            "ai_reasoning": "configured" if gemini_status == "CONFIGURED" else "degraded"
+            "datastore": "healthy" if datastore_ok else "unhealthy",
+            "ai_reasoning": "configured" if gemini_ok else "degraded"
         }
     }
 
 @app.get("/health")
 async def health_check():
+    """
+    Health Check: reports the real state of the trust-layer datastore (Supabase)
+    and AI reasoning configuration. Returns 200 with an honest status body —
+    a down DB reports 'degraded', it never silently claims health.
+    """
     from backend.core.config import settings
-    from backend.services.store import FirestoreStore
-    
-    store = FirestoreStore()
-    firestore_status = await store.check_health()
+    from backend.services.pm_store import get_pm_store
+
     gemini_status = "CONFIGURED" if settings.GEMINI_API_KEY else "MISSING"
-    
-    if firestore_status != "CONNECTED" or gemini_status == "MISSING":
-        return {"status": "degraded", "firestore": firestore_status, "gemini": gemini_status}
-        
-    return {"status": "ok", "service": "pathmind-backend", "firestore": firestore_status, "gemini": gemini_status}
+    try:
+        store = get_pm_store()
+        datastore_status = await store.check_health()
+    except Exception:
+        return {"status": "degraded", "datastore": "UNREACHABLE", "gemini": gemini_status}
+
+    if datastore_status != "CONNECTED" or gemini_status == "MISSING":
+        return {"status": "degraded", "datastore": datastore_status, "gemini": gemini_status}
+
+    return {"status": "ok", "service": "pathmind-backend", "datastore": datastore_status, "gemini": gemini_status}
 
 if __name__ == "__main__":
     import uvicorn
