@@ -3,11 +3,11 @@ from backend.services.artifact_service import ArtifactService
 from backend.services.step_verification_service import StepVerificationService
 from backend.core.artifact_schemas import CanonicalArtifact
 from backend.core.learning_resource_schemas import StepVerificationSubmission
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     store._in_memory_persons.clear()
     return store
 

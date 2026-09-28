@@ -16,7 +16,7 @@
 -- gen_random_uuid() is built into Postgres 13+; pgcrypto line kept for explicitness.
 create extension if not exists "pgcrypto";
 
--- Person record (Firestore: persons/{id} merge)
+-- Person record (one row per learner in pm_person_records)
 create table if not exists public.pm_persons (
   id uuid not null default gen_random_uuid() primary key,
   person_id text not null,

@@ -7,12 +7,12 @@ import pytest
 from backend.services.second_brain_service import SecondBrainService
 from backend.services.memory_engine import MemoryEngine
 from backend.services.proactive_memory_service import ProactiveMemoryService
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     store._in_memory_persons.clear()
     return store
 

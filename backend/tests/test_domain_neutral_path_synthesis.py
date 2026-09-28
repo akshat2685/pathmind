@@ -1,5 +1,5 @@
 import pytest
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.services.requirement_graph_service import RequirementGraphService
 from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.career_readiness_engine import CareerReadinessEngine
@@ -11,7 +11,7 @@ from backend.core.trajectory_schemas import CandidatePath
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     store._in_memory_persons.clear()
     return store
 

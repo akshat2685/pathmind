@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.opportunity_service import OpportunityService
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.core.career_schemas import UniversalCareerProfile, ProjectItem, ExperienceItem, EducationItem
 
 @pytest.fixture
@@ -15,7 +15,7 @@ def opp_service():
 
 @pytest.fixture
 def store():
-    return FirestoreStore()
+    return InMemoryStore()
 
 @pytest.mark.asyncio
 async def test_universal_career_profile_and_target_goal(requires_live_db, career_engine, store):

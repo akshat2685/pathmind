@@ -21,10 +21,6 @@ class Settings(BaseSettings):
     # ESCO Configuration
     ESCO_API_URL: str = "https://ec.europa.eu/esco/api"
     
-    # Firebase / Firestore config
-    GOOGLE_APPLICATION_CREDENTIALS: str | None = None
-    FIRESTORE_PROJECT_ID: str | None = None
-
     # Supabase config (shared project with College MVP; auth verification
     # only — does not touch college tables)
     SUPABASE_URL: str | None = None

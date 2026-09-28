@@ -10,7 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # We also need google-generativeai and pydantic which were added later
-RUN pip install --no-cache-dir google-generativeai google-cloud-firestore
+RUN pip install --no-cache-dir google-generativeai
 
 # Copy backend source
 COPY . ./backend

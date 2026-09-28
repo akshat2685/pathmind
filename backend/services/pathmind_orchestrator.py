@@ -583,7 +583,7 @@ class PathmindOrchestrator:
     async def init_journey(self, name: str, person_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Requirement 3: CREATE THE CANONICAL PERSON ID IMMEDIATELY AFTER NAME COLLECTION.
-        Persists an initial learner record immediately in Firestore / store.
+        Persists an initial learner record immediately in Supabase (PmStore).
         
         If person_id is provided (authenticated user via Supabase JWT), uses it directly
         to ensure consistency across the authenticated flow. Otherwise, generates a

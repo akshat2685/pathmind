@@ -10,7 +10,7 @@ from backend.core.assessment_schemas import (
     CounselingChatRequest,
     CounselingMessage
 )
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 def test_evidence_classification_and_weighting():
     agent = CounselingAgent()
@@ -100,7 +100,7 @@ def test_categorical_confidence_insufficient_evidence():
 
 def test_counseling_chat_and_memory_isolation():
     agent = CounselingAgent()
-    store = FirestoreStore()
+    store = InMemoryStore()
 
     profile = agent.synthesize_deterministic_profile(
         person_id="user-chat-test",

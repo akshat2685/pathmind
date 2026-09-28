@@ -13,11 +13,11 @@ from backend.core.opportunity_schemas import (
     CanonicalOpportunity,
     CreatePreparationPlanRequest
 )
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     store._in_memory_persons.clear()
     return store
 

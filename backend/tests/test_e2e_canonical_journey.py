@@ -4,13 +4,13 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.core.security import get_authenticated_person
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 client = TestClient(app)
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     return store
 
 def test_canonical_product_journey_e2e(clean_store, requires_live_db):

@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from backend.services.memory_engine import MemoryEngine
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.core.memory_schemas import (
     MemoryRecallQuery,
     MemoryItem,
@@ -14,7 +14,7 @@ def memory_engine():
 
 @pytest.fixture
 def store():
-    return FirestoreStore()
+    return InMemoryStore()
 
 @pytest.mark.asyncio
 async def test_memory_extraction_and_types(requires_live_db, memory_engine, store):
