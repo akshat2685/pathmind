@@ -4,6 +4,7 @@ from backend.services.step_verification_service import StepVerificationService
 from backend.core.artifact_schemas import CanonicalArtifact
 from backend.core.learning_resource_schemas import StepVerificationSubmission
 from backend.services.store import FirestoreStore
+from backend.services.memory_engine import MemoryEngine
 
 @pytest.fixture
 def clean_store():
@@ -13,14 +14,16 @@ def clean_store():
 
 @pytest.fixture
 def artifact_service(clean_store):
-    return ArtifactService(store=clean_store)
+    # MemoryEngine() defaults to the live store; inject the in-memory store so
+    # ingest_artifact's verified-artifact memory write stays in the test double.
+    return ArtifactService(store=clean_store, memory_engine=MemoryEngine(store=clean_store))
 
 @pytest.fixture
 def step_service(clean_store):
     return StepVerificationService(store=clean_store)
 
 @pytest.mark.asyncio
-async def test_real_artifact_ingestion_github(requires_live_db, artifact_service):
+async def test_real_artifact_ingestion_github(artifact_service):
     payload = {
         "source": "GITHUB",
         "url": "https://github.com/scholar-user/fastapi-distributed-engine",
@@ -45,7 +48,7 @@ async def test_real_artifact_ingestion_github(requires_live_db, artifact_service
     assert artifact.analysis.dimensions.testing_evidence == "AUTOMATED_UNIT_TESTS"
 
 @pytest.mark.asyncio
-async def test_mentioned_vs_demonstrated_separation(requires_live_db, artifact_service):
+async def test_mentioned_vs_demonstrated_separation(artifact_service):
     payload = {
         "source": "GITHUB",
         "url": "https://github.com/scholar-user/simple-api",
@@ -88,7 +91,7 @@ async def test_ownership_verification_and_tenant_isolation(artifact_service):
     assert len(arts_bob) == 0
 
 @pytest.mark.asyncio
-async def test_duplicate_detection_and_versioning(requires_live_db, artifact_service):
+async def test_duplicate_detection_and_versioning(artifact_service):
     url = "https://github.com/scholar-user/evolutionary-repo"
     person_ctx = {"name": "Scholar User", "github_username": "scholar-user"}
     
@@ -112,7 +115,7 @@ async def test_duplicate_detection_and_versioning(requires_live_db, artifact_ser
     assert len(all_arts) == 1
 
 @pytest.mark.asyncio
-async def test_candidate_promotion_to_canonical_evidence(requires_live_db, artifact_service):
+async def test_candidate_promotion_to_canonical_evidence(artifact_service):
     payload = {
         "source": "GITHUB",
         "url": "https://github.com/scholar-user/verified-backend",
@@ -140,7 +143,7 @@ async def test_candidate_promotion_to_canonical_evidence(requires_live_db, artif
     assert profiles["Python Implementation"]["mastery_state"] == "APPLICATION"
 
 @pytest.mark.asyncio
-async def test_artifact_defense_mode_workflow(requires_live_db, artifact_service):
+async def test_artifact_defense_mode_workflow(artifact_service):
     payload = {
         "source": "GITHUB",
         "url": "https://github.com/scholar-user/architectural-project",
@@ -172,7 +175,7 @@ async def test_artifact_defense_mode_workflow(requires_live_db, artifact_service
     assert len(evaluated.capabilities_upgraded) > 0
 
 @pytest.mark.asyncio
-async def test_claim_validation(requires_live_db, artifact_service):
+async def test_claim_validation(artifact_service):
     payload = {
         "source": "GITHUB",
         "url": "https://github.com/scholar-user/data-pipeline",
