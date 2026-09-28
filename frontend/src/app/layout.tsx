@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Source_Serif_4, Be_Vietnam_Pro, Caveat } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/auth-context";
 
 const bricolageGrotesque = Bricolage_Grotesque({
   variable: "--font-bricolage",
@@ -52,7 +53,7 @@ export default function RootLayout({
       >
         <div className="watercolor-overlay"></div>
         <div className="paper-texture"></div>
-        {children}
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );
