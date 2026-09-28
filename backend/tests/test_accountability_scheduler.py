@@ -9,6 +9,10 @@ from datetime import datetime, timezone, timedelta
 from backend.services.store import FirestoreStore
 from backend.services.proactive_intervention_engine import ProactiveInterventionEngine
 from backend.services.accountability_scheduler import AccountabilityScheduler
+from backend.services.context_graph_service import ContextGraphService
+from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
+from backend.services.mastery_engine import MasteryEngine
 
 
 @pytest.fixture
@@ -16,6 +20,26 @@ def clean_store():
     store = FirestoreStore()
     store._in_memory_persons.clear()
     return store
+
+
+def _make_engine(store):
+    """Build ProactiveInterventionEngine with every sub-engine store-injected.
+
+    ContextGraphService defaults to live-store RoadmapEngine/CareerReadinessEngine/
+    MasteryEngine; the sweep path (assemble_context_graph) reaches them, so they
+    must get the in-memory store here.
+    """
+    ctx = ContextGraphService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        readiness_engine=CareerReadinessEngine(store=store),
+        mastery_engine=MasteryEngine(store=store),
+    )
+    return ProactiveInterventionEngine(store=store, context_service=ctx)
+
+
+def _make_scheduler(store, **kwargs):
+    return AccountabilityScheduler(store=store, engine=_make_engine(store), **kwargs)
 
 
 def _roadmap(pid: str):
@@ -30,13 +54,13 @@ def _roadmap(pid: str):
 
 
 @pytest.mark.asyncio
-async def test_sweep_generates_intervention_for_struggling_learner(requires_live_db, clean_store):
+async def test_sweep_generates_intervention_for_struggling_learner(clean_store):
     pid = "sweep-learner"
     await clean_store.save_roadmap(pid, _roadmap(pid))
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
 
-    sched = AccountabilityScheduler(store=clean_store)
+    sched = _make_scheduler(clean_store)
     report = await sched.run_accountability_sweep()
 
     assert report["persons_checked"] == 1
@@ -49,13 +73,13 @@ async def test_sweep_generates_intervention_for_struggling_learner(requires_live
 
 
 @pytest.mark.asyncio
-async def test_sweep_is_idempotent_across_runs(requires_live_db, clean_store):
+async def test_sweep_is_idempotent_across_runs(clean_store):
     pid = "sweep-learner-2"
     await clean_store.save_roadmap(pid, _roadmap(pid))
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
 
-    sched = AccountabilityScheduler(store=clean_store)
+    sched = _make_scheduler(clean_store)
     first = await sched.run_accountability_sweep()
     second = await sched.run_accountability_sweep()
 
@@ -67,7 +91,7 @@ async def test_sweep_is_idempotent_across_runs(requires_live_db, clean_store):
 
 
 @pytest.mark.asyncio
-async def test_dedup_retires_duplicate_of_recent_live_intervention(requires_live_db, clean_store):
+async def test_dedup_retires_duplicate_of_recent_live_intervention(clean_store):
     pid = "sweep-learner-3"
     await clean_store.save_roadmap(pid, _roadmap(pid))
     await clean_store.save_evaluation_attempt(pid, {"stage_id": "s1", "status": "REINFORCE"})
@@ -85,7 +109,7 @@ async def test_dedup_retires_duplicate_of_recent_live_intervention(requires_live
                                               "status": "PENDING", "created_at": two_h,
                                               "title": "old"})
 
-    engine = ProactiveInterventionEngine(store=clean_store)
+    engine = _make_engine(clean_store)
     kept = await engine.generate_interventions_deduplicated(pid, window_hours=6)
 
     assert kept == []
@@ -109,20 +133,20 @@ async def test_sweep_skips_persons_without_roadmaps(clean_store):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_start_fails_loudly_when_db_unreachable(requires_live_db, clean_store):
+async def test_scheduler_start_fails_loudly_when_db_unreachable(clean_store):
     class DeadStore(FirestoreStore):
         async def check_health(self):
             return "SOURCE_UNAVAILABLE"
 
-    sched = AccountabilityScheduler(store=DeadStore())
+    sched = _make_scheduler(DeadStore())
     with pytest.raises(RuntimeError, match="ACCOUNTABILITY_SCHEDULER_DB_UNREACHABLE"):
         await sched.start()
     assert not sched.scheduler.running
 
 
 @pytest.mark.asyncio
-async def test_scheduler_job_runs_every_six_hours(requires_live_db, clean_store):
-    sched = AccountabilityScheduler(store=clean_store, interval_hours=6)
+async def test_scheduler_job_runs_every_six_hours(clean_store):
+    sched = _make_scheduler(clean_store, interval_hours=6)
     jobs = sched.scheduler.get_jobs()
     assert len(jobs) == 1
     assert jobs[0].id == "accountability_sweep"
