@@ -15,6 +15,22 @@ from backend.core.opportunity_schemas import (
 )
 from backend.services.store import FirestoreStore
 
+
+@pytest.fixture(autouse=True)
+def _mock_route_auth():
+    """Test-only auth override: production routes reject self-asserted
+    x-person-id headers (anti-impersonation). Route tests honor the header."""
+    from fastapi import Header
+    from backend.main import app as _route_app
+    from backend.core.security import get_authenticated_person
+
+    async def _test_auth(x_person_id: str = Header(None)):
+        return x_person_id or "test-route-person"
+
+    _route_app.dependency_overrides[get_authenticated_person] = _test_auth
+    yield
+    _route_app.dependency_overrides.pop(get_authenticated_person, None)
+
 @pytest.fixture
 def clean_store():
     store = FirestoreStore()
@@ -227,7 +243,7 @@ async def test_tenant_isolation_opportunities(matching_engine):
     assert len(alex_actions) >= 0
     assert len(bob_actions) == 0
 
-def test_fastapi_opportunity_endpoints(requires_live_db, matching_engine):
+def test_fastapi_opportunity_endpoints(matching_engine):
     from backend.api import opportunity_routes
     original_engine = opportunity_routes.matching_engine
     opportunity_routes.matching_engine = matching_engine
