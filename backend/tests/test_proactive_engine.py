@@ -2,7 +2,28 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.event_bus_service import EventBusService
 from backend.services.proactive_intervention_engine import ProactiveInterventionEngine
+from backend.services.context_graph_service import ContextGraphService
+from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.memory_engine import MemoryEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.store import FirestoreStore
+
+@pytest.fixture
+def proactive_setup():
+    """
+    ProactiveInterventionEngine with the in-memory FirestoreStore injected through
+    the whole nested chain: ContextGraphService -> roadmap/memory/readiness engines.
+    (ContextGraphService defaults would build those engines on the live Supabase store.)
+    """
+    store = FirestoreStore()
+    context_service = ContextGraphService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        memory_engine=MemoryEngine(store=store),
+        readiness_engine=CareerReadinessEngine(store=store),
+    )
+    engine = ProactiveInterventionEngine(store=store, context_service=context_service)
+    return engine, store
 
 @pytest.mark.asyncio
 async def test_event_ingestion_and_provenance():
@@ -56,12 +77,11 @@ async def test_event_deduplication_within_cooldown():
     assert evt2.processed_state == "DEDUPLICATED"
 
 @pytest.mark.asyncio
-async def test_repeated_evidence_failures_trigger_reinforcement(requires_live_db):
+async def test_repeated_evidence_failures_trigger_reinforcement(proactive_setup):
     """
     Two consecutive failed attempts on active stage generate a REVIEW_REINFORCEMENT intervention.
     """
-    store = FirestoreStore()
-    engine = ProactiveInterventionEngine(store=store)
+    engine, store = proactive_setup
     person_id = "test-fail-pattern"
 
     # Initialize roadmap
@@ -92,12 +112,11 @@ async def test_repeated_evidence_failures_trigger_reinforcement(requires_live_db
     assert "pytest" in reinforce_intv.what_should_i_do
 
 @pytest.mark.asyncio
-async def test_action_and_dismissal_lifecycle(requires_live_db):
+async def test_action_and_dismissal_lifecycle(proactive_setup):
     """
     Interventions transition status to ACTED_ON when acted on and DISMISSED when dismissed.
     """
-    store = FirestoreStore()
-    engine = ProactiveInterventionEngine(store=store)
+    engine, store = proactive_setup
     person_id = "test-lifecycle-learner"
 
     # Save an intervention
@@ -124,12 +143,11 @@ async def test_action_and_dismissal_lifecycle(requires_live_db):
     assert updated["status"] == "ACTED_ON"
 
 @pytest.mark.asyncio
-async def test_notification_preferences_suppress_disabled_categories(requires_live_db):
+async def test_notification_preferences_suppress_disabled_categories(proactive_setup):
     """
     Disabling reinforcement alerts in preferences suppresses intervention generation.
     """
-    store = FirestoreStore()
-    engine = ProactiveInterventionEngine(store=store)
+    engine, store = proactive_setup
     person_id = "test-prefs-learner"
 
     await engine.context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
