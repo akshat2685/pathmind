@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { NotificationCenter } from "@/components/pathmind/proactive/NotificationCenter";
+import { getSupabaseClient } from "@/lib/supabase";
 
 interface TopBarProps {
   scholarName?: string | null;
@@ -10,6 +12,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ scholarName: propName, personId: propId }: TopBarProps = {}) {
+  const router = useRouter();
   const [scholarName, setScholarName] = useState<string | null>(propName || null);
   const [personId, setPersonId] = useState<string | null>(propId || null);
 
@@ -48,6 +51,21 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
         window.location.reload();
       }
     }
+  };
+
+  const handleSignOut = async () => {
+    const client = getSupabaseClient();
+    if (client) {
+      await client.auth.signOut();
+    }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("pathmind_person_id");
+      localStorage.removeItem("pathmind_user_name");
+      localStorage.removeItem("pathmind_user_identity");
+      localStorage.removeItem("pathmind_user_goal");
+      localStorage.removeItem("pathmind_user_evidence");
+    }
+    router.replace("/signin");
   };
 
   return (
@@ -97,6 +115,15 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
             <span className="hidden sm:inline">Reset</span>
           </button>
         )}
+
+        <button
+          onClick={handleSignOut}
+          title="Sign out"
+          className="text-xs text-on-surface-variant hover:text-error transition-colors px-2.5 py-1 rounded border border-outline-variant/40 hover:border-error/40 flex items-center gap-1 cursor-pointer font-note-handwritten text-sm"
+        >
+          <span className="material-symbols-outlined text-sm">logout</span>
+          <span className="hidden sm:inline">Sign out</span>
+        </button>
 
         <NotificationCenter />
       </div>
