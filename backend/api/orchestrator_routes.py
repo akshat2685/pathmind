@@ -9,12 +9,12 @@ from backend.core.orchestration_schemas import (
     OrchestrationResponse
 )
 from backend.services.pathmind_orchestrator import PathmindOrchestrator
-from backend.services.pm_store import get_pm_store
+from backend.services.store import FirestoreStore
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/orchestrate", tags=["Unified Agent Orchestration & Control Tower"])
-store = get_pm_store()
+store = FirestoreStore()
 orchestrator = PathmindOrchestrator(store=store)
 get_person_id = get_authenticated_person
 
@@ -116,13 +116,33 @@ class PhaseEvidenceRequest(BaseModel):
     content_payload: Dict[str, Any]
 
 @router.post("/journey/init")
-async def init_journey(request: InitJourneyRequest):
+async def init_journey(
+    request: InitJourneyRequest,
+    authorization: Optional[str] = Header(None)
+):
     """
     Requirement 3: Canonical person ID created immediately after name collection.
     Persists initial learner record.
+    
+    If a valid Supabase JWT is provided, uses the Supabase user ID as the person_id
+    to ensure consistency across the authenticated flow. Otherwise, generates a
+    random person_id for unauthenticated/backwards-compatible usage.
     """
     try:
-        return await orchestrator.init_journey(name=request.name)
+        # Try to extract authenticated person_id from JWT if present
+        authenticated_person_id = None
+        if authorization and authorization.startswith("Bearer "):
+            try:
+                authenticated_person_id = get_authenticated_person(authorization=authorization)
+            except HTTPException:
+                # If JWT verification fails, fall back to generated ID
+                # (the error will be raised by subsequent endpoints that require auth)
+                pass
+        
+        return await orchestrator.init_journey(
+            name=request.name,
+            person_id=authenticated_person_id
+        )
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
@@ -146,7 +166,7 @@ async def record_aspiration(
     person_id: str = Depends(get_person_id)
 ):
     """
-    Records aspiration and learner stage. Returns evidence requirements PLUS immediate aspiration intelligence (potential, gaps, path outline, clarifying questions).
+    Records aspiration and learner stage, returns grounded evidence requirements.
     """
     try:
         return await orchestrator.record_aspiration_and_stage(
@@ -159,30 +179,6 @@ async def record_aspiration(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to record aspiration: {str(e)}")
-
-@router.post("/journey/grounded-assessment")
-async def grounded_assessment(
-    person_id: str = Depends(get_person_id)
-):
-    """
-    Generates the grounded potential assessment (potential, strengths,
-    gaps, path outline) based on the learner's REAL evidence: verification
-    data (marks, results, experience) + aptitude test results.
-
-    Call this AFTER verification and test are complete — the assessment
-    is only meaningful when grounded in what the learner has proven.
-    """
-    try:
-        state = await orchestrator.get_journey_state(person_id)
-        if not state.get("aspiration"):
-            raise HTTPException(status_code=400, detail="No aspiration recorded yet.")
-        return await orchestrator.generate_grounded_assessment(
-            person_id=person_id,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate assessment: {str(e)}")
 
 @router.post("/journey/evidence")
 async def submit_evidence(
