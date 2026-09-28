@@ -11,6 +11,22 @@ from backend.core.career_schemas import (
     ProjectItem,
     CredentialItem
 )
+from backend.services.store import FirestoreStore
+
+
+@pytest.fixture
+def store():
+    return FirestoreStore()
+
+
+@pytest.fixture
+def roadmap_engine(store):
+    return RoadmapEngine(store=store)
+
+
+@pytest.fixture
+def career_engine(store):
+    return CareerReadinessEngine(store=store)
 
 @pytest.mark.asyncio
 async def test_scenario_a_product_designer_diversity():
@@ -166,15 +182,13 @@ async def test_scenario_e_sales_to_product_manager_transition():
     assert "pytorch" not in all_text
 
 @pytest.mark.asyncio
-async def test_scenario_f_honest_insufficient_information_state(requires_live_db):
+async def test_scenario_f_honest_insufficient_information_state(roadmap_engine, career_engine):
     """
     Scenario F: Honest Insufficient Information Handling.
     When a production user has no configured goal or profile, the system must NOT
     silently manufacture an AI/ML roadmap or hallucinated GitHub projects.
+    (Both code paths are deterministic and store-only; no PersonalAgentEngine.)
     """
-    roadmap_engine = RoadmapEngine()
-    career_engine = CareerReadinessEngine()
-
     unseeded_user = "prod_fresh_user_9999"
 
     # 1. Roadmap engine raises clear NEEDS_USER_INPUT error
