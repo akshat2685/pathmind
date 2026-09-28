@@ -13,7 +13,7 @@ def clean_store():
     store = FirestoreStore()
     return store
 
-def test_canonical_product_journey_e2e(clean_store, requires_live_db):
+def test_canonical_product_journey_e2e(clean_store):
     """
     Validates the complete 14-step Canonical Product Journey:
     1. Authenticate & System Readiness
