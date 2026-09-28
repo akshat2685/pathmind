@@ -2,7 +2,28 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.trust_provenance_service import TrustProvenanceService
 from backend.services.recommendation_explanation_service import RecommendationExplanationService
+from backend.services.context_graph_service import ContextGraphService
+from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.memory_engine import MemoryEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.store import FirestoreStore
+
+@pytest.fixture
+def explanation_setup():
+    """
+    RecommendationExplanationService with the in-memory FirestoreStore injected
+    through the whole nested chain: ContextGraphService -> roadmap/memory/readiness engines.
+    (ContextGraphService defaults would build those engines on the live Supabase store.)
+    """
+    store = FirestoreStore()
+    context_service = ContextGraphService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        memory_engine=MemoryEngine(store=store),
+        readiness_engine=CareerReadinessEngine(store=store),
+    )
+    service = RecommendationExplanationService(store=store, context_service=context_service)
+    return service, store
 
 @pytest.mark.asyncio
 async def test_provenance_grounding_and_epistemic_classification():
@@ -71,12 +92,11 @@ async def test_safety_guardrails_block_clinical_and_guarantee_claims():
     assert res3.safety_category == "PASSED"
 
 @pytest.mark.asyncio
-async def test_why_this_and_why_not_explainability(requires_live_db):
+async def test_why_this_and_why_not_explainability(explanation_setup):
     """
     RecommendationExplanationService provides grounded 'Why This?' and 'Why Not?' explanations.
     """
-    store = FirestoreStore()
-    explanation_service = RecommendationExplanationService(store=store)
+    explanation_service, store = explanation_setup
     person_id = "test-explain-learner"
 
     await explanation_service.context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -112,12 +132,11 @@ async def test_why_this_and_why_not_explainability(requires_live_db):
     assert len(explanation.unknowns_summary) > 0
 
 @pytest.mark.asyncio
-async def test_user_autonomy_decision_and_feedback(requires_live_db):
+async def test_user_autonomy_decision_and_feedback(explanation_setup):
     """
     Learner can accept, decline, or choose alternatives, and provide structured feedback.
     """
-    store = FirestoreStore()
-    explanation_service = RecommendationExplanationService(store=store)
+    explanation_service, store = explanation_setup
     person_id = "test-autonomy-learner"
 
     rec = await explanation_service.generate_structured_recommendation(
