@@ -9,19 +9,19 @@ from backend.core.roadmap_schemas import (
 )
 
 @pytest.fixture
-def engine():
-    return RoadmapEngine()
+def engine(store):
+    return RoadmapEngine(store=store)
 
 @pytest.fixture
-def personal_agent():
-    return PersonalAgentEngine()
+def personal_agent(store):
+    return PersonalAgentEngine(store=store)
 
 @pytest.fixture
 def store():
     return FirestoreStore()
 
 @pytest.mark.asyncio
-async def test_roadmap_generation_and_progressive_disclosure(requires_live_db, engine):
+async def test_roadmap_generation_and_progressive_disclosure(engine):
     person_id = "scholar-roadmap-test-1"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -47,7 +47,7 @@ async def test_roadmap_generation_and_progressive_disclosure(requires_live_db, e
     assert len(locked_stage_2.resources) == 0
 
 @pytest.mark.asyncio
-async def test_backend_lock_enforcement(requires_live_db, engine):
+async def test_backend_lock_enforcement(engine):
     person_id = "scholar-lock-enforce-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -64,7 +64,7 @@ async def test_backend_lock_enforcement(requires_live_db, engine):
         await engine.evaluate_evidence_and_progress(person_id, sub_locked)
 
 @pytest.mark.asyncio
-async def test_successful_evidence_evaluation_and_unlock_loop(requires_live_db, engine, personal_agent):
+async def test_successful_evidence_evaluation_and_unlock_loop(engine, personal_agent):
     person_id = "scholar-unlock-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -82,7 +82,10 @@ async def test_successful_evidence_evaluation_and_unlock_loop(requires_live_db, 
     
     eval_result = await engine.evaluate_evidence_and_progress(person_id, valid_sub)
     assert eval_result.status == "PASS"
-    assert eval_result.mastery_dimensions.accuracy >= 80.0
+    # Honest contract: the automated check confirms substantive content, but no
+    # rubric has measured mastery yet, so mastery_dimensions stays None —
+    # scores are never fabricated on a keyword pass.
+    assert eval_result.mastery_dimensions is None
     assert len(eval_result.demonstrated) >= 2
 
     # Verify Stage 1 is COMPLETED and Stage 2 is UNLOCKED
@@ -105,7 +108,7 @@ async def test_successful_evidence_evaluation_and_unlock_loop(requires_live_db, 
     assert len(agent_model.longitudinal_memories) >= 2
 
 @pytest.mark.asyncio
-async def test_reinforcement_path_on_insufficient_evidence(requires_live_db, engine):
+async def test_reinforcement_path_on_insufficient_evidence(engine):
     person_id = "scholar-reinforce-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -137,7 +140,7 @@ async def test_reinforcement_path_on_insufficient_evidence(requires_live_db, eng
     assert any("reinf" in m.mission_id for m in stage_1.missions)
 
 @pytest.mark.asyncio
-async def test_constraint_adaptation_preserves_progress(requires_live_db, engine):
+async def test_constraint_adaptation_preserves_progress(engine):
     person_id = "scholar-adapt-test"
     roadmap = await engine.get_or_create_roadmap(person_id=person_id, target_outcome="Applied AI Specialist")
     
@@ -152,7 +155,7 @@ async def test_constraint_adaptation_preserves_progress(requires_live_db, engine
     assert "Adjusted roadmap pacing for 5 hours/week" in adapted_roadmap.revision_reason
 
 @pytest.mark.asyncio
-async def test_person_isolation_and_cross_stage_memory(requires_live_db, personal_agent):
+async def test_person_isolation_and_cross_stage_memory(personal_agent):
     person_a = "person-alice-1"
     person_b = "person-bob-2"
     
