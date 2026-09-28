@@ -23,12 +23,19 @@ export default function LoginPage() {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
-        setMessage("Welcome! Please check your email to confirm your account before logging in.");
+        // When email confirmation is disabled (mailer_autoconfirm), signUp
+        // returns a session immediately — the traveler is already signed in.
+        // Only promise a confirmation email when one is actually pending.
+        if (data.session) {
+          router.push("/");
+        } else {
+          setMessage("Welcome! Please check your email to confirm your account before logging in.");
+        }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -154,7 +161,7 @@ export default function LoginPage() {
                     The traveler registry is now securely managed. To enter your academic journey, please authenticate using your email and password.
                   </p>
                   <p className="text-[11px] text-[#252321]/70">
-                    If you are a new scholar, use the &quot;New Traveler&quot; option to register your credentials. A confirmation link will be sent to your email.
+                    If you are a new scholar, use the &quot;New Traveler&quot; option to register your credentials. You will be signed in immediately.
                   </p>
                 </div>
               </div>
