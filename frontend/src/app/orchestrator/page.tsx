@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import type { Metadata } from "next";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -9,6 +10,14 @@ export const metadata: Metadata = {
 };
 
 export default function OrchestratorPage() {
+  return (
+    <AuthGate>
+      <OrchestratorPageInner />
+    </AuthGate>
+  );
+}
+
+function OrchestratorPageInner() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />
