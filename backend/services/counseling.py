@@ -560,7 +560,8 @@ Input Data:
         user_message: str,
         profile: CounselingProfile,
         history: List[CounselingMessage] = None,
-        memories: Optional[List[MemoryItem]] = None
+        memories: Optional[List[MemoryItem]] = None,
+        longitudinal_brief: Optional[str] = None
     ) -> CounselingMessage:
         """
         Interactive counseling dialogue that explains findings, answers questions,
@@ -570,9 +571,16 @@ Input Data:
         the prompt. DURABLE memories are repeatedly-observed patterns — weight
         them strongly. CANDIDATE memories are emerging patterns — treat as
         tentative and never present them as established fact.
+
+        longitudinal_brief: college-MVP-style context brief (recent session
+        turns + durable learner facts + learning signals) built by
+        LongitudinalMemoryService.build_context_brief(). Injected verbatim so
+        every turn is grounded in this learner's own short-term and long-term
+        memory.
         """
         history = history or []
         memory_block = self._format_memory_context(memories or [])
+        brief_block = f"\n{longitudinal_brief}\n" if longitudinal_brief else ""
 
         # Polite mentor dialogue generation
         if self.model:
@@ -588,7 +596,7 @@ Active Profile Summary:
 - Contradictions: {json.dumps([c.model_dump() for c in profile.contradictions])}
 - Evidence Gaps: {json.dumps(profile.evidence_gaps)}
 {memory_block}
-GUIDELINES:
+{brief_block}GUIDELINES:
 - Warm, polite, supportive, mentor-like tone.
 - Explain evidence backing recommendations.
 - Clarify contradictions gently.
