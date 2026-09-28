@@ -13,7 +13,7 @@ from backend.core.orchestration_schemas import (
     OrchestrationRequest,
     OrchestrationResponse
 )
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 from backend.services.counseling import CounselingAgent
 from backend.services.adaptive_planning_agent import AdaptivePlanningAgent
 from backend.services.evidence_evaluation_agent import EvidenceEvaluationAgent
@@ -45,8 +45,8 @@ class PathmindOrchestrator:
     strict server-side person scoping, circular call prevention, prompt injection defenses,
     action proposal approval gates, and failure-tolerant execution.
     """
-    def __init__(self, store: Optional[FirestoreStore] = None):
-        self.store = store or FirestoreStore()
+    def __init__(self, store: Optional[Any] = None):
+        self.store = store or get_pm_store()
 
         # Instantiate specialized agents & services
         self.counseling_agent = CounselingAgent()
