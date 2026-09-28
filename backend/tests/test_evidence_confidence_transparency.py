@@ -23,6 +23,26 @@ from backend.services.counseling import CounselingAgent
 from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.resume_validator import ResumeFactValidator
 from backend.services.context_graph_service import ContextGraphService
+from backend.services.memory_engine import MemoryEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
+from backend.services.mastery_engine import MasteryEngine
+from backend.services.store import FirestoreStore
+
+
+@pytest.fixture
+def store():
+    return FirestoreStore()
+
+
+@pytest.fixture
+def context_service(store):
+    return ContextGraphService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        memory_engine=MemoryEngine(store=store),
+        readiness_engine=CareerReadinessEngine(store=store),
+        mastery_engine=MasteryEngine(store=store),
+    )
 
 
 def test_canonical_trust_schemas_and_provenance():
@@ -208,10 +228,12 @@ def test_resume_validator_rejects_unverified_inferences():
 
 
 @pytest.mark.asyncio
-async def test_deterministic_context_graph_scoring(requires_live_db):
+async def test_deterministic_context_graph_scoring(context_service):
     """Verifies that context graph requirement match score is strictly deterministic and categorical."""
-    service = ContextGraphService()
-    graph = await service.assemble_context_graph(person_id="scholar-test-user")
+    await context_service.roadmap_engine.get_or_create_roadmap(
+        person_id="scholar-test-user", target_outcome="Applied AI Specialist"
+    )
+    graph = await context_service.assemble_context_graph(person_id="scholar-test-user")
 
     career_context = graph.career_context
     assert "readiness_tier" in career_context
