@@ -184,3 +184,99 @@ class LongitudinalMemoryService:
                 for s in signals
             ],
         }
+
+    # ------------------------------------------------------------------
+    # Context brief (college-MVP parity: injected into every AI prompt)
+    # ------------------------------------------------------------------
+    async def build_context_brief(
+        self,
+        person_id: str,
+        session_id: Optional[str] = None,
+        max_short_term: int = 10,
+        max_long_term: int = 8,
+    ) -> str:
+        """
+        College-MVP-style context brief: recent session turns + durable
+        learner facts + learning signals, formatted for prompt injection.
+
+        Mirrors the college MVP's _build_context_brief(): the AI sees what
+        was just discussed, what is durably known about this learner, and
+        how they learn. Never raises — degrades to an empty-memory note.
+        """
+        try:
+            short_term = await self.get_short_term(
+                person_id, session_id=session_id, limit=max_short_term
+            )
+        except Exception:
+            short_term = []
+        try:
+            long_term = await self.get_long_term(person_id, limit=max_long_term)
+        except Exception:
+            long_term = []
+        try:
+            signals = await self.get_signals(person_id, limit=10)
+        except Exception:
+            signals = []
+
+        lines = ["CONVERSATION CONTEXT (from this learner's persisted memory — this is what you remember):"]
+        if short_term:
+            lines.append("Recent session context:")
+            # Chronological (oldest first) so the conversation reads naturally.
+            for m in reversed(short_term):
+                content = str(m.get("content") or "")[:400]
+                if content:
+                    lines.append(f"- {content}")
+        else:
+            lines.append("- Recent session context: none recorded yet.")
+        if long_term:
+            lines.append("Durable learner facts (established, weight strongly):")
+            for m in long_term:
+                title = str(m.get("title") or "Memory")[:120]
+                snippet = str(m.get("content") or "")[:200]
+                imp = str(m.get("importance") or "MEDIUM")
+                lines.append(f"- [{imp}] {title}: {snippet}")
+        else:
+            lines.append("- Durable learner facts: none recorded yet.")
+        if signals:
+            lines.append("How this learner learns (observed signals):")
+            for s in signals[:6]:
+                stype = str(s.get("signal_type") or "SIGNAL")
+                snippet = str(s.get("content") or "")[:160]
+                if snippet:
+                    lines.append(f"- {stype}: {snippet}")
+        return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Short -> long promotion (college-MVP parity)
+    # ------------------------------------------------------------------
+    async def promote_to_long_term(
+        self,
+        person_id: str,
+        short_term_memory: Dict[str, Any],
+        title: str,
+        memory_type: str = "EPISODIC",
+        importance: str = "MEDIUM",
+        related_domain: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Promote a short-term observation into durable long-term memory.
+
+        College-MVP parity with ProactiveMemoryService.promote_to_long_term_memory():
+        only ever called with actually-observed content — never fabricates.
+        The link back to the source short-term row is kept in metadata.
+        """
+        content = str(short_term_memory.get("content") or "")
+        if not content.strip():
+            raise ValueError("Cannot promote an empty short-term memory.")
+        metadata = dict(short_term_memory.get("metadata") or {})
+        metadata["promoted_from"] = short_term_memory.get("memory_id")
+        metadata["promoted_at"] = datetime.now(timezone.utc).isoformat()
+        return await self.record_long_term(
+            person_id=person_id,
+            content=content,
+            title=title,
+            memory_type=memory_type,
+            importance=importance,
+            related_domain=related_domain,
+            metadata=metadata,
+        )
