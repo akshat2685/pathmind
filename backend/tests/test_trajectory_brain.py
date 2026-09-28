@@ -8,7 +8,7 @@ from backend.core.trajectory_schemas import (
     CounterfactualRequest
 )
 from backend.core.assessment_schemas import CounselingProfile, CounselingFact, Contradiction
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.fixture
 def corpus():
@@ -20,7 +20,7 @@ def engine():
 
 @pytest.fixture
 def store():
-    return FirestoreStore()
+    return InMemoryStore()
 
 def test_trajectory_corpus_and_similarity_matching(corpus):
     trajectories = corpus.get_all_trajectories()

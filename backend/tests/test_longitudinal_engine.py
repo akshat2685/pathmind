@@ -2,14 +2,14 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.progress_analysis_service import ProgressAnalysisService
 from backend.services.learner_evolution_agent import LearnerEvolutionAgent
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.mark.asyncio
 async def test_capability_evolution_and_progress_classification():
     """
     ProgressAnalysisService reconstructs capability trajectories and classifies progress accurately.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     progress_service = ProgressAnalysisService(store=store)
     person_id = "test-longitudinal-learner-1"
 
@@ -50,7 +50,7 @@ async def test_recurring_misconception_detection():
     """
     Two or more failed evaluation attempts on a concept trigger a RecurringMisconception signal.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     progress_service = ProgressAnalysisService(store=store)
     person_id = "test-misconception-learner"
 
@@ -81,7 +81,7 @@ async def test_learning_strategy_evaluation():
     """
     ProgressAnalysisService evaluates learning strategy effectiveness from real evaluation attempts.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     progress_service = ProgressAnalysisService(store=store)
     person_id = "test-strategy-learner"
 
@@ -104,7 +104,7 @@ async def test_temporal_queries_with_grounded_provenance(requires_live_db):
     """
     LearnerEvolutionAgent answers temporal questions with exact timestamps and falls back cleanly.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     agent = LearnerEvolutionAgent(store=store)
     person_id = "test-temporal-query-learner"
 
@@ -138,7 +138,7 @@ async def test_progress_insight_dispute_lifecycle(requires_live_db):
     """
     Learner can dispute an insight, updating its status to DISPUTED with reason.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     agent = LearnerEvolutionAgent(store=store)
     person_id = "test-dispute-learner"
 
@@ -168,7 +168,7 @@ async def test_tenant_isolation_for_longitudinal_state():
     """
     Person A's longitudinal state and turning points cannot be accessed by Person B.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     person_a = "person-longitudinal-a"
     person_b = "person-longitudinal-b"
 

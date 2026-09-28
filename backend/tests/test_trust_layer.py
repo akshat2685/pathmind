@@ -2,14 +2,14 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.trust_provenance_service import TrustProvenanceService
 from backend.services.recommendation_explanation_service import RecommendationExplanationService
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.mark.asyncio
 async def test_provenance_grounding_and_epistemic_classification():
     """
     TrustProvenanceService validates factual claims and assigns structured provenance with source type.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     trust_service = TrustProvenanceService(store=store)
     person_id = "test-trust-learner-1"
 
@@ -32,7 +32,7 @@ async def test_missing_evidence_resolves_to_unknown():
     """
     If a claim references a non-existent personal evidence ID, it resolves to UNKNOWN.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     trust_service = TrustProvenanceService(store=store)
     person_id = "test-unknown-evidence"
 
@@ -52,7 +52,7 @@ async def test_safety_guardrails_block_clinical_and_guarantee_claims():
     """
     Deterministic safety guardrails block clinical diagnoses and salary/employment guarantees.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     trust_service = TrustProvenanceService(store=store)
 
     # 1. Clinical Diagnosis Check
@@ -75,7 +75,7 @@ async def test_why_this_and_why_not_explainability(requires_live_db):
     """
     RecommendationExplanationService provides grounded 'Why This?' and 'Why Not?' explanations.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     explanation_service = RecommendationExplanationService(store=store)
     person_id = "test-explain-learner"
 
@@ -116,7 +116,7 @@ async def test_user_autonomy_decision_and_feedback(requires_live_db):
     """
     Learner can accept, decline, or choose alternatives, and provide structured feedback.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     explanation_service = RecommendationExplanationService(store=store)
     person_id = "test-autonomy-learner"
 
@@ -161,7 +161,7 @@ async def test_tenant_isolation_for_trust_layer():
     """
     Person A's recommendations and provenance records cannot be accessed by Person B.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     person_a = "person-trust-a"
     person_b = "person-trust-b"
 

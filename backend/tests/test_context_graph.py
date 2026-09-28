@@ -2,14 +2,14 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.context_graph_service import ContextGraphService
 from backend.services.decision_intelligence_service import DecisionIntelligenceService
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.mark.asyncio
 async def test_personal_context_graph_assembly(requires_live_db):
     """
     ContextGraphService dynamically synthesizes all 9 context domains without duplicating canonical models.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     context_service = ContextGraphService(store=store)
     person_id = "test-context-learner-1"
 
@@ -32,7 +32,7 @@ async def test_task_context_relevance_filtering(requires_live_db):
     """
     extract_task_context_package extracts concise task-specific packages to avoid model context flooding.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     context_service = ContextGraphService(store=store)
     person_id = "test-context-filter"
 
@@ -56,7 +56,7 @@ async def test_command_center_six_answers_generation(requires_live_db):
     5. What Should I Do Now?
     6. What Happens After That?
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     context_service = ContextGraphService(store=store)
     decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-context-cc"
@@ -79,7 +79,7 @@ async def test_decision_recording_and_outcome_learning(requires_live_db):
     """
     User decisions are canonically persisted with context snapshots, and later outcome learning attaches.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     context_service = ContextGraphService(store=store)
     decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-decision-learner"
@@ -120,7 +120,7 @@ async def test_next_action_adapts_to_mastery_risk(requires_live_db):
     """
     When a mastery risk is flagged, NextAction prioritizes concept remediation before forward progression.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     context_service = ContextGraphService(store=store)
     decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-risk-next-action"
@@ -145,7 +145,7 @@ async def test_tenant_isolation_for_context_and_decisions():
     """
     Person A's decision records and context conflicts cannot be accessed by Person B.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     person_a = "person-ctx-alpha"
     person_b = "person-ctx-beta"
 

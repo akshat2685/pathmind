@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.services.second_brain_service import SecondBrainService
 from backend.services.proactive_memory_service import ProactiveMemoryService
 from backend.services.context_graph_service import ContextGraphService
@@ -9,7 +9,7 @@ from backend.core.memory_schemas import ProactiveMemoryContext
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     store._in_memory_persons.clear()
     return store
 

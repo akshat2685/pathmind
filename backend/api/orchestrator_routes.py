@@ -9,12 +9,12 @@ from backend.core.orchestration_schemas import (
     OrchestrationResponse
 )
 from backend.services.pathmind_orchestrator import PathmindOrchestrator
-from backend.services.store import FirestoreStore
+from backend.services.pm_store import get_pm_store
 
 from backend.core.security import get_authenticated_person
 
 router = APIRouter(prefix="/api/orchestrate", tags=["Unified Agent Orchestration & Control Tower"])
-store = FirestoreStore()
+store = get_pm_store()
 orchestrator = PathmindOrchestrator(store=store)
 get_person_id = get_authenticated_person
 

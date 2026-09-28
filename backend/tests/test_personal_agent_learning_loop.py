@@ -3,13 +3,13 @@ from datetime import datetime, timezone
 from backend.services.mastery_engine import MasteryEngine
 from backend.services.personal_agent_engine import PersonalAgentEngine
 from backend.services.adaptation_service import AdaptationService
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.core.adaptation_schemas import LearningSignal, UserAdaptationDecision
 from backend.core.evidence_schemas import CanonicalEvidence
 
 @pytest.fixture
 def store():
-    return FirestoreStore()
+    return InMemoryStore()
 
 @pytest.fixture
 def personal_agent(store):

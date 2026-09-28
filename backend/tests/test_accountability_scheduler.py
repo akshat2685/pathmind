@@ -6,14 +6,14 @@ and loud failure when the datastore is unreachable.
 import pytest
 from datetime import datetime, timezone, timedelta
 
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.services.proactive_intervention_engine import ProactiveInterventionEngine
 from backend.services.accountability_scheduler import AccountabilityScheduler
 
 
 @pytest.fixture
 def clean_store():
-    store = FirestoreStore()
+    store = InMemoryStore()
     store._in_memory_persons.clear()
     return store
 
@@ -110,7 +110,7 @@ async def test_sweep_skips_persons_without_roadmaps(clean_store):
 
 @pytest.mark.asyncio
 async def test_scheduler_start_fails_loudly_when_db_unreachable(requires_live_db, clean_store):
-    class DeadStore(FirestoreStore):
+    class DeadStore(InMemoryStore):
         async def check_health(self):
             return "SOURCE_UNAVAILABLE"
 

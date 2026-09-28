@@ -11,7 +11,7 @@ from backend.core.security import (
     sanitize_external_content,
     SecurityRateLimiter
 )
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 def test_malformed_identity_rejected():
     # Attack vectors: path traversal, script injection, null bytes, SQL tokens
@@ -153,7 +153,7 @@ def test_liveness_and_readiness_endpoints():
 
 @pytest.mark.asyncio
 async def test_concurrency_locking():
-    store = FirestoreStore()
+    store = InMemoryStore()
     lock_alex1 = store.get_person_lock("person_alex")
     lock_alex2 = store.get_person_lock("person_alex")
     lock_bob = store.get_person_lock("person_bob")

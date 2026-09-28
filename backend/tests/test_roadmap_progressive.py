@@ -2,7 +2,7 @@ import pytest
 import asyncio
 from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.personal_agent_engine import PersonalAgentEngine
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.core.roadmap_schemas import (
     EvidenceSubmission,
     AdaptConstraintRequest
@@ -18,7 +18,7 @@ def personal_agent():
 
 @pytest.fixture
 def store():
-    return FirestoreStore()
+    return InMemoryStore()
 
 @pytest.mark.asyncio
 async def test_roadmap_generation_and_progressive_disclosure(requires_live_db, engine):

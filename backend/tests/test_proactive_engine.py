@@ -2,14 +2,14 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.event_bus_service import EventBusService
 from backend.services.proactive_intervention_engine import ProactiveInterventionEngine
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.mark.asyncio
 async def test_event_ingestion_and_provenance():
     """
     EventBusService publishes structured events with source provenance and timestamps.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     event_bus = EventBusService(store=store)
     person_id = "test-proactive-learner-1"
 
@@ -34,7 +34,7 @@ async def test_event_deduplication_within_cooldown():
     """
     Publishing identical event on same entity within cooldown window marks state as DEDUPLICATED.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     event_bus = EventBusService(store=store)
     person_id = "test-dedup-learner"
 
@@ -60,7 +60,7 @@ async def test_repeated_evidence_failures_trigger_reinforcement(requires_live_db
     """
     Two consecutive failed attempts on active stage generate a REVIEW_REINFORCEMENT intervention.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     engine = ProactiveInterventionEngine(store=store)
     person_id = "test-fail-pattern"
 
@@ -96,7 +96,7 @@ async def test_action_and_dismissal_lifecycle(requires_live_db):
     """
     Interventions transition status to ACTED_ON when acted on and DISMISSED when dismissed.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     engine = ProactiveInterventionEngine(store=store)
     person_id = "test-lifecycle-learner"
 
@@ -128,7 +128,7 @@ async def test_notification_preferences_suppress_disabled_categories(requires_li
     """
     Disabling reinforcement alerts in preferences suppresses intervention generation.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     engine = ProactiveInterventionEngine(store=store)
     person_id = "test-prefs-learner"
 
@@ -165,7 +165,7 @@ async def test_tenant_isolation_for_proactive_events():
     """
     Person A's events and interventions cannot be accessed by Person B.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     person_a = "person-proactive-a"
     person_b = "person-proactive-b"
 

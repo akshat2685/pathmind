@@ -9,7 +9,5 @@ services:
     envVars:
       - key: GEMINI_API_KEY
         sync: false
-      - key: FIRESTORE_PROJECT_ID
-        sync: false
       - key: PYTHON_VERSION
         value: 3.11.0

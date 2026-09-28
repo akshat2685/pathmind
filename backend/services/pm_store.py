@@ -1,17 +1,17 @@
 """
 PmStore — Supabase-backed persistence for the PATHMIND main product.
 
-Drop-in replacement for FirestoreStore (backend/services/store.py):
-identical public method signatures so routes/services need no changes.
+The single persistence layer for all production code. Every method hits the
+real Supabase database.
 
-HARD RULES (unlike FirestoreStore):
+HARD RULES:
   * No in-memory fallback. Every method hits the real Supabase database.
   * No silent degradation. Any DB error propagates to the caller.
   * Fail fast: missing SUPABASE_URL / SUPABASE_SECRET_KEY, a missing
     `supabase` package, or a client that cannot be built raises
     RuntimeError("PERSISTENCE_UNAVAILABLE: ...") at construction time.
 
-Table layout: one pm_-prefixed table per Firestore collection/bucket
+Table layout: one pm_-prefixed table per data bucket
 (see backend/migrations/001_pm_core_tables.sql). Uniform row shape:
   id uuid PK, person_id text (Supabase Auth user id; 'global' sentinel for
   cross-learner rows), data jsonb (the original document payload),
@@ -128,7 +128,7 @@ class PmStore:
         if merge:
             existing = await self._get_singleton(table, person_id)
             if existing:
-                body = {**existing, **body}  # shallow top-level merge (Firestore merge=True)
+                body = {**existing, **body}  # shallow top-level merge
         payload = {"person_id": person_id, "data": body}
         await asyncio.to_thread(
             lambda: self._db().table(table).upsert(payload, on_conflict="person_id").execute()

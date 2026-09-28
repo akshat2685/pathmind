@@ -27,7 +27,7 @@ class KnowledgeService:
         for name, provider in self.providers.items():
             status[name] = await provider.check_health()
         
-        status["firestore_cache"] = await self.store.check_health()
+        status["knowledge_cache"] = await self.store.check_health()
         return status
 
     async def search_occupations(self, query: str, limit: int = 10, preferred_provider: str = None) -> KnowledgeResponse:

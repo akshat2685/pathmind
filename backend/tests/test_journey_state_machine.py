@@ -1,13 +1,13 @@
 import pytest
 from fastapi.testclient import TestClient
 from backend.main import app
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 
 client = TestClient(app)
 
 @pytest.fixture
 def clean_store():
-    return FirestoreStore()
+    return InMemoryStore()
 
 def test_complete_guided_journey_state_machine(requires_live_db, clean_store):
     """

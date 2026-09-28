@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from backend.services.mastery_engine import MasteryEngine
 from backend.services.evidence_verification_service import EvidenceVerificationService
 from backend.services.evidence_evaluation_agent import EvidenceEvaluationAgent
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.core.evidence_schemas import CanonicalEvidence
 
 @pytest.mark.asyncio
@@ -12,7 +12,7 @@ async def test_evidence_submission_and_quality_verification(requires_live_db):
     Submitting executable Python code with unit tests & type hints must be deterministically
     verified as VERIFIED_STRONG and achieve PASS status.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-evidence-1"
 
@@ -63,7 +63,7 @@ async def test_locked_stage_rejects_premature_submission(requires_live_db):
     """
     Submitting evidence for a locked downstream stage without satisfying prerequisites must raise PermissionError.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-lock"
 
@@ -86,7 +86,7 @@ async def test_insufficient_evidence_triggers_reinforcement(requires_live_db):
     """
     Submitting minimal/incomplete code fails quality criteria and triggers reinforcement.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-reinforce"
 
@@ -109,7 +109,7 @@ async def test_mastery_regression_flagged_without_erasing_history():
     """
     Detecting repeated struggle flags MASTERY_AT_RISK while preserving past evidence references.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-regression"
 
@@ -128,7 +128,7 @@ async def test_transfer_validation_across_novel_domains(requires_live_db):
     """
     Submitting evidence for a transfer task marks transfer_validated as True.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-transfer"
 
@@ -169,7 +169,7 @@ async def test_dispute_and_challenge_flow():
     """
     Learner can challenge an evaluation and record a dispute without overwriting past attempts.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-dispute"
 
@@ -198,7 +198,7 @@ async def test_mastery_dashboard_state_generation(requires_live_db):
     MasteryDashboardState accurately populates 'What I Can Do', 'What I Am Working On',
     'What I Need To Prove', and locked stages.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     mastery_engine = MasteryEngine(store=store)
     person_id = "test-learner-dash"
 
@@ -215,7 +215,7 @@ async def test_tenant_isolation_for_evidence_and_disputes():
     """
     Person A's evidence, evaluation attempts, and disputes cannot be accessed by Person B.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     person_a = "person-alpha-11"
     person_b = "person-beta-11"
 

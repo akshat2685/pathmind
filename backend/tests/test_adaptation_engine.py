@@ -5,7 +5,7 @@ from backend.services.state_change_service import StateChangeService
 from backend.services.impact_analysis_service import ImpactAnalysisService
 from backend.services.adaptive_planning_agent import AdaptivePlanningAgent
 from backend.services.roadmap_engine import RoadmapEngine
-from backend.services.store import FirestoreStore
+from backend.tests.in_memory_store import InMemoryStore
 from backend.core.adaptation_schemas import UserAdaptationDecision, StateChangeEvent
 
 @pytest.mark.asyncio
@@ -14,7 +14,7 @@ async def test_goal_change_creates_versioned_proposal_and_requires_approval(requ
     Changing target goal must trigger impact analysis, formulate a Roadmap v2 proposal,
     preserve foundational milestones, and require explicit user approval.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     adaptation_service = AdaptationService(store=store)
     person_id = "test-learner-goal-change"
 
@@ -61,7 +61,7 @@ async def test_plan_stability_low_impact_auto_adapts():
     Minor changes (routine evidence submissions or minor format preferences)
     auto-adapt without triggering unnecessary major version bumps or approval dialogs.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     impact_service = ImpactAnalysisService()
 
     event = StateChangeEvent(
@@ -83,7 +83,7 @@ async def test_mastery_risk_triggers_reinforcement_not_downstream_unlock():
     Multiple evidence failures trigger MASTERY_RISK and inject a reinforcement stage
     rather than skipping prerequisites.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     state_service = StateChangeService(store=store)
     impact_service = ImpactAnalysisService()
     person_id = "test-learner-risk"
@@ -109,7 +109,7 @@ async def test_constraint_change_smoothly_recalibrates(requires_live_db):
     """
     Reducing available study hours adjusts pacing smoothly without destroying completed stages.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     adaptation_service = AdaptationService(store=store)
     person_id = "test-learner-constraint"
     await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
@@ -134,7 +134,7 @@ async def test_opportunity_driven_adaptation(requires_live_db):
     """
     Verified opportunity matching triggers review to prioritize relevant milestone projects.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     adaptation_service = AdaptationService(store=store)
     person_id = "test-learner-opp"
     await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
@@ -156,7 +156,7 @@ async def test_pause_and_resume_reassessment_after_hiatus():
     """
     Returning after > 90 days triggers a REASSESS / diagnostic refresher recommendation.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     state_service = StateChangeService(store=store)
     person_id = "test-learner-pause"
 
@@ -174,7 +174,7 @@ async def test_conflict_detection_surfaces_evidence_discrepancy():
     """
     Self-report confidence contradicting repeated task failures triggers EVIDENCE_CONFLICT.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     state_service = StateChangeService(store=store)
     person_id = "test-learner-conflict"
 
@@ -212,7 +212,7 @@ async def test_roadmap_history_and_isolation(requires_live_db):
     """
     Past roadmap versions remain retrievable and Person A cannot access Person B's adaptations.
     """
-    store = FirestoreStore()
+    store = InMemoryStore()
     adaptation_service = AdaptationService(store=store)
     person_a = "person-alpha-10"
     person_b = "person-beta-10"

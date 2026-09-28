@@ -261,7 +261,7 @@ export default function GuidedJourneyPage() {
     if (name.trim().length < 2) return;
 
     setLoading(true);
-    setLoadingMessage("Creating canonical scholar record in Firestore...");
+    setLoadingMessage("Creating canonical scholar record in Supabase...");
     setErrorMessage("");
 
     try {

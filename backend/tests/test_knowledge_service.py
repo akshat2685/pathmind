@@ -9,7 +9,7 @@ async def test_knowledge_service_health(requires_live_db):
     
     assert "esco" in status
     assert "nco" in status
-    assert "firestore_cache" in status
+    assert "knowledge_cache" in status
 
 @pytest.mark.asyncio
 async def test_knowledge_service_search_graceful_fallback(requires_live_db):
