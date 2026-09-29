@@ -3,6 +3,7 @@ import time
 import uuid
 import ipaddress
 import urllib.parse
+import httpx
 from typing import Optional, Dict, List, Tuple
 from fastapi import Header, HTTPException, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -53,6 +54,13 @@ def get_authenticated_person(
         return adapter.verify_jwt(token)
     except HTTPException:
         raise
+    except (httpx.TimeoutException, httpx.ConnectError, ConnectionError, TimeoutError) as err:
+        # Transport-level failure talking to Supabase Auth — an outage, not a
+        # bad token. Return 503 so callers retry instead of re-authenticating.
+        raise HTTPException(
+            status_code=503,
+            detail=f"AUTH_SERVICE_UNAVAILABLE: authentication service is temporarily unavailable ({type(err).__name__}); please retry."
+        )
     except Exception:
         raise HTTPException(
             status_code=401,
