@@ -125,3 +125,4 @@ class CounselingChatRequest(BaseModel):
     person_id: str = "demo-user"
     message: str
     history: Optional[List[CounselingMessage]] = None
+    session_id: Optional[str] = None

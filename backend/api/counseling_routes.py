@@ -14,11 +14,13 @@ from backend.core.assessment_schemas import (
 from backend.services.pm_store import get_pm_store
 from backend.services.counseling import CounselingAgent
 from backend.services.second_brain_service import SecondBrainService
+from backend.services.longitudinal_memory_service import LongitudinalMemoryService
 
 router = APIRouter(prefix="/api/counseling", tags=["Counseling"])
 store = get_pm_store()
 agent = CounselingAgent()
 second_brain = SecondBrainService(store=store)
+longitudinal_memory = LongitudinalMemoryService(store=store)
 
 class SynthesizeRequest(BaseModel):
     person_id: Optional[str] = "scholar-user"
@@ -156,13 +158,46 @@ async def counseling_chat(
         )
         injected_memories = [r.memory for r in mem_results[:3]]
 
+        # College-MVP parity: every turn is recorded as short-term context and
+        # the reply is grounded in this learner's own short-term + long-term
+        # memory via a context brief. Memory failures never break the chat.
+        session_id = req.session_id or "counseling"
+        try:
+            await longitudinal_memory.record_short_term(
+                person_id=active_person_id,
+                content=f"User asked: {req.message[:300]}",
+                topic="counseling",
+                session_id=session_id,
+                metadata={"source": "counseling_chat"},
+            )
+        except Exception:
+            pass
+        try:
+            longitudinal_brief = await longitudinal_memory.build_context_brief(
+                active_person_id, session_id=session_id
+            )
+        except Exception:
+            longitudinal_brief = None
+
         reply = agent.counsel_chat(
             person_id=active_person_id,
             user_message=req.message,
             profile=profile,
             history=req.history or [],
-            memories=injected_memories
+            memories=injected_memories,
+            longitudinal_brief=longitudinal_brief
         )
+
+        try:
+            await longitudinal_memory.record_short_term(
+                person_id=active_person_id,
+                content=f"Counselor replied: {reply.content[:300]}",
+                topic="counseling",
+                session_id=session_id,
+                metadata={"source": "counseling_chat"},
+            )
+        except Exception:
+            pass
 
         # Store episodic interaction memory fact
         memory_item = CounselingMemoryItem(

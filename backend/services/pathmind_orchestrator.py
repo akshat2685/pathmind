@@ -30,6 +30,7 @@ from backend.services.career_agents import (
 )
 from backend.services.opportunity_matching_engine import OpportunityMatchingEngine
 from backend.services.second_brain_service import SecondBrainService
+from backend.services.longitudinal_memory_service import LongitudinalMemoryService
 from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.services.execution_engine import ExecutionEngine
 from backend.services.trajectory_engine import TrajectoryEngine
@@ -66,6 +67,10 @@ class PathmindOrchestrator:
         self.opportunity_engine = OpportunityMatchingEngine(store=self.store, career_engine=self.career_engine)
         self.second_brain = SecondBrainService(store=self.store)
         self.execution_engine = ExecutionEngine(store=self.store)
+        # College-MVP parity: per-user short-term + long-term memory tiers.
+        # Journey milestones below record durable long-term memories; the
+        # counseling chat records short-term turns + injects a context brief.
+        self.longitudinal_memory = LongitudinalMemoryService(store=self.store)
 
         # Longitudinal Trajectory, Roadmap & Dynamic Assessment Services
         self.trajectory_engine = TrajectoryEngine()
@@ -725,6 +730,27 @@ class PathmindOrchestrator:
         state["updated_at"] = datetime.now(timezone.utc).isoformat()
         await self.store.save_journey_state(person_id, state)
 
+        # Durable long-term memory: this learner's declared aspiration is a
+        # stable fact the AI must remember across sessions (college-MVP parity).
+        # Memory failures never break the journey flow.
+        try:
+            await self.longitudinal_memory.record_long_term(
+                person_id=person_id,
+                title=f"Career aspiration: {clean_aspiration[:120]}",
+                content=(
+                    f"Learner declared aspiration '{clean_aspiration}' at stage "
+                    f"'{clean_stage}'."
+                    + (f" Constraints: {', '.join(clean_constraints[:5])}."
+                       if clean_constraints else "")
+                ),
+                memory_type="EPISODIC",
+                importance="HIGH",
+                related_domain=clean_aspiration[:80],
+                metadata={"source": "journey", "event": "aspiration_declared"},
+            )
+        except Exception:
+            pass
+
         return state
 
     async def submit_evidence_and_generate_blueprint(
@@ -851,6 +877,27 @@ class PathmindOrchestrator:
         state["step_name"] = "BASELINE_READY"
         state["updated_at"] = datetime.now(timezone.utc).isoformat()
         await self.store.save_journey_state(person_id, state)
+
+        # Durable long-term memory: verified assessment baseline (college-MVP
+        # parity — verified milestones are durable facts, never fabricated).
+        try:
+            interests = ", ".join(primary_interests[:4]) if primary_interests else "unassessed"
+            await self.longitudinal_memory.record_long_term(
+                person_id=person_id,
+                title="Completed aptitude assessment",
+                content=(
+                    f"Learner completed the domain aptitude assessment for "
+                    f"aspiration '{aspiration}'. Strongest measured interests: "
+                    f"{interests}. Baseline profile confidence: "
+                    f"{counseling_profile.overall_confidence}."
+                ),
+                memory_type="SEMANTIC",
+                importance="HIGH",
+                related_domain=aspiration[:80],
+                metadata={"source": "journey", "event": "assessment_completed"},
+            )
+        except Exception:
+            pass
 
         return state
 
