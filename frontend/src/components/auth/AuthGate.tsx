@@ -32,6 +32,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       } else {
         router.replace("/signin");
       }
+    }).catch(() => {
+      // A rejected session check must not leave the "Verifying your session..."
+      // spinner hanging forever: treat it as unauthenticated.
+      router.replace("/signin");
     });
 
     // Listen for auth changes (sign out in another tab, token expiry)
