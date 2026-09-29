@@ -33,6 +33,10 @@ export default function SignInPage() {
       } else {
         setChecking(false);
       }
+    }).catch(() => {
+      // A rejected session check must still clear the checking state —
+      // otherwise this page renders "Loading..." forever.
+      setChecking(false);
     });
   }, [router]);
 
