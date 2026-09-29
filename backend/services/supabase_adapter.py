@@ -77,6 +77,29 @@ class SupabaseAdapter:
     def is_configured(self) -> bool:
         return self.client is not None
 
+    def verify_client_works(self) -> Dict[str, Any]:
+        """
+        Verifies the supabase-py client object was actually created (not just
+        that env vars exist). The /api/health/database endpoint uses raw HTTP
+        and can return 200 even when create_client() failed — this catches that.
+        Returns {"ok": True} or {"ok": False, "error": "..."}.
+        Never exposes secrets.
+        """
+        if not self.url or not self.key:
+            missing = []
+            if not self.url:
+                missing.append("SUPABASE_URL")
+            if not self.key:
+                missing.append("SUPABASE_SECRET_KEY")
+            return {"ok": False, "error": f"Missing env vars: {', '.join(missing)}"}
+        client = self.client
+        if client is None:
+            return {
+                "ok": False,
+                "error": self._config_error or "create_client() returned None",
+            }
+        return {"ok": True}
+
     def require_client(self):
         """
         Returns the client, or raises RuntimeError with an actionable message

@@ -197,10 +197,17 @@ async def generate_plan_endpoint(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as exc:
         # Never a bare 500: surface the error code so the cause is diagnosable.
+        # Include the exception MESSAGE (not just type) — the type alone
+        # ("RuntimeError") is useless for debugging. The message from
+        # require_client() names the missing env vars.
         code = f"PLAN_FAILED:{type(exc).__name__}"
         log_event("college.route.plan_failed", user_id=person_id,
-                  outcome="error", error_code=code)
-        raise HTTPException(status_code=500, detail=code)
+                  outcome="error", error_code=code,
+                  error_message=str(exc)[:500])
+        raise HTTPException(status_code=500, detail={
+            "code": code,
+            "message": str(exc)[:500],
+        })
 
 @router.post("/plans/{plan_id}/phases/{phase_id}/activities/enrich",
              response_model=CollegePlanPhase)
