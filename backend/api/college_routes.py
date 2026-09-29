@@ -43,6 +43,7 @@ from backend.services.college_adk_runtime import run_agent_interact
 from backend.services.college_resource_pipeline import CollegeResourcePipeline
 from backend.services.college_store import college_store
 from backend.services.store import FirestoreStore
+from backend.services.supabase_adapter import get_supabase_adapter, CONFIG_ERROR_MESSAGE
 
 router = APIRouter(prefix="/api/college", tags=["College Engineering MVP"])
 
@@ -53,6 +54,20 @@ assessment_service = CollegeAssessmentService(store)
 accountability_service = CollegeAccountabilityService(store)
 memory_service = CollegeMemoryService(store)
 orchestrator = CollegeOrchestrator(store)
+
+def _require_supabase_configured():
+    """
+    Raises HTTPException 503 with an actionable message if Supabase is not
+    configured. Call at the top of any endpoint that needs the database so
+    misconfiguration surfaces as a clear 503, not a cryptic PLAN_FAILED.
+    """
+    adapter = get_supabase_adapter()
+    err = adapter.config_error
+    if err:
+        raise HTTPException(status_code=503, detail={
+            "code": "DATABASE_UNAVAILABLE",
+            "message": err,
+        })
 
 # --- 1. User Profile & Registry ---
 
@@ -165,6 +180,7 @@ async def generate_plan_endpoint(
     req: GeneratePlanRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
+    _require_supabase_configured()
     try:
         plan = await learning_service.generate_learning_plan(
             uid=person_id,
@@ -181,10 +197,17 @@ async def generate_plan_endpoint(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as exc:
         # Never a bare 500: surface the error code so the cause is diagnosable.
+        # Include the exception MESSAGE (not just type) — the type alone
+        # ("RuntimeError") is useless for debugging. The message from
+        # require_client() names the missing env vars.
         code = f"PLAN_FAILED:{type(exc).__name__}"
         log_event("college.route.plan_failed", user_id=person_id,
-                  outcome="error", error_code=code)
-        raise HTTPException(status_code=500, detail=code)
+                  outcome="error", error_code=code,
+                  error_message=str(exc)[:500])
+        raise HTTPException(status_code=500, detail={
+            "code": code,
+            "message": str(exc)[:500],
+        })
 
 @router.post("/plans/{plan_id}/phases/{phase_id}/activities/enrich",
              response_model=CollegePlanPhase)
@@ -448,6 +471,7 @@ async def agent_interact_endpoint(
     Without a Gemini key it answers via the deterministic legacy path —
     same {message, state, ui_blocks, sources} shape either way (TRD §23).
     """
+    _require_supabase_configured()
     return await run_agent_interact(
         uid=person_id,
         user_message=req.message,

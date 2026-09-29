@@ -34,9 +34,10 @@ class CollegeStore:
     
     @property
     def client(self):
-        if not self.adapter.client:
-            raise RuntimeError("Supabase client is not available for CollegeStore.")
-        return self.adapter.client
+        # require_client() raises RuntimeError with an actionable message naming
+        # the missing env vars (e.g. SUPABASE_SECRET_KEY) instead of a cryptic
+        # "not available" — see supabase_adapter.CONFIG_ERROR_MESSAGE.
+        return self.adapter.require_client()
         
     # --- Users ---
 
