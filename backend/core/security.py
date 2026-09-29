@@ -1,3 +1,4 @@
+import concurrent.futures
 import re
 import time
 import uuid
@@ -8,9 +9,29 @@ from fastapi import Header, HTTPException, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from backend.services.supabase_adapter import get_supabase_adapter
+import httpx
 
 # Valid person_id regex: 3-64 chars, alphanumeric with hyphens, underscores, dots
 PERSON_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]{3,64}$")
+
+# Upper bound for the Supabase auth round-trip (auth.get_user). The supabase-py
+# sync auth client exposes no per-call timeout, so get_authenticated_person
+# runs it on a worker thread and caps the wait (see below). On Python 3.11+
+# concurrent.futures.TimeoutError is an alias of builtin TimeoutError, so the
+# infra-error tuple in get_authenticated_person covers it.
+AUTH_VERIFY_TIMEOUT_SECONDS = 10
+_INFRA_ERRORS = (
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    ConnectionError,
+    TimeoutError,
+)
+
+# Module-level pool for bounding auth.get_user(): a bounded worker pool means
+# timed-out calls can't leak threads unboundedly. NOTE: a genuinely hung
+# socket still occupies one worker until it returns; on serverless hosts the
+# container is recycled between invocations so this cannot accumulate.
+_auth_verify_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
 def validate_person_id_format(person_id: str) -> bool:
     if not person_id or not isinstance(person_id, str):
@@ -42,11 +63,25 @@ def get_authenticated_person(
         )
 
     try:
-        user_resp = adapter.client.auth.get_user(token)
+        # Bound the auth round-trip: supabase-py's sync auth client offers no
+        # per-call timeout (only a client-wide httpx_client override at
+        # construction, which would touch the shared adapter), so run
+        # auth.get_user on a pool thread and cap the wait. A hung connection
+        # can no longer eat into the 60s serverless timeout.
+        user_resp = _auth_verify_pool.submit(
+            adapter.client.auth.get_user, token
+        ).result(timeout=AUTH_VERIFY_TIMEOUT_SECONDS)
         if not user_resp or not user_resp.user:
             raise ValueError("No user found")
         return user_resp.user.id
-    except Exception as e:
+    except _INFRA_ERRORS as infra_exc:
+        # Network / timeout / connectivity failures are INFRA, not bad tokens —
+        # returning 401 here masks outages as invalid credentials.
+        raise HTTPException(
+            status_code=503,
+            detail=f"AUTH_SERVICE_UNAVAILABLE: authentication service unavailable ({type(infra_exc).__name__})."
+        )
+    except Exception:
         raise HTTPException(
             status_code=401,
             detail="INVALID_TOKEN: Supabase JWT verification failed."

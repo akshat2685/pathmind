@@ -10,7 +10,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -297,23 +296,9 @@ export default function LoginPage() {
                     </div>
                   </div>
   
-                  {/* Remember Me */}
-                  <div className="flex items-center justify-between pt-1">
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none group">
-                      <input
-                        type="checkbox"
-                        checked={rememberMe}
-                        onChange={(e) => setRememberMe(e.target.checked)}
-                        className="w-4 h-4 rounded text-[#252321] border-[#252321] focus:ring-0 cursor-pointer"
-                      />
-                      <span className="text-xs text-[#252321] group-hover:text-black">
-                        Keep me remembered on this parchment
-                      </span>
-                    </label>
-                    <span className="text-[11px] font-serif italic text-[#68635e] hidden sm:inline">
-                      Parchment Safe
-                    </span>
-                  </div>
+                  {/* Remember-me is not offered: supabase-js v2 sets session
+                      persistence at client creation (@/lib/supabase/client), not
+                      per sign-in call, so a checkbox here would be misleading. */}
   
                   {/* Primary Submission Button */}
                   <button

@@ -92,8 +92,11 @@ class CollegeStore:
             data = profile_data.copy()
             if "user_id" not in data:
                 data["user_id"] = uid
-                
-            self.client.table("learners").update(data).eq("user_id", uid).execute()
+
+            # Upsert, not update: update() is a silent no-op when the learners
+            # row is missing, so first-time saves were silently dropped.
+            # on_conflict="user_id" matches the upsert in get_or_create_college_user.
+            self.client.table("learners").upsert(data, on_conflict="user_id").execute()
         except Exception as e:
             logger.error("Failed to save_college_user_profile: %s", str(e))
             raise RuntimeError("PERSISTENCE_UNAVAILABLE")
