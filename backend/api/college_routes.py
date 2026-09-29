@@ -493,3 +493,45 @@ async def enrich_resources_endpoint(
         topic=req.topic,
         time_budget_seconds=min(max(req.time_budget_seconds, 5), 45),
     )
+
+@router.get("/debug/gemini-status")
+async def debug_gemini_status():
+    """Temporary debug endpoint to diagnose Gemini SDK issues."""
+    import sys
+    result = {
+        "python_version": sys.version,
+        "has_api_key": bool(__import__("backend.core.config", fromlist=["settings"]).settings.GEMINI_API_KEY),
+        "model_id": getattr(__import__("backend.core.config", fromlist=["settings"]).settings, "GEMINI_MODEL", "NOT_SET"),
+    }
+    # Test new SDK import
+    try:
+        from google import genai as new_genai
+        result["new_sdk_import"] = "OK"
+        result["new_sdk_has_client"] = hasattr(new_genai, "Client")
+        # Try creating client (doesn't validate key)
+        try:
+            client = new_genai.Client(api_key="test-dummy-key")
+            result["new_sdk_client_create"] = "OK"
+        except Exception as e:
+            result["new_sdk_client_create"] = f"FAIL: {type(e).__name__}: {str(e)[:200]}"
+    except Exception as e:
+        result["new_sdk_import"] = f"FAIL: {type(e).__name__}: {str(e)[:200]}"
+    
+    # Test legacy SDK import
+    try:
+        import google.generativeai as legacy_genai
+        result["legacy_sdk_import"] = "OK"
+    except Exception as e:
+        result["legacy_sdk_import"] = f"FAIL: {type(e).__name__}: {str(e)[:200]}"
+    
+    # Test the actual get_gemini_model function
+    try:
+        from backend.core.gemini import get_gemini_model
+        model = get_gemini_model()
+        result["get_gemini_model_result"] = "OK - returned model object" if model is not None else "FAIL - returned None"
+        if model is not None:
+            result["model_type"] = type(model).__name__
+    except Exception as e:
+        result["get_gemini_model_result"] = f"EXCEPTION: {type(e).__name__}: {str(e)[:200]}"
+    
+    return result
