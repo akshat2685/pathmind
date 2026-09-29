@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 /**
@@ -14,6 +15,7 @@ import { useAuth } from "@/lib/auth-context";
  */
 export default function LoginPage() {
   const { signUp, signIn, resendConfirmation, resetPassword } = useAuth();
+  const router = useRouter();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,12 +38,21 @@ export default function LoginPage() {
           setMessage("Welcome! Please check your email to confirm your account before logging in.");
           setShowResend(true);
         } else {
-          setMessage("Welcome! You are signed in.");
+          setMessage("Welcome! You are signed in. Taking you to onboarding…");
+          // Explicit navigation for reliability (route guard also handles this).
+          setTimeout(() => router.replace("/onboarding"), 800);
         }
         // The AuthProvider's route guard moves the traveler to /onboarding
         // as soon as the session is active.
       } else {
         await signIn(email, password);
+        // Sign-in succeeded: give immediate feedback and navigate explicitly.
+        // (The AuthProvider route guard also redirects, but an explicit push
+        // is reliable even if the auth-state listener is delayed.)
+        setMessage("Welcome back! Taking you to your journey…");
+        // Small delay so the message is visible, then go to onboarding.
+        // The route guard will also handle this if the user state updates first.
+        setTimeout(() => router.replace("/onboarding"), 800);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";

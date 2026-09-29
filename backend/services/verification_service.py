@@ -331,7 +331,21 @@ def get_requirements(user_type: str) -> Dict[str, Any]:
             f"Unknown user_type '{user_type}'. Must be one of: {', '.join(USER_TYPES)}"
         )
     spec = _REQUIREMENTS[key]
-    return {"user_type": key, **spec}
+    # The frontend contract expects `id` on each field; the backend catalog
+    # uses `name` as the canonical key. Provide both so the form binds each
+    # input to its own state value (a missing `id` collapses all fields onto
+    # a single shared key, breaking the form).
+    fields = []
+    for f in spec.get("fields", []):
+        ff = dict(f)
+        ff.setdefault("id", ff.get("name"))
+        # Frontend also reads `hint`; backend catalog uses `help`.
+        if "hint" not in ff and "help" in ff:
+            ff["hint"] = ff["help"]
+        fields.append(ff)
+    out = dict(spec)
+    out["fields"] = fields
+    return {"user_type": key, **out}
 
 
 def validate_submission(user_type: str, data: Dict[str, Any]) -> List[str]:
