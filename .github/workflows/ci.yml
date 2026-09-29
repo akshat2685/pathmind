@@ -28,6 +28,9 @@ jobs:
       - name: Run Pytest
         run: |
           python -m pytest -v backend/tests/
+        env:
+          SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.TEST_SUPABASE_SECRET_KEY }}
 
   frontend-build:
     name: Frontend Build & Typecheck
