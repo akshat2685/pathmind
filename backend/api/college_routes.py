@@ -72,13 +72,31 @@ def _require_supabase_configured():
 # --- 1. User Profile & Registry ---
 
 @router.get("/users", response_model=List[Dict[str, Any]])
-async def list_all_college_learners():
-    """Lists all registered learners across the system."""
+async def list_all_college_learners(
+    person_id: str = Depends(get_authenticated_person)
+):
+    """Lists all registered learners across the system. Requires auth —
+    learner identities are private and must not be publicly listable."""
     return await store.list_all_college_users()
 
 @router.get("/profile", response_model=UserProfile)
 async def get_learner_profile(person_id: str = Depends(get_authenticated_person)):
-    user = await store.get_college_user_profile(person_id)
+    # Guard config first: a missing/unusable Supabase client must surface as
+    # 503, not be swallowed into a 404 PROFILE_NOT_FOUND below.
+    _require_supabase_configured()
+    try:
+        user = await store.get_college_user_profile(person_id)
+    except RuntimeError as exc:
+        # Store/DB call itself failed (e.g. client unavailable) — distinct
+        # from a genuine not-found. NOTE: query-mid-flight failures are still
+        # swallowed to None inside CollegeStore.get_college_user_profile
+        # (its None-on-error contract is depended on by 6 other call sites),
+        # so they still surface as 404; the dominant config-failure mode is
+        # now an honest 503.
+        raise HTTPException(status_code=503, detail={
+            "code": "PROFILE_UNAVAILABLE",
+            "message": str(exc)[:300],
+        })
     if not user:
         raise HTTPException(status_code=404, detail="PROFILE_NOT_FOUND")
     return UserProfile(**user)
@@ -93,6 +111,10 @@ async def update_learner_profile(
     req: UpdateProfileRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
+    # NOTE: _require_supabase_configured() already exists in this module
+    # (merged via PR #26 qt/supabase-config-error-clarity), so no duplicate
+    # local helper is added here — this just wires it into POST /profile.
+    _require_supabase_configured()
     # Check existing
     user = await store.get_college_user_profile(person_id)
     if not user:
