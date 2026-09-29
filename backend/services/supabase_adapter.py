@@ -157,23 +157,27 @@ class SupabaseAdapter:
     async def verify_and_map_user(self, uid: str, email: str, name: str = "") -> Dict[str, Any]:
         """
         Ensures auth.user.id is mapped to an internal application person_id in public.learners.
+        Fails LOUDLY when the Supabase client is unavailable — no caller depends
+        on the old silent fallback, and a quiet synthetic row masks broken
+        auth config (e.g. missing SUPABASE_SECRET_KEY).
         """
-        if not self.client:
-            return {"user_id": uid, "email": email, "name": name}
-            
+        client = self.require_client()
         try:
             data = {
                 "user_id": uid,
                 "email": email,
                 "name": name
             }
-            res = self.client.table("learners").upsert(data, on_conflict="user_id").execute()
+            res = client.table("learners").upsert(data, on_conflict="user_id").execute()
             if res.data:
                 return res.data[0]
             return data
         except Exception as e:
             logger.error("Failed to map user in Supabase: %s", str(e))
-            return {"user_id": uid, "email": email, "name": name}
+            raise RuntimeError(
+                "Failed to map user in Supabase: verify SUPABASE_URL and "
+                f"SUPABASE_SECRET_KEY env vars are set and valid ({type(e).__name__})."
+            )
 
 def get_supabase_adapter() -> SupabaseAdapter:
     if SupabaseAdapter._instance is None:
