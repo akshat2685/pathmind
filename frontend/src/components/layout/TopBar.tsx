@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { NotificationCenter } from "@/components/pathmind/proactive/NotificationCenter";
+import { useAuth } from "@/lib/auth-context";
 
 interface TopBarProps {
   scholarName?: string | null;
@@ -12,6 +13,7 @@ interface TopBarProps {
 export function TopBar({ scholarName: propName, personId: propId }: TopBarProps = {}) {
   const [scholarName, setScholarName] = useState<string | null>(propName || null);
   const [personId, setPersonId] = useState<string | null>(propId || null);
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     if (propName !== undefined) setScholarName(propName);
@@ -95,6 +97,17 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
           >
             <span className="material-symbols-outlined text-sm">restart_alt</span>
             <span className="hidden sm:inline">Reset</span>
+          </button>
+        )}
+
+        {user && (
+          <button
+            onClick={() => signOut()}
+            title={`Sign out (${user.email ?? "traveler"})`}
+            className="text-xs text-on-surface-variant hover:text-error transition-colors px-2.5 py-1 rounded border border-outline-variant/40 hover:border-error/40 flex items-center gap-1 cursor-pointer font-note-handwritten text-sm"
+          >
+            <span className="material-symbols-outlined text-sm">logout</span>
+            <span className="hidden sm:inline">Sign out</span>
           </button>
         )}
 
