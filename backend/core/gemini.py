@@ -17,6 +17,40 @@ from typing import Optional
 from backend.core.college_logging import log_event
 
 
+class _GenaiResponseWrapper:
+    """
+    Wraps the new google.genai GenerateContentResponse to provide a safe
+    `.text` attribute. The new SDK's `.text` property can raise if the
+    response has no parts (e.g., blocked content); this wrapper guarantees
+    `.text` always returns a string (possibly empty) and never raises.
+    """
+    def __init__(self, raw_response):
+        self._raw = raw_response
+
+    @property
+    def text(self) -> str:
+        try:
+            t = self._raw.text
+            return t if isinstance(t, str) else ""
+        except Exception:
+            # Fall back to manually concatenating parts
+            try:
+                parts = []
+                for cand in (getattr(self._raw, "candidates", None) or []):
+                    content = getattr(cand, "content", None)
+                    for part in (getattr(content, "parts", None) or []):
+                        pt = getattr(part, "text", None)
+                        if isinstance(pt, str):
+                            parts.append(pt)
+                return "".join(parts)
+            except Exception:
+                return ""
+
+    def __getattr__(self, name):
+        # Delegate everything else to the raw response
+        return getattr(self._raw, name)
+
+
 class _GenaiModelWrapper:
     """
     Wraps the new google.genai Client to provide the legacy
@@ -27,10 +61,11 @@ class _GenaiModelWrapper:
         self._model_id = model_id
 
     def generate_content(self, prompt: str):
-        return self._client.models.generate_content(
+        raw = self._client.models.generate_content(
             model=self._model_id,
             contents=prompt,
         )
+        return _GenaiResponseWrapper(raw)
 
 
 def get_gemini_model() -> Optional[object]:
