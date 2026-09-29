@@ -296,6 +296,13 @@ export function CollegeDashboard() {
       // 2. Academic Context — without it there is nothing honest to show
       const ctxRes = await apiClient.get<any>("/api/college/academic-context");
       if (!ctxRes.ok) {
+        // An auth failure (401) means the session is gone — expired or
+        // revoked. Redirect to /login via the router instead of showing an
+        // error banner. Non-auth errors still get the banner below.
+        if (ctxRes.status === 401) {
+          router.push("/login");
+          return;
+        }
         // A transient failure (e.g. token refresh race on first load) gets
         // one retry; a hard failure gets an explicit banner, never a stale
         // "not set" screen.
