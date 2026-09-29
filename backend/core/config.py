@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = Field(default="", validation_alias="GEMINI_API_KEY")
     # Model ids live in env so a Google model retirement is a dashboard
     # change, not a code deploy. Never hardcode a model id in services.
-    GEMINI_MODEL: str = Field(default="gemini-2.0-flash", validation_alias="GEMINI_MODEL")
+    # gemini-2.0-flash was retired by Google (404); gemini-3.5-flash is verified working.
+    GEMINI_MODEL: str = Field(default="gemini-3.5-flash", validation_alias="GEMINI_MODEL")
     GEMINI_FALLBACK_MODEL: str = Field(default="", validation_alias="GEMINI_FALLBACK_MODEL")
     
     # ESCO Configuration

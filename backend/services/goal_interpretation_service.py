@@ -19,7 +19,7 @@ class GoalInterpretationService:
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=settings.GEMINI_API_KEY)
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                self.model = genai.GenerativeModel('gemini-3.5-flash')
             except Exception as e:
                 print(f"Warning: Failed to initialize Gemini in GoalInterpretationService: {e}")
                 self.model = None

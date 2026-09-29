@@ -37,7 +37,7 @@ class AssessmentBlueprintService:
         self.model = None
         if self.gemini_available:
             try:
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                self.model = genai.GenerativeModel('gemini-3.5-flash')
             except Exception as e:
                 print(f"[AssessmentBlueprintService] Warning: Could not initialize Gemini model: {e}")
                 self.model = None
