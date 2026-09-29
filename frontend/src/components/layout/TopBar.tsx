@@ -56,18 +56,22 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
   };
 
   const handleSignOut = async () => {
-    const client = getSupabaseClient();
-    if (client) {
-      await client.auth.signOut();
+    try {
+      const client = getSupabaseClient();
+      if (client) {
+        await client.auth.signOut();
+      }
+    } finally {
+      // Always run local cleanup + redirect, even if signOut() rejects.
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("pathmind_person_id");
+        localStorage.removeItem("pathmind_user_name");
+        localStorage.removeItem("pathmind_user_identity");
+        localStorage.removeItem("pathmind_user_goal");
+        localStorage.removeItem("pathmind_user_evidence");
+      }
+      router.replace("/signin");
     }
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("pathmind_person_id");
-      localStorage.removeItem("pathmind_user_name");
-      localStorage.removeItem("pathmind_user_identity");
-      localStorage.removeItem("pathmind_user_goal");
-      localStorage.removeItem("pathmind_user_evidence");
-    }
-    router.replace("/signin");
   };
 
   return (
