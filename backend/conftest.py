@@ -7,8 +7,11 @@ from pathlib import Path
 # provide dummy values here. supabase-py's create_client is lazy — no network
 # traffic happens at construction. Tests that need a live database use the
 # requires_live_db fixture below and skip honestly on dummy credentials.
-os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
-os.environ.setdefault("SUPABASE_SECRET_KEY", "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJyb2xlIjogInNlcnZpY2Vfcm9sZSIsICJpc3MiOiAic3VwYWJhc2UiLCAicmVmIjogInRlc3QifQ.ImR1bW15LXNpZ25hdHVyZSI")
+# (Empty-string counts as missing: CI maps unset secrets to empty env vars.)
+if not os.environ.get("SUPABASE_URL"):
+    os.environ["SUPABASE_URL"] = "https://test.supabase.co"
+if not os.environ.get("SUPABASE_SECRET_KEY"):
+    os.environ["SUPABASE_SECRET_KEY"] = "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJyb2xlIjogInNlcnZpY2Vfcm9sZSIsICJpc3MiOiAic3VwYWJhc2UiLCAicmVmIjogInRlc3QifQ.ImR1bW15LXNpZ25hdHVyZSI"
 
 # Add project root to sys.path
 root_dir = Path(__file__).resolve().parent.parent

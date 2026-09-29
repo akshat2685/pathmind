@@ -56,7 +56,7 @@ async def test_automatic_proactive_recall_during_learning_task(clean_store, proa
     assert "Rate Limit" in ctx.proactive_summary or "Distributed Caching" in ctx.proactive_summary
 
 @pytest.mark.asyncio
-async def test_context_graph_service_integrates_proactive_memory(requires_live_db, clean_store, second_brain):
+async def test_context_graph_service_integrates_proactive_memory(clean_store, second_brain):
     person_id = "test-learner-graph"
     
     await second_brain.ingest_memory(person_id, {
@@ -194,7 +194,7 @@ async def test_strict_person_isolation(clean_store, proactive_service, second_br
     assert ctx_bob.status == "NO_RELEVANT_MEMORY"
 
 @pytest.mark.asyncio
-async def test_shared_learning_patterns_scrub_identity(requires_live_db, client):
+async def test_shared_learning_patterns_scrub_identity(client):
     res = client.get("/api/memory/shared-patterns")
     assert res.status_code == 200
     patterns = res.json()
@@ -430,14 +430,22 @@ async def test_scenarios_a_through_e(clean_store, proactive_service, second_brai
 # -------------------------------------------------------------------------
 # Test 16: Debug API Endpoint
 # -------------------------------------------------------------------------
-def test_debug_proactive_context_endpoint(requires_live_db, client):
-    res = client.get(
-        "/api/memory/debug/proactive-context?task_type=NEXT_LEARNING_ACTION&current_concept=Tree%20Traversal",
-        headers={"X-Person-ID": "test-debug-client"}
-    )
-    assert res.status_code == 200
-    data = res.json()
-    assert "status" in data
-    assert "retrieved_memories" in data
-    assert "relevance_reasons" in data
-    assert "proactive_summary" in data
+def test_debug_proactive_context_endpoint(client):
+    from fastapi import Header as _Header
+    from backend.core.security import get_authenticated_person as _gap
+    async def _test_auth_override(x_person_id: str = _Header(None)):
+        return x_person_id or "test-route-person"
+    app.dependency_overrides[_gap] = _test_auth_override
+    try:
+        res = client.get(
+            "/api/memory/debug/proactive-context?task_type=NEXT_LEARNING_ACTION&current_concept=Tree%20Traversal",
+            headers={"X-Person-ID": "test-debug-client"}
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert "status" in data
+        assert "retrieved_memories" in data
+        assert "relevance_reasons" in data
+        assert "proactive_summary" in data
+    finally:
+        app.dependency_overrides.pop(_gap, None)

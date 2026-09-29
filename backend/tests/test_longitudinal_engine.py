@@ -2,6 +2,10 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.progress_analysis_service import ProgressAnalysisService
 from backend.services.learner_evolution_agent import LearnerEvolutionAgent
+from backend.services.context_graph_service import ContextGraphService
+from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.memory_engine import MemoryEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
 from backend.tests.in_memory_store import InMemoryStore
 
 @pytest.mark.asyncio
@@ -100,12 +104,20 @@ async def test_learning_strategy_evaluation():
     assert proj_strat.successful_evaluations == 1
 
 @pytest.mark.asyncio
-async def test_temporal_queries_with_grounded_provenance(requires_live_db):
+async def test_temporal_queries_with_grounded_provenance():
     """
     LearnerEvolutionAgent answers temporal questions with exact timestamps and falls back cleanly.
     """
     store = InMemoryStore()
-    agent = LearnerEvolutionAgent(store=store)
+    agent = LearnerEvolutionAgent(
+        store=store,
+        context_service=ContextGraphService(
+            store=store,
+            roadmap_engine=RoadmapEngine(store=store),
+            memory_engine=MemoryEngine(store=store),
+            readiness_engine=CareerReadinessEngine(store=store),
+        ),
+    )
     person_id = "test-temporal-query-learner"
 
     # 1. Initialize roadmap & capability
@@ -134,12 +146,18 @@ async def test_temporal_queries_with_grounded_provenance(requires_live_db):
     assert res2.status == "INSUFFICIENT_HISTORY"
 
 @pytest.mark.asyncio
-async def test_progress_insight_dispute_lifecycle(requires_live_db):
+async def test_progress_insight_dispute_lifecycle():
     """
     Learner can dispute an insight, updating its status to DISPUTED with reason.
     """
     store = InMemoryStore()
-    agent = LearnerEvolutionAgent(store=store)
+    agent = LearnerEvolutionAgent(
+        store=store,
+        context_service=ContextGraphService(
+            store=store,
+            memory_engine=MemoryEngine(store=store),
+        ),
+    )
     person_id = "test-dispute-learner"
 
     # Save an insight

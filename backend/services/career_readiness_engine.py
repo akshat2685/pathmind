@@ -40,7 +40,7 @@ from backend.services.pm_store import get_pm_store
 class CareerReadinessEngine:
     def __init__(self, store: Optional[Any] = None):
         self.store = store or get_pm_store()
-        self.knowledge_service = KnowledgeService()
+        self.knowledge_service = KnowledgeService(store=self.store)
         self.opportunity_matching_engine = OpportunityMatchingEngine(store=self.store, career_engine=self)
         self.requirement_graph_service = RequirementGraphService(self.knowledge_service)
         

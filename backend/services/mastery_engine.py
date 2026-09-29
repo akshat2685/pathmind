@@ -31,9 +31,9 @@ class MasteryEngine:
         self.store = store or get_pm_store()
         self.verification_service = verification_service or EvidenceVerificationService()
         self.evaluation_agent = evaluation_agent or EvidenceEvaluationAgent()
-        self.roadmap_engine = roadmap_engine or RoadmapEngine()
-        self.memory_engine = memory_engine or MemoryEngine()
-        self.personal_agent = personal_agent or PersonalAgentEngine()
+        self.roadmap_engine = roadmap_engine or RoadmapEngine(store=self.store)
+        self.memory_engine = memory_engine or MemoryEngine(store=self.store)
+        self.personal_agent = personal_agent or PersonalAgentEngine(store=self.store)
 
     async def submit_and_evaluate_evidence(
         self,

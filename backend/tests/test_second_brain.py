@@ -11,6 +11,22 @@ from backend.core.memory_schemas import (
 )
 from backend.tests.in_memory_store import InMemoryStore
 
+
+@pytest.fixture(autouse=True)
+def _mock_route_auth():
+    """Test-only auth override: production routes reject self-asserted
+    x-person-id headers (anti-impersonation). Route tests honor the header."""
+    from fastapi import Header
+    from backend.main import app as _route_app
+    from backend.core.security import get_authenticated_person
+
+    async def _test_auth(x_person_id: str = Header(None)):
+        return x_person_id or "test-route-person"
+
+    _route_app.dependency_overrides[get_authenticated_person] = _test_auth
+    yield
+    _route_app.dependency_overrides.pop(get_authenticated_person, None)
+
 @pytest.fixture
 def clean_store():
     store = InMemoryStore()
@@ -292,7 +308,7 @@ async def test_user_memory_update_and_deletion(second_brain):
     remaining = await second_brain.store.get_personal_memories(person_id)
     assert not any(m["memory_id"] == mem.memory_id for m in remaining)
 
-def test_fastapi_second_brain_endpoints(requires_live_db):
+def test_fastapi_second_brain_endpoints():
     client = TestClient(app)
     headers = {"x-person-id": "test-scholar-api"}
 

@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { AssessmentFlow } from "@/components/pathmind/assessment/AssessmentFlow";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,6 +9,14 @@ export const metadata = {
 };
 
 export default function AssessmentPage() {
+  return (
+    <AuthGate>
+      <AssessmentPageInner />
+    </AuthGate>
+  );
+}
+
+function AssessmentPageInner() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />

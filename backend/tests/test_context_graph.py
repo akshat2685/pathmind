@@ -2,15 +2,59 @@ import pytest
 from datetime import datetime, timezone
 from backend.services.context_graph_service import ContextGraphService
 from backend.services.decision_intelligence_service import DecisionIntelligenceService
+from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.memory_engine import MemoryEngine
+from backend.services.career_readiness_engine import CareerReadinessEngine
+from backend.services.mastery_engine import MasteryEngine
 from backend.tests.in_memory_store import InMemoryStore
 
+
+@pytest.fixture
+def store():
+    return InMemoryStore()
+
+
+@pytest.fixture
+def roadmap_engine(store):
+    return RoadmapEngine(store=store)
+
+
+@pytest.fixture
+def memory_engine(store):
+    return MemoryEngine(store=store)
+
+
+@pytest.fixture
+def readiness_engine(store):
+    return CareerReadinessEngine(store=store)
+
+
+@pytest.fixture
+def mastery_engine(store):
+    return MasteryEngine(store=store)
+
+
+@pytest.fixture
+def context_service(store, roadmap_engine, memory_engine, readiness_engine, mastery_engine):
+    return ContextGraphService(
+        store=store,
+        roadmap_engine=roadmap_engine,
+        memory_engine=memory_engine,
+        readiness_engine=readiness_engine,
+        mastery_engine=mastery_engine,
+    )
+
+
+@pytest.fixture
+def decision_service(store, context_service):
+    return DecisionIntelligenceService(store=store, context_service=context_service)
+
+
 @pytest.mark.asyncio
-async def test_personal_context_graph_assembly(requires_live_db):
+async def test_personal_context_graph_assembly(context_service):
     """
     ContextGraphService dynamically synthesizes all 9 context domains without duplicating canonical models.
     """
-    store = InMemoryStore()
-    context_service = ContextGraphService(store=store)
     person_id = "test-context-learner-1"
 
     # Initialize underlying roadmap & mastery
@@ -28,12 +72,10 @@ async def test_personal_context_graph_assembly(requires_live_db):
     assert isinstance(graph.opportunity_context, list)
 
 @pytest.mark.asyncio
-async def test_task_context_relevance_filtering(requires_live_db):
+async def test_task_context_relevance_filtering(context_service):
     """
     extract_task_context_package extracts concise task-specific packages to avoid model context flooding.
     """
-    store = InMemoryStore()
-    context_service = ContextGraphService(store=store)
     person_id = "test-context-filter"
 
     await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -46,7 +88,7 @@ async def test_task_context_relevance_filtering(requires_live_db):
     assert isinstance(pkg.active_constraints, dict)
 
 @pytest.mark.asyncio
-async def test_command_center_six_answers_generation(requires_live_db):
+async def test_command_center_six_answers_generation(context_service, decision_service):
     """
     Command Center accurately answers:
     1. Where Am I?
@@ -56,9 +98,6 @@ async def test_command_center_six_answers_generation(requires_live_db):
     5. What Should I Do Now?
     6. What Happens After That?
     """
-    store = InMemoryStore()
-    context_service = ContextGraphService(store=store)
-    decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-context-cc"
 
     await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -75,13 +114,10 @@ async def test_command_center_six_answers_generation(requires_live_db):
     assert len(overview.what_happens_after_that) > 0
 
 @pytest.mark.asyncio
-async def test_decision_recording_and_outcome_learning(requires_live_db):
+async def test_decision_recording_and_outcome_learning(context_service, decision_service, store):
     """
     User decisions are canonically persisted with context snapshots, and later outcome learning attaches.
     """
-    store = InMemoryStore()
-    context_service = ContextGraphService(store=store)
-    decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-decision-learner"
 
     await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')
@@ -116,13 +152,10 @@ async def test_decision_recording_and_outcome_learning(requires_live_db):
     assert records[0]["outcome_state"] == "POSITIVE"
 
 @pytest.mark.asyncio
-async def test_next_action_adapts_to_mastery_risk(requires_live_db):
+async def test_next_action_adapts_to_mastery_risk(context_service, decision_service):
     """
     When a mastery risk is flagged, NextAction prioritizes concept remediation before forward progression.
     """
-    store = InMemoryStore()
-    context_service = ContextGraphService(store=store)
-    decision_service = DecisionIntelligenceService(store=store, context_service=context_service)
     person_id = "test-risk-next-action"
 
     await context_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome='Applied AI Specialist')

@@ -25,8 +25,8 @@ from backend.services.requirement_graph_service import RequirementGraphService
 class RoadmapEngine:
     def __init__(self, store: Optional[Any] = None):
         self.store = store or get_pm_store()
-        self.knowledge_service = KnowledgeService()
-        self.personal_agent = PersonalAgentEngine()
+        self.knowledge_service = KnowledgeService(store=self.store)
+        self.personal_agent = PersonalAgentEngine(store=self.store)
         self.requirement_service = RequirementGraphService(knowledge_service=self.knowledge_service)
         self.gemini_available = bool(settings.GEMINI_API_KEY)
         self.model = None
@@ -501,6 +501,23 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
             )
             await self.store.save_roadmap(person_id, new_roadmap.model_dump(mode="json"))
             return new_roadmap
+
+        # 3. Check if user has a selected path (from trajectory discovery)
+        selected_path = await self.store.get_active_selected_path(person_id)
+        if selected_path:
+            path_outcome = (
+                selected_path.get("selected_path", {}).get("title")
+                or selected_path.get("title")
+                or path_id
+            )
+            if path_outcome:
+                new_roadmap = await self.synthesize_personalized_roadmap(
+                    person_id=person_id,
+                    target_outcome=path_outcome,
+                    path_id=path_id or selected_path.get("selected_path_id") or f"path_{path_outcome.lower().replace(' ', '_')}"
+                )
+                await self.store.save_roadmap(person_id, new_roadmap.model_dump(mode="json"))
+                return new_roadmap
 
         # 4. If neither goal nor valid path exists for production user, raise explicit error instead of silent AI hallucination
         raise ValueError("NEEDS_USER_INPUT: No canonical goal or path found for user. Cannot synthesize roadmap without direction.")

@@ -14,8 +14,8 @@ from backend.services.pm_store import get_pm_store
 from backend.services.proactive_memory_service import ProactiveMemoryService
 
 class PersonalAgentEngine:
-    def __init__(self):
-        self.store = get_pm_store()
+    def __init__(self, store=None):
+        self.store = store or get_pm_store()
         self.proactive_memory = ProactiveMemoryService(self.store)
 
     async def get_or_create_agent_model(self, person_id: str) -> PersonalAgentModel:
