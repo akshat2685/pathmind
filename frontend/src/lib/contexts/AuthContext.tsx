@@ -66,7 +66,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const isAuthRoute = pathname === "/login";
       if (!user && !isAuthRoute) {
         router.push("/login");
-      } else if (user && isAuthRoute && user.email_confirmed_at) {
+      // NOTE: the /login → / redirect below is deliberately NOT gated on
+      // user.email_confirmed_at. Supabase runs with mailer_autoconfirm=true,
+      // so no confirmation email is ever sent and email_confirmed_at can stay
+      // null even for valid sessions — gating on it strands users in a
+      // redirect race. Session presence alone is the source of truth.
+      } else if (user && isAuthRoute) {
         router.push("/");
       }
     }
