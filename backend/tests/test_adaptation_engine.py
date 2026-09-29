@@ -5,17 +5,23 @@ from backend.services.state_change_service import StateChangeService
 from backend.services.impact_analysis_service import ImpactAnalysisService
 from backend.services.adaptive_planning_agent import AdaptivePlanningAgent
 from backend.services.roadmap_engine import RoadmapEngine
+from backend.services.memory_engine import MemoryEngine
 from backend.tests.in_memory_store import InMemoryStore
+from backend.services.personal_agent_engine import PersonalAgentEngine
 from backend.core.adaptation_schemas import UserAdaptationDecision, StateChangeEvent
 
 @pytest.mark.asyncio
-async def test_goal_change_creates_versioned_proposal_and_requires_approval(requires_live_db):
+async def test_goal_change_creates_versioned_proposal_and_requires_approval():
     """
     Changing target goal must trigger impact analysis, formulate a Roadmap v2 proposal,
     preserve foundational milestones, and require explicit user approval.
     """
     store = InMemoryStore()
-    adaptation_service = AdaptationService(store=store)
+    adaptation_service = AdaptationService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        memory_engine=MemoryEngine(store=store),
+    )
     person_id = "test-learner-goal-change"
 
     # 1. Initialize baseline roadmap (Version 1)
@@ -105,12 +111,12 @@ async def test_mastery_risk_triggers_reinforcement_not_downstream_unlock():
     assert "reinforcement" in impact.what_changed.lower()
 
 @pytest.mark.asyncio
-async def test_constraint_change_smoothly_recalibrates(requires_live_db):
+async def test_constraint_change_smoothly_recalibrates():
     """
     Reducing available study hours adjusts pacing smoothly without destroying completed stages.
     """
     store = InMemoryStore()
-    adaptation_service = AdaptationService(store=store)
+    adaptation_service = AdaptationService(store=store, personal_agent=PersonalAgentEngine(store=store))
     person_id = "test-learner-constraint"
     await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
 
@@ -130,12 +136,16 @@ async def test_constraint_change_smoothly_recalibrates(requires_live_db):
     assert agent_model.learning_preferences["weekly_hours"] == 6
 
 @pytest.mark.asyncio
-async def test_opportunity_driven_adaptation(requires_live_db):
+async def test_opportunity_driven_adaptation():
     """
     Verified opportunity matching triggers review to prioritize relevant milestone projects.
     """
     store = InMemoryStore()
-    adaptation_service = AdaptationService(store=store)
+    adaptation_service = AdaptationService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        memory_engine=MemoryEngine(store=store),
+    )
     person_id = "test-learner-opp"
     await adaptation_service.roadmap_engine.get_or_create_roadmap(person_id, target_outcome="Applied AI Specialist")
 
@@ -208,12 +218,16 @@ async def test_conflict_detection_surfaces_evidence_discrepancy():
     assert conflict.recommended_verification_task is not None
 
 @pytest.mark.asyncio
-async def test_roadmap_history_and_isolation(requires_live_db):
+async def test_roadmap_history_and_isolation():
     """
     Past roadmap versions remain retrievable and Person A cannot access Person B's adaptations.
     """
     store = InMemoryStore()
-    adaptation_service = AdaptationService(store=store)
+    adaptation_service = AdaptationService(
+        store=store,
+        roadmap_engine=RoadmapEngine(store=store),
+        memory_engine=MemoryEngine(store=store),
+    )
     person_a = "person-alpha-10"
     person_b = "person-beta-10"
     await adaptation_service.roadmap_engine.get_or_create_roadmap(person_a, target_outcome="Applied AI Specialist")

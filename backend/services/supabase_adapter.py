@@ -11,6 +11,7 @@ are additive and namespaced; college tables are never touched.
 
 from typing import Optional, Dict, Any
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,8 @@ class SupabaseAdapter:
             try:
                 from supabase import create_client, Client
                 self._client: Client = create_client(self.url, self.key)
-            except Exception:
-                logger.error("Failed to initialize Supabase client: %s", type(Exception).__name__)
+            except Exception as err:
+                logger.error("Failed to initialize Supabase client: %s (%s)", type(err).__name__, err)
                 self._client = None
         else:
             self._client = None
@@ -70,10 +71,22 @@ class SupabaseAdapter:
         """
         Verifies a Supabase Auth JWT and returns the authenticated user id.
         Raises on any failure — never returns an unverified identity.
+
+        The underlying Supabase client's ``auth.get_user()`` sets no explicit
+        timeout, so the call runs in a short-lived worker thread with a 5s
+        join-timeout (thread-with-timeout pattern, mirroring the 5s used by
+        ``check_database_health``). A TimeoutError means the auth service did
+        not answer in time; the stuck worker is abandoned
+        (``executor.shutdown(wait=False)``) rather than blocking the request.
         """
         if not self.client:
             raise RuntimeError("DATABASE_UNAVAILABLE: Supabase client not initialized.")
-        user_resp = self.client.auth.get_user(token)
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pm-auth-verify")
+        try:
+            future = executor.submit(self.client.auth.get_user, token)
+            user_resp = future.result(timeout=5.0)
+        finally:
+            executor.shutdown(wait=False)
         if not user_resp or not user_resp.user:
             raise ValueError("No user found for token")
         return user_resp.user.id

@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { ProgressiveJourney } from "@/components/pathmind/journey/ProgressiveJourney";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,6 +9,14 @@ export const metadata = {
 };
 
 export default function JourneyPage() {
+  return (
+    <AuthGate>
+      <JourneyPageInner />
+    </AuthGate>
+  );
+}
+
+function JourneyPageInner() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />

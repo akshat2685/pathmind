@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { MemoryVault } from "@/components/pathmind/memory/MemoryVault";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,6 +9,14 @@ export const metadata = {
 };
 
 export default function MemoryPage() {
+  return (
+    <AuthGate>
+      <MemoryPageInner />
+    </AuthGate>
+  );
+}
+
+function MemoryPageInner() {
   return (
     <div className="flex min-h-screen bg-surface w-full max-w-full overflow-x-hidden">
       <Sidebar />

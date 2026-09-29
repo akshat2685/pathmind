@@ -35,9 +35,9 @@ class AdaptationService:
         self.state_change_service = state_change_service or StateChangeService(self.store)
         self.impact_service = impact_service or ImpactAnalysisService()
         self.agent = agent or AdaptivePlanningAgent()
-        self.roadmap_engine = roadmap_engine or RoadmapEngine()
-        self.memory_engine = memory_engine or MemoryEngine()
-        self.personal_agent = personal_agent or PersonalAgentEngine()
+        self.roadmap_engine = roadmap_engine or RoadmapEngine(store=self.store)
+        self.memory_engine = memory_engine or MemoryEngine(store=self.store)
+        self.personal_agent = personal_agent or PersonalAgentEngine(store=self.store)
 
     async def get_continuous_intelligence_state(self, person_id: str) -> ContinuousIntelligenceState:
         roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)

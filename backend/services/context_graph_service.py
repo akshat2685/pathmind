@@ -48,30 +48,38 @@ class ContextGraphService:
             "status": "CURRENT"
         }
 
-        # 2. Roadmap & Learning State
-        roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
-        flat_stages = self.roadmap_engine.get_all_stages_flat(roadmap)
-        active_stage = next((s for s in flat_stages if s.stage_id == roadmap.current_stage_id), flat_stages[0] if flat_stages else None)
+        # 2. Roadmap & Learning State (graceful for new users with no goal yet)
+        try:
+            roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
+        except ValueError as e:
+            if "NEEDS_USER_INPUT" not in str(e):
+                raise
+            roadmap = None
+        if roadmap:
+            flat_stages = self.roadmap_engine.get_all_stages_flat(roadmap)
+            active_stage = next((s for s in flat_stages if s.stage_id == roadmap.current_stage_id), flat_stages[0] if flat_stages else None)
+        else:
+            flat_stages, active_stage = [], None
         
         learning_context = {
-            "roadmap_id": roadmap.roadmap_id,
-            "version": roadmap.version,
-            "current_stage_id": roadmap.current_stage_id,
+            "roadmap_id": roadmap.roadmap_id if roadmap else None,
+            "version": roadmap.version if roadmap else 0,
+            "current_stage_id": roadmap.current_stage_id if roadmap else None,
             "current_stage_title": active_stage.title if active_stage else "Stage 01",
             "current_stage_number": active_stage.stage_number if active_stage else 1,
-            "completed_stages": roadmap.completed_stages,
-            "total_stages": roadmap.total_stages,
-            "progress_percent": round((roadmap.completed_stages / max(1, roadmap.total_stages)) * 100, 1),
+            "completed_stages": roadmap.completed_stages if roadmap else 0,
+            "total_stages": roadmap.total_stages if roadmap else 0,
+            "progress_percent": round((roadmap.completed_stages / max(1, roadmap.total_stages)) * 100, 1) if roadmap else 0.0,
             "current_blocker": active_stage.title if active_stage and active_stage.locked else None
         }
 
         # 3. Goal Context
         goal_context = {
-            "primary_target_role": roadmap.target_outcome or "UNKNOWN",
-            "confidence": "HIGH",
-            "status": "CURRENT",
-            "timeline": (roadmap.constraints or {}).get("timeline") or "NOT_SPECIFIED",
-            "revision_reason": roadmap.revision_reason
+            "primary_target_role": (roadmap.target_outcome if roadmap else None) or "UNKNOWN",
+            "confidence": "HIGH" if roadmap else "UNKNOWN",
+            "status": "CURRENT" if roadmap else "NOT_SET",
+            "timeline": ((roadmap.constraints or {}).get("timeline") if roadmap else None) or "NOT_SPECIFIED",
+            "revision_reason": roadmap.revision_reason if roadmap else None
         }
 
         # 4. Capability & Mastery Context
@@ -92,20 +100,30 @@ class ContextGraphService:
         }
 
         # 5. Career Readiness Context
-        readiness = await self.readiness_engine.generate_career_readiness_report(person_id, roadmap.target_outcome)
-        total_reqs = len(readiness.transferable_skills.already_have) + len(readiness.categorized_gaps)
-        calc_match = round((len(readiness.transferable_skills.already_have) / max(1, total_reqs)) * 100, 1) if total_reqs > 0 else 0.0
-        career_context = {
-            "target_role": roadmap.target_outcome,
-            "readiness_tier": readiness.readiness_state,
-            "overall_match_score": calc_match,
-            "alignment_level": "STRONG" if calc_match >= 70 else ("PROMISING" if calc_match >= 30 else "DEVELOPING"),
-            "critical_skill_gaps": [g.title for g in readiness.categorized_gaps if g.importance in ["HIGH", "CRITICAL"]],
-            "verified_requirements_count": len(readiness.transferable_skills.already_have)
-        }
+        if roadmap and roadmap.target_outcome:
+            readiness = await self.readiness_engine.generate_career_readiness_report(person_id, roadmap.target_outcome)
+            total_reqs = len(readiness.transferable_skills.already_have) + len(readiness.categorized_gaps)
+            calc_match = round((len(readiness.transferable_skills.already_have) / max(1, total_reqs)) * 100, 1) if total_reqs > 0 else 0.0
+            career_context = {
+                "target_role": roadmap.target_outcome,
+                "readiness_tier": readiness.readiness_state,
+                "overall_match_score": calc_match,
+                "alignment_level": "STRONG" if calc_match >= 70 else ("PROMISING" if calc_match >= 30 else "DEVELOPING"),
+                "critical_skill_gaps": [g.title for g in readiness.categorized_gaps if g.importance in ["HIGH", "CRITICAL"]],
+                "verified_requirements_count": len(readiness.transferable_skills.already_have)
+            }
+        else:
+            career_context = {
+                "target_role": "UNKNOWN",
+                "readiness_tier": "UNKNOWN",
+                "overall_match_score": 0.0,
+                "alignment_level": "DEVELOPING",
+                "critical_skill_gaps": [],
+                "verified_requirements_count": 0
+            }
 
         # 6. Constraints Context
-        constraints = roadmap.constraints or {}
+        constraints = (roadmap.constraints or {}) if roadmap else {}
         constraint_context = {
             "weekly_hours": constraints.get("weekly_hours", 10),
             "format_preference": constraints.get("format_preference") or "NOT_SPECIFIED",
@@ -117,13 +135,13 @@ class ContextGraphService:
         proactive_mem = await self.proactive_memory.get_proactive_memory_context(
             person_id=person_id,
             task_type="GENERAL_CONTEXT",
-            current_goal=roadmap.target_outcome
+            current_goal=roadmap.target_outcome if roadmap else None
         )
         memory_context = [m.model_dump(mode="json") for m in proactive_mem.retrieved_memories]
 
         # 8. Verified Opportunities Context
         opp_records = await self.opp_provider.fetch_opportunities(
-            role_filter=roadmap.target_outcome
+            role_filter=roadmap.target_outcome if roadmap else None
         )
         opportunity_context = [o.model_dump() for o in opp_records[:3]]
 

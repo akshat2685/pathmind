@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { OnboardingFlow } from "@/components/pathmind/OnboardingFlow";
 
 export const metadata = {
@@ -6,5 +7,13 @@ export const metadata = {
 };
 
 export default function OnboardingPage() {
+  return (
+    <AuthGate>
+      <OnboardingPageInner />
+    </AuthGate>
+  );
+}
+
+function OnboardingPageInner() {
   return <OnboardingFlow />;
 }

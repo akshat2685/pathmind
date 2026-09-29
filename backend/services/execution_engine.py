@@ -134,7 +134,22 @@ class ExecutionEngine:
         # 2. Retrieve existing actions or decompose from active roadmap
         actions_raw = await self.store.get_person_actions(person_id)
         if not actions_raw:
-            roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
+            try:
+                roadmap = await self.roadmap_engine.get_or_create_roadmap(person_id)
+            except ValueError as e:
+                if "NEEDS_USER_INPUT" not in str(e):
+                    raise
+                # New user with no goal yet: return an empty plan, not a 500.
+                return DailyExecutionPlan(
+                    person_id=person_id,
+                    primary_action=None,
+                    secondary_actions=[],
+                    why_it_matters="No goal set yet. Complete onboarding to get your daily plan.",
+                    evidence_proof_required="N/A",
+                    active_blockers=[],
+                    next_subsequent_step="Set your aspiration and goal to unlock your daily execution plan.",
+                    is_paused=False,
+                )
             flat_stages = self.roadmap_engine.get_all_stages_flat(roadmap)
             active_stage = next((s for s in flat_stages if s.status == "ACTIVE"), flat_stages[0] if flat_stages else None)
             if active_stage:

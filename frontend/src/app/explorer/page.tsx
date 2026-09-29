@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { CareerExplorer } from "@/components/pathmind/explorer/CareerExplorer";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,6 +9,14 @@ export const metadata = {
 };
 
 export default function ExplorerPage() {
+  return (
+    <AuthGate>
+      <ExplorerPageInner />
+    </AuthGate>
+  );
+}
+
+function ExplorerPageInner() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />

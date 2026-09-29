@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { CareerLaunchpad } from "@/components/pathmind/career/CareerLaunchpad";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,6 +9,14 @@ export const metadata = {
 };
 
 export default function ReadinessPage() {
+  return (
+    <AuthGate>
+      <ReadinessPageInner />
+    </AuthGate>
+  );
+}
+
+function ReadinessPageInner() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />

@@ -1,5 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from typing import List, Dict, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from backend.core.orchestration_schemas import (
     AgentContract,
@@ -132,21 +135,27 @@ async def init_journey(
         # Try to extract authenticated person_id from JWT if present
         authenticated_person_id = None
         if authorization and authorization.startswith("Bearer "):
-            try:
-                authenticated_person_id = get_authenticated_person(authorization=authorization)
-            except HTTPException:
-                # If JWT verification fails, fall back to generated ID
-                # (the error will be raised by subsequent endpoints that require auth)
-                pass
-        
+            # A credential was presented: if verification fails, the honest
+            # 401 propagates instead of silently falling back to an anonymous
+            # ID (which would orphan the learner's data under a random
+            # person_id no other endpoint will ever read).
+            authenticated_person_id = get_authenticated_person(authorization=authorization)
+
         return await orchestrator.init_journey(
             name=request.name,
             person_id=authenticated_person_id
         )
+    except HTTPException:
+        # Auth failures (e.g. INVALID_TOKEN 401) propagate unchanged —
+        # never masked as 500 by the handler below.
+        raise
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize journey: {str(e)}")
+        # Never leak raw exception / DB internals to the client; log them
+        # server-side and return a generic message.
+        logger.error("Failed to initialize journey: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to initialize journey due to an internal error.")
 
 @router.get("/journey/state")
 async def get_journey_state(person_id: str = Depends(get_person_id)):

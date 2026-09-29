@@ -1,3 +1,4 @@
+import { AuthGate } from "@/components/auth/AuthGate";
 import { MasteryDashboard } from "@/components/pathmind/evidence/MasteryDashboard";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
@@ -8,6 +9,14 @@ export const metadata = {
 };
 
 export default function EvidencePage() {
+  return (
+    <AuthGate>
+      <EvidencePageInner />
+    </AuthGate>
+  );
+}
+
+function EvidencePageInner() {
   return (
     <div className="flex min-h-screen bg-surface">
       <Sidebar />
