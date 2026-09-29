@@ -48,6 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setUser(data.session?.user ?? null);
       setLoading(false);
+    }).catch(() => {
+      // A rejected session read must still clear the loading state —
+      // otherwise the app hangs on a spinner forever.
+      if (!mounted) return;
+      setLoading(false);
     });
     const { data: listener } = client.auth.onAuthStateChange((_event, newSession) => {
       if (!mounted) return;
@@ -93,21 +98,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const client = getSupabaseClient();
-    if (!client) return;
-    await client.auth.signOut();
-    if (typeof window !== "undefined") {
-      // Clear local scholar identity so the next sign-in starts fresh.
-      for (const k of [
-        "pathmind_person_id",
-        "pathmind_user_name",
-        "pathmind_user_identity",
-        "pathmind_user_goal",
-        "pathmind_user_evidence",
-      ]) {
-        localStorage.removeItem(k);
+    try {
+      if (client) {
+        await client.auth.signOut();
       }
+    } finally {
+      // Local cleanup + redirect must ALWAYS run, even if the server-side
+      // revocation rejects (network error, etc.).
+      if (typeof window !== "undefined") {
+        // Clear local scholar identity so the next sign-in starts fresh.
+        for (const k of [
+          "pathmind_person_id",
+          "pathmind_user_name",
+          "pathmind_user_identity",
+          "pathmind_user_goal",
+          "pathmind_user_evidence",
+        ]) {
+          localStorage.removeItem(k);
+        }
+      }
+      router.replace("/login");
     }
-    router.replace("/login");
   }, [router]);
 
   const resendConfirmation = useCallback(async (email: string) => {
