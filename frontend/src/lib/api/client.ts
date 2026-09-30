@@ -24,6 +24,58 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
   params?: Record<string, string | number | boolean | undefined>;
 }
 
+/**
+ * FastAPI error bodies come in a few shapes:
+ *   { detail: "some message" }                          (HTTPException)
+ *   { detail: [ { loc: [...], msg: "...", type } ] }    (422 validation errors)
+ *   { detail: { msg: "..." } }
+ *   { error: "..." } / { message: "..." }
+ * Normalize any of them into ONE human-readable string. Never String() a raw
+ * object/array here — that is exactly how "[object Object]" leaked into the UI.
+ */
+interface FastApiErrorItem {
+  loc?: Array<string | number>;
+  msg?: string;
+  message?: string;
+}
+
+function describeErrorItem(item: unknown): string {
+  if (typeof item === "string") return item;
+  if (item && typeof item === "object") {
+    const e = item as FastApiErrorItem;
+    const msg = e.msg || e.message;
+    if (msg) {
+      // Prefix the field path ("email: field required") so form users know
+      // WHICH input failed; the leading "body" segment is noise.
+      const loc = Array.isArray(e.loc)
+        ? e.loc.filter((part) => part !== "body").join(".")
+        : "";
+      return loc ? `${loc}: ${msg}` : msg;
+    }
+    try {
+      return JSON.stringify(item);
+    } catch {
+      return "Unknown error";
+    }
+  }
+  return item == null ? "Unknown error" : String(item);
+}
+
+export function extractErrorMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== "object") return fallback;
+  const d = data as { detail?: unknown; error?: unknown; message?: unknown };
+  const candidate = d.detail ?? d.error ?? d.message;
+  if (typeof candidate === "string" && candidate) return candidate;
+  if (Array.isArray(candidate)) {
+    if (candidate.length === 0) return fallback;
+    return candidate.map(describeErrorItem).join("; ");
+  }
+  if (candidate && typeof candidate === "object") {
+    return describeErrorItem(candidate);
+  }
+  return fallback;
+}
+
 async function request<T = unknown>(
   endpoint: string,
   options: RequestInit = {}
@@ -60,15 +112,17 @@ async function request<T = unknown>(
     }
 
     if (!res.ok) {
-      const errorMessage =
-        (responseData as { detail?: string; error?: string })?.detail ||
-        (responseData as { detail?: string; error?: string })?.error ||
-        `HTTP Error ${res.status}: ${res.statusText}`;
+      // detail can be a string, an ARRAY (FastAPI 422), or an object — always
+      // normalize to a readable string, never String() the raw value.
+      const errorMessage = extractErrorMessage(
+        responseData,
+        `HTTP Error ${res.status}: ${res.statusText}`
+      );
       return {
         data: responseData,
         status: res.status,
         ok: false,
-        error: String(errorMessage),
+        error: errorMessage,
       };
     }
 
