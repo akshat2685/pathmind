@@ -143,7 +143,7 @@ export function CollegeOnboardingFlow() {
   const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null);
   const [semester, setSemester] = useState<number>(3);
 
-  // STEP 3 — Diagnostic
+  // STEP 4 — Diagnostic
   const [diagState, setDiagState] = useState<"intro" | "taking" | "result" | "unavailable" | "skipped">("intro");
   const [diagLoading, setDiagLoading] = useState(false);
   const [diagAssessment, setDiagAssessment] = useState<any>(null);
@@ -151,7 +151,7 @@ export function CollegeOnboardingFlow() {
   const [diagResult, setDiagResult] = useState<DiagnosticResult | null>(null);
   const [baseline, setBaseline] = useState<Baseline | null>(null);
 
-  // STEP 4 — Branch
+  // STEP 3 — Branch (asked before the diagnostic so questions can ground)
   const [branch, setBranch] = useState<string | null>(null);
   const [curriculumLoading, setCurriculumLoading] = useState(false);
   const [curriculumSubjects, setCurriculumSubjects] = useState<Subject[]>([]);
@@ -221,6 +221,45 @@ export function CollegeOnboardingFlow() {
     }
   };
 
+  // ---------- STEP 3: branch finished — persist BEFORE the diagnostic ---
+  // Discipline is asked FIRST, before any questions: the diagnostic
+  // generator grounds its probes in the saved academic context
+  // (university + branch + semester + subjects). Persisting branch and
+  // context here is what lets the diagnostic draw on the learner's real
+  // syllabus instead of generic material. Step 5 re-saves the same
+  // context with the final scope, so this is an idempotent upsert.
+  const handleBranchContinue = async () => {
+    if (!branch || !selectedUniversity) return;
+    setError(null);
+    setSubmitting(true);
+    try {
+      const profRes = await apiClient.post<any>("/api/college/profile", {
+        supported_path: branch,
+      });
+      if (!profRes.ok) {
+        setError(profRes.error || "Failed to save your branch. Please try again.");
+        return;
+      }
+      if (curriculumSubjects.length > 0) {
+        const ctxRes = await apiClient.post<any>("/api/college/academic-context", {
+          university_id: selectedUniversity.university_id,
+          branch: branch,
+          semester: semester,
+          subjects: curriculumSubjects.map((s) => s.subject_id),
+          available_hours_per_week: weeklyHours,
+          learning_style_preferences: [learningStyle],
+        });
+        if (!ctxRes.ok) {
+          setError(ctxRes.error || "Failed to save your academic context. Please try again.");
+          return;
+        }
+      }
+      setStep(4);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // ---------- STEP 1: create learner profile ----------
   const handleAspirationsNext = async () => {
     setError(null);
@@ -244,7 +283,7 @@ export function CollegeOnboardingFlow() {
     }
   };
 
-  // ---------- STEP 3: diagnostic assessment ----------
+  // ---------- STEP 4: diagnostic assessment ----------
   const beginDiagnostic = async () => {
     setDiagLoading(true);
     setError(null);
@@ -376,7 +415,7 @@ export function CollegeOnboardingFlow() {
     }
   };
 
-  const stepLabels = ["Aspirations", "University", "Diagnostic", "Branch", "Scope"];
+  const stepLabels = ["Aspirations", "University", "Branch", "Diagnostic", "Scope"];
 
   return (
     <div className="min-h-screen bg-[#f7f4e7] text-[#252321] flex flex-col justify-between relative overflow-x-hidden font-sans">
@@ -622,17 +661,17 @@ export function CollegeOnboardingFlow() {
                     onClick={() => selectedUniversity && setStep(3)}
                     className="px-6 py-3 bg-[#252321] hover:bg-[#383430] text-[#fdfae7] font-semibold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_rgba(37,35,33,0.9)] flex items-center gap-2 cursor-pointer disabled:opacity-40"
                   >
-                    <span>Continue to Diagnostic</span>
+                    <span>Continue to Branch</span>
                     <span>→</span>
                   </button>
                 </div>
               </motion.div>
             )}
 
-            {/* STEP 3: DIAGNOSTIC ASSESSMENT */}
-            {step === 3 && (
+            {/* STEP 4: DIAGNOSTIC ASSESSMENT (after branch — grounded in the saved context) */}
+            {step === 4 && (
               <motion.div
-                key="step3"
+                key="step4-diagnostic"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -700,7 +739,7 @@ export function CollegeOnboardingFlow() {
                         type="button"
                         onClick={() => {
                           setDiagState("skipped");
-                          setStep(4);
+                          setStep(5);
                         }}
                         className="px-6 py-3 bg-[#252321] text-[#fdfae7] font-semibold text-sm rounded-md border-2 border-[#252321] cursor-pointer"
                       >
@@ -915,10 +954,10 @@ export function CollegeOnboardingFlow() {
                     <div className="flex justify-end">
                       <button
                         type="button"
-                        onClick={() => setStep(4)}
+                        onClick={() => setStep(5)}
                         className="px-6 py-3 bg-[#252321] text-[#fdfae7] font-semibold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_rgba(37,35,33,0.9)] cursor-pointer"
                       >
-                        Continue to Branch →
+                        Continue to Scope →
                       </button>
                     </div>
                   </div>
@@ -928,7 +967,7 @@ export function CollegeOnboardingFlow() {
                   <div className="flex justify-between pt-4 border-t border-dashed border-[#252321]/20">
                     <button
                       type="button"
-                      onClick={() => setStep(2)}
+                      onClick={() => setStep(3)}
                       className="px-5 py-2.5 border-[1.5px] border-[#252321] rounded-md text-xs font-semibold cursor-pointer"
                     >
                       ← Back
@@ -937,7 +976,7 @@ export function CollegeOnboardingFlow() {
                       type="button"
                       onClick={() => {
                         setDiagState("skipped");
-                        setStep(4);
+                        setStep(5);
                       }}
                       className="px-5 py-2.5 border-[1.5px] border-[#252321]/50 rounded-md text-xs font-semibold cursor-pointer"
                     >
@@ -949,7 +988,7 @@ export function CollegeOnboardingFlow() {
                   <div className="flex justify-start pt-4 border-t border-dashed border-[#252321]/20">
                     <button
                       type="button"
-                      onClick={() => setStep(2)}
+                      onClick={() => setStep(3)}
                       className="px-5 py-2.5 border-[1.5px] border-[#252321] rounded-md text-xs font-semibold cursor-pointer"
                     >
                       ← Back
@@ -959,10 +998,10 @@ export function CollegeOnboardingFlow() {
               </motion.div>
             )}
 
-            {/* STEP 4: ENGINEERING BRANCH (exactly 5 + General/Other) */}
-            {step === 4 && (
+            {/* STEP 3: ENGINEERING BRANCH (exactly 5 + General/Other) — asked first, before the diagnostic */}
+            {step === 3 && (
               <motion.div
-                key="step4"
+                key="step3-branch"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -1015,12 +1054,12 @@ export function CollegeOnboardingFlow() {
                       <span className="font-bold">Curriculum note:</span> no verified curriculum
                       found for this university / branch / semester combination
                       ({curriculumError}). You can continue — your plan will be built from the
-                      subjects you confirm in the next step.
+                      subjects you confirm before your plan is built.
                     </p>
                   ) : branch && curriculumSubjects.length > 0 ? (
                     <p className="text-[#4a654e]">
                       <span className="font-bold">{curriculumSubjects.length} verified subjects</span>{" "}
-                      found for Semester {semester} — you will confirm them in the next step.
+                      found for Semester {semester} — you will confirm them before your plan is built.
                     </p>
                   ) : (
                     <p className="font-serif italic text-[#68635e]">
@@ -1033,18 +1072,18 @@ export function CollegeOnboardingFlow() {
                 <div className="flex justify-between pt-4 border-t border-dashed border-[#252321]/20">
                   <button
                     type="button"
-                    onClick={() => setStep(3)}
+                    onClick={() => setStep(2)}
                     className="px-5 py-2.5 border-[1.5px] border-[#252321] rounded-md text-xs font-semibold cursor-pointer"
                   >
                     ← Back
                   </button>
                   <button
                     type="button"
-                    disabled={!branch}
-                    onClick={() => branch && setStep(5)}
+                    disabled={!branch || submitting}
+                    onClick={handleBranchContinue}
                     className="px-6 py-3 bg-[#252321] hover:bg-[#383430] text-[#fdfae7] font-semibold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_rgba(37,35,33,0.9)] flex items-center gap-2 cursor-pointer disabled:opacity-40"
                   >
-                    <span>Choose Study Scope</span>
+                    <span>{submitting ? "Saving…" : "Continue to Diagnostic"}</span>
                     <span>→</span>
                   </button>
                 </div>

@@ -331,7 +331,7 @@ class CollegeStore:
                 for p in plan_data.phases:
                     if p.activities:
                         for act in p.activities:
-                            act_dict = act.model_dump(exclude={"resource", "pyq_question"})
+                            act_dict = act.model_dump(exclude={"resource", "pyq_question", "learn_steps"})
                             act_dict["user_id"] = uid
                             all_acts.append(act_dict)
                             
@@ -384,7 +384,7 @@ class CollegeStore:
                                phase.phase_id, exc)
             acts = []
             for act in phase.activities:
-                act_dict = act.model_dump(exclude={"resource", "pyq_question"})
+                act_dict = act.model_dump(exclude={"resource", "pyq_question", "learn_steps"})
                 act_dict["user_id"] = uid
                 acts.append(act_dict)
             if acts:

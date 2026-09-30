@@ -336,6 +336,7 @@ async def search_pyq_endpoint(
     semester: int = Query(...),
     subject_id: Optional[str] = Query(None),
     subject_name: Optional[str] = Query(None),
+    subject_code: Optional[str] = Query(None, description="Subject code as filed by the university (e.g. 7CS4-01) — paper archives are indexed by code"),
     scope: str = Query("subject", description="subject = this subject only; program = whole branch, progressive levels"),
     level: int = Query(1, ge=1, le=3),
 ):
@@ -345,6 +346,7 @@ async def search_pyq_endpoint(
     return await get_pyqs_scoped(
         university_id=university_id, branch=branch, semester=semester,
         subject_id=subject_id, subject_name=subject_name,
+        subject_code=subject_code,
         scope=scope, level=level,
     )
 
@@ -558,6 +560,7 @@ async def get_verified_resources_endpoint(
 class EnrichResourcesRequest(BaseModel):
     subject_id: str
     topic: str
+    subject_name: Optional[str] = None
     time_budget_seconds: int = 30
 
 @router.post("/resources/enrich")
@@ -575,5 +578,6 @@ async def enrich_resources_endpoint(
     return await pipeline.research_topic(
         subject_id=req.subject_id,
         topic=req.topic,
+        subject_name=req.subject_name,
         time_budget_seconds=min(max(req.time_budget_seconds, 5), 45),
     )

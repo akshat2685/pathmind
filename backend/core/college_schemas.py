@@ -298,6 +298,11 @@ class CollegeActivity(BaseModel):
     completed_at: Optional[str] = None
     completion_evidence: Optional[Dict[str, Any]] = None
 
+    # Concrete "how to learn this" steps (active recall, timed attempts,
+    # error logging...). Derived server-side at build/read time; transient
+    # like `resource` below — never a column on learning_activities.
+    learn_steps: List[str] = Field(default_factory=list)
+
     # Transient references for API inclusion, not strictly persisted on the row
     resource: Optional[ResourceRecord] = None
     pyq_question: Optional[PYQQuestionRecord] = None

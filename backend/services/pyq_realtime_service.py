@@ -179,6 +179,7 @@ async def _seeded_papers(university_id: str, subject_id: Optional[str]) -> List[
 async def realtime_pyq_search(*, university_id: str, branch: str,
                              semester: int,
                              subject_name: Optional[str] = None,
+                             subject_code: Optional[str] = None,
                              scope: str = "subject",
                              max_results: int = 10) -> List[Dict[str, Any]]:
     """
@@ -200,6 +201,14 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
             f"{univ_short} {subject_name} previous year question paper",
             f"{univ_short} {subject_name} end semester question paper pdf",
         ]
+        if subject_code:
+            # University paper archives are indexed by subject CODE
+            # (e.g. RTU files IoT under 7CS4-01), not by subject name —
+            # name-only queries miss the real papers entirely.
+            queries = [
+                f"{univ_short} {subject_code} question paper",
+                f"{subject_code} {subject_name} question paper pdf",
+            ] + queries
     else:
         queries = [
             f"{univ_short} {branch} semester {semester} question papers",
@@ -217,11 +226,15 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
         for h in seen.values()
     ]
 
+    code_l = (subject_code or "").strip().lower()
+
     def _relevance(p: Dict[str, Any]) -> int:
         # Prefer hits that actually look like question papers over generic
         # university PDFs (syllabi, notices) that Tavily also returns.
         blob = f"{p['title']} {p['url']}".lower()
         score = 0
+        if code_l and code_l in blob:
+            score += 3
         for kw in ("question paper", "questionpaper", "previous year", "end semester",
                    "mid semester", "model paper", "sample paper"):
             if kw in blob:
@@ -247,6 +260,7 @@ def apply_program_level(papers: List[Dict[str, Any]], level: int) -> List[Dict[s
 async def get_pyqs_scoped(*, university_id: str, branch: str, semester: int,
                           subject_id: Optional[str] = None,
                           subject_name: Optional[str] = None,
+                          subject_code: Optional[str] = None,
                           scope: str = "subject",
                           level: int = 1) -> Dict[str, Any]:
     """
@@ -267,7 +281,8 @@ async def get_pyqs_scoped(*, university_id: str, branch: str, semester: int,
     if not papers or scope == "program":
         realtime = await realtime_pyq_search(
             university_id=university_id, branch=branch, semester=semester,
-            subject_name=subject_name, scope=scope, max_results=10)
+            subject_name=subject_name, subject_code=subject_code,
+            scope=scope, max_results=10)
         known_urls = {p["url"] for p in papers if p.get("url")}
         papers.extend([p for p in realtime if p["url"] not in known_urls])
 
