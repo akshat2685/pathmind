@@ -17,6 +17,39 @@ from typing import Optional
 from backend.core.college_logging import log_event
 
 
+def classify_llm_error(exc: BaseException) -> str:
+    """
+    Map an LLM SDK exception to a safe, user-presentable error class.
+
+    Returns a stable code — LLM_QUOTA, LLM_AUTH, LLM_MODEL_NOT_FOUND or
+    LLM_UNAVAILABLE — never the exception message (which may echo request
+    details). Callers use the class to fail fast (retrying an exhausted
+    quota or a rejected key only burns time) and to tell the learner the
+    truth about why AI is unavailable.
+    """
+    code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    text = f"{type(exc).__name__} {exc}".upper()
+    if (code == 429 or "RESOURCE_EXHAUSTED" in text or "QUOTA" in text
+            or " 429" in text or "TOO MANY REQUESTS" in text):
+        return "LLM_QUOTA"
+    if (code in (401, 403) or "API_KEY_INVALID" in text
+            or "API KEY NOT VALID" in text or "PERMISSION_DENIED" in text
+            or "UNAUTHENTICATED" in text):
+        return "LLM_AUTH"
+    if code == 404 or "NOT_FOUND" in text or "IS NOT FOUND" in text:
+        return "LLM_MODEL_NOT_FOUND"
+    return "LLM_UNAVAILABLE"
+
+
+class LLMServiceError(Exception):
+    """An LLM call failed in a classified way; carries the safe error code."""
+
+    def __init__(self, error_code: str, cause: BaseException):
+        super().__init__(f"{error_code} ({type(cause).__name__})")
+        self.error_code = error_code
+        self.cause = cause
+
+
 class _GenaiResponseWrapper:
     """
     Wraps the new google.genai GenerateContentResponse to provide a safe

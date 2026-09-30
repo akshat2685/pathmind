@@ -308,5 +308,6 @@ async def run_agent_interact(uid: str, user_message: str,
         shape.setdefault("session_id", adk_session_id)
         log_event("college.agent.interact", user_id=uid,
                   via_adk=used_adk, state=shape.get("state"),
-                  outcome="ok")
+                  outcome="error" if shape.get("state") == "ERROR"
+                  else "ok")
         return shape

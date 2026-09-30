@@ -10,6 +10,8 @@ import json
 import logging
 import re
 from backend.core.config import settings
+from backend.core.college_logging import log_event
+from backend.core.gemini import LLMServiceError, classify_llm_error
 from backend.core.college_schemas import (
     EngineeringBranch,
     AcademicContext,
@@ -127,13 +129,21 @@ class CollegeOrchestrator:
                         "LLM response contained only a memory action block")
                 return text
             except Exception as exc:
+                error_code = classify_llm_error(exc)
+                logger.warning("Mentor LLM attempt %d/3 failed: %s (%s)",
+                               attempt + 1, type(exc).__name__, error_code)
+                # Quota exhaustion, a rejected key and a retired model do
+                # not heal between retries — fail fast instead of burning
+                # the serverless budget (and more quota) on doomed calls.
+                if error_code in ("LLM_QUOTA", "LLM_AUTH",
+                                  "LLM_MODEL_NOT_FOUND"):
+                    raise LLMServiceError(error_code, exc) from exc
                 last_exc = exc
-                logger.warning("Mentor LLM attempt %d/3 failed: %s",
-                               attempt + 1, type(exc).__name__)
                 if attempt < 2:
                     await asyncio.sleep(2 ** attempt)
         assert last_exc is not None
-        raise last_exc
+        raise LLMServiceError(classify_llm_error(last_exc), last_exc) \
+            from last_exc
 
     async def interact(self, uid: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -239,25 +249,45 @@ class CollegeOrchestrator:
         # a reply the model never wrote.
         ai_response_text = None
         mentor_error = False
+        mentor_error_code: Optional[str] = None
         if settings.GEMINI_API_KEY:
             try:
                 ai_response_text = await self._generate_mentor_reply(
                     uid, user_message, ctx, pref_texts, countdown)
             except Exception as e:
+                mentor_error_code = getattr(e, "error_code", None) \
+                    or classify_llm_error(e)
                 logger.error("Mentor LLM failed after retries: %s",
                              str(e), exc_info=True)
                 log_event("college.mentor.llm_failed", user_id=uid,
-                          outcome="error", error_code=type(e).__name__)
+                          outcome="error", error_code=mentor_error_code)
                 mentor_error = True
+        else:
+            mentor_error_code = "LLM_NOT_CONFIGURED"
 
         if mentor_error or not (ai_response_text or "").strip():
+            if mentor_error_code == "LLM_QUOTA":
+                unavailable_msg = (
+                    "The AI mentor has reached its usage limit for now, "
+                    "so it cannot answer at the moment. Please try again "
+                    "after some time.")
+            elif mentor_error_code in ("LLM_AUTH", "LLM_MODEL_NOT_FOUND",
+                                       "LLM_NOT_CONFIGURED"):
+                unavailable_msg = (
+                    "The AI mentor is unavailable right now — the AI "
+                    "service needs attention from the PathMind team.")
+            else:
+                unavailable_msg = (
+                    "The AI mentor is temporarily unavailable "
+                    "(the language service could not be reached). "
+                    "Please try asking again in a moment.")
             return {
-                "message": ("The AI mentor is temporarily unavailable "
-                            "(the language service could not be reached). "
+                "message": (unavailable_msg + " "
                             "Your study plan, assessments and PYQs below are "
-                            "unaffected — please try asking again in a moment. "
+                            "unaffected. "
                             "Nothing was fabricated in place of the answer."),
                 "state": "ERROR",
+                "error_code": mentor_error_code or "LLM_UNAVAILABLE",
                 "ui_blocks": [
                     {
                         "type": "NEXT_ACTION",

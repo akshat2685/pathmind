@@ -392,20 +392,28 @@ reference answer. Never invent subject ids."""
             marks = max(1, min(10, marks))
 
             if qtype == "MCQ":
-                options = [str(o).strip() for o in (gq.get("options") or [])
-                           if str(o).strip()]
+                options = list(dict.fromkeys(
+                    str(o).strip() for o in (gq.get("options") or [])
+                    if str(o).strip()))
                 if len(options) < 3:
                     continue
                 answer = str(gq.get("answer") or "").strip()
                 if not answer:
                     continue
+                # Resolve a letter answer ("B") to the option text now, so
+                # the stored correct answer is always one of the options.
                 if len(answer) == 1 and answer.upper() in "ABCD":
-                    if "ABCD".index(answer.upper()) >= len(options):
+                    idx = "ABCD".index(answer.upper())
+                    if idx >= len(options):
                         continue
+                    answer = options[idx]
                 elif answer not in options:
                     continue
+                # Canonical server-assigned id: a model-supplied "id" can
+                # repeat across questions, which collapses the frontend's
+                # radio groups into one (answering wipes the others).
                 questions.append(CollegeAssessmentQuestion(
-                    question_id=str(gq.get("id") or f"dq{i}"),
+                    question_id=f"dq{len(questions) + 1}",
                     question_text=text,
                     question_type="MCQ",
                     options=options,
@@ -423,7 +431,7 @@ reference answer. Never invent subject ids."""
                 # exact-match grader; it stays model-labeled, never verified.
                 reference = str(gq.get("answer") or "").strip() or None
                 questions.append(CollegeAssessmentQuestion(
-                    question_id=str(gq.get("id") or f"dq{i}"),
+                    question_id=f"dq{len(questions) + 1}",
                     question_text=text,
                     question_type="SHORT_ANSWER",
                     correct_answer=reference,
@@ -593,18 +601,76 @@ Make the first two MCQs and the last one SHORT_ANSWER.
             if text.endswith("```"):
                 text = text[:-3]
             gen_qs = json.loads(text.strip())
-            questions = []
-            for i, gq in enumerate(gen_qs, start=1):
-                questions.append(CollegeAssessmentQuestion(
-                    question_id=gq.get("id", f"q{i}"),
-                    question_text=gq.get("text", "Question"),
-                    question_type=gq.get("type", "MCQ"),
-                    options=gq.get("options", []),
-                    correct_answer=gq.get("answer"),
-                    rubric=gq.get("rubric"),
-                    topic=topic_tags[(i - 1) % len(topic_tags)],
-                    marks=gq.get("marks", 5),
-                ))
+            if not isinstance(gen_qs, list):
+                return []
+            questions: List[CollegeAssessmentQuestion] = []
+            seen_texts = set()
+            for gq in gen_qs:
+                if not isinstance(gq, dict):
+                    continue
+                qtext = str(gq.get("text") or "").strip()
+                if not qtext or qtext.lower() in seen_texts:
+                    continue
+                qtype = str(gq.get("type") or "").strip().upper()
+                try:
+                    marks = int(gq.get("marks") or 5)
+                except (TypeError, ValueError):
+                    marks = 5
+                marks = max(1, min(10, marks))
+                # Canonical server-assigned ids, always. Trusting the model's
+                # own "id" field caused duplicate ids (it repeats "q1"),
+                # which collapses the frontend's radio groups into one —
+                # answering one question silently erased the others.
+                question_id = f"q{len(questions) + 1}"
+                topic = topic_tags[len(questions) % len(topic_tags)]
+                if qtype == "MCQ":
+                    options = list(dict.fromkeys(
+                        str(o).strip() for o in (gq.get("options") or [])
+                        if str(o).strip()))
+                    if len(options) < 2:
+                        continue
+                    answer = str(gq.get("answer") or "").strip()
+                    if not answer:
+                        continue
+                    # The prompt's format example invites a letter answer
+                    # ("Option B" in the schema, "B" in practice). Resolve
+                    # letters to the option text NOW so the stored correct
+                    # answer is always exactly one of the options.
+                    if len(answer) == 1 and answer.upper() in "ABCD":
+                        idx = "ABCD".index(answer.upper())
+                        if idx >= len(options):
+                            continue
+                        answer = options[idx]
+                    elif answer not in options:
+                        # An answer that is not one of the options can never
+                        # be scored — drop the question instead of shipping
+                        # an unanswerable MCQ.
+                        continue
+                    questions.append(CollegeAssessmentQuestion(
+                        question_id=question_id,
+                        question_text=qtext,
+                        question_type="MCQ",
+                        options=options,
+                        correct_answer=answer,
+                        topic=topic,
+                        marks=marks,
+                    ))
+                elif qtype == "SHORT_ANSWER":
+                    reference = str(gq.get("answer") or "").strip() or None
+                    questions.append(CollegeAssessmentQuestion(
+                        question_id=question_id,
+                        question_text=qtext,
+                        question_type="SHORT_ANSWER",
+                        correct_answer=reference,
+                        rubric=str(gq.get("rubric") or "").strip() or None,
+                        topic=topic,
+                        marks=marks,
+                    ))
+                else:
+                    continue
+                seen_texts.add(qtext.lower())
+                if len(questions) >= 3:
+                    break
             return questions
         except Exception as exc:
             log_event("college.assessment.generation_failed", outcome="error",

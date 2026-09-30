@@ -267,14 +267,14 @@ def test_plan_reflects_diagnostic_evidence(monkeypatch):
     # light-revision objective (not a full re-teach).
     assert ll_guidance["band"] == "mastered"
     assert ll_phase["objective"].startswith(
-        "Light revision with spaced retrieval")
+        "Quick revision — you already know this well")
     # She missed the Scheduling MCQ -> weak band, guided objective.
     sched_phase = next(
         p for p in plan["phases"]
         if "Scheduling" in (p["unlock_rule"].get("required_topics") or []))
     assert sched_phase["unlock_rule"]["diagnostic_guidance"]["band"] == "weak"
     assert sched_phase["objective"].startswith(
-        "Guided intensive learning first")
+        "Start here — learn the basics step by step")
 
 
 def test_plan_generation_failure_contract(monkeypatch):
