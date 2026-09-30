@@ -247,6 +247,7 @@ def install_fake_adapter(monkeypatch=None):
     import backend.core.security as sec_mod
     import backend.providers.curriculum_registry as cr_mod
     import backend.services.college_store as cs_mod
+    import backend.api.college_routes as routes_mod
 
     adapter = FakeSupabaseAdapter()
     seed_college_mvp(adapter)
@@ -255,6 +256,7 @@ def install_fake_adapter(monkeypatch=None):
         monkeypatch.setattr(sa_mod, "get_supabase_adapter", lambda: adapter)
         monkeypatch.setattr(sec_mod, "get_supabase_adapter", lambda: adapter)
         monkeypatch.setattr(cr_mod, "get_supabase_adapter", lambda: adapter)
+        monkeypatch.setattr(routes_mod, "get_supabase_adapter", lambda: adapter)
         monkeypatch.setattr(cs_mod.college_store, "adapter", adapter)
         monkeypatch.setattr(cs_mod, "get_supabase_adapter", lambda: adapter)
         return adapter, lambda: None
@@ -263,12 +265,14 @@ def install_fake_adapter(monkeypatch=None):
         "sa": sa_mod.get_supabase_adapter,
         "sec": sec_mod.get_supabase_adapter,
         "cr": cr_mod.get_supabase_adapter,
+        "routes": routes_mod.get_supabase_adapter,
         "cs_adapter": cs_mod.college_store.adapter,
         "cs": cs_mod.get_supabase_adapter,
     }
     sa_mod.get_supabase_adapter = lambda: adapter
     sec_mod.get_supabase_adapter = lambda: adapter
     cr_mod.get_supabase_adapter = lambda: adapter
+    routes_mod.get_supabase_adapter = lambda: adapter
     cs_mod.college_store.adapter = adapter
     cs_mod.get_supabase_adapter = lambda: adapter
 
@@ -276,6 +280,7 @@ def install_fake_adapter(monkeypatch=None):
         sa_mod.get_supabase_adapter = saved["sa"]
         sec_mod.get_supabase_adapter = saved["sec"]
         cr_mod.get_supabase_adapter = saved["cr"]
+        routes_mod.get_supabase_adapter = saved["routes"]
         cs_mod.college_store.adapter = saved["cs_adapter"]
         cs_mod.get_supabase_adapter = saved["cs"]
 

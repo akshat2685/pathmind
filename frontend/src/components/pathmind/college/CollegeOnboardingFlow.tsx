@@ -340,11 +340,13 @@ export function CollegeOnboardingFlow() {
         return;
       }
 
-      // 3. Generate the ordered learning plan at the chosen scope
+      // 3. Generate the ordered learning plan at the chosen scope.
+      // Do not send a shared static goal_id: the backend is authoritative
+      // for per-user goal identity. A target subject only applies to
+      // SUBJECT_PART; SEMESTER must cover the chosen context subjects.
       const planRes = await apiClient.post<any>("/api/college/plans/generate", {
-        goal_id: `goal_${scope.toLowerCase()}`,
         target_subject_code_or_id:
-          scope === "SUBJECT_PART" ? partSubjectId : selectedSubjectIds[0] || null,
+          scope === "SUBJECT_PART" ? partSubjectId : null,
         scope: scope,
       });
       if (!planRes.ok) {

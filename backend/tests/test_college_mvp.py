@@ -55,8 +55,8 @@ def test_list_all_users_lists_new_users():
     assert resp_bob.status_code == 200
     assert resp_bob.json()["user_id"] == BOB_UID
 
-    # List all users
-    resp_users = client.get("/api/college/users")
+    # List all users (authenticated: learner identities are private)
+    resp_users = client.get("/api/college/users", headers=AUTH_HEADERS_ALICE)
     assert resp_users.status_code == 200
     users = resp_users.json()
     uids = [u["user_id"] for u in users]
@@ -161,6 +161,61 @@ def test_ordered_learning_plan_generation():
     if read_act:
         assert read_act["resource"] is not None
         assert "pages" in read_act["instructions"] or "Read" in read_act["instructions"]
+
+
+def test_plan_generation_goal_ids_are_user_scoped():
+    """Two learners can request the same legacy goal slug without colliding.
+
+    Regression test for the Step 5 PERSISTENCE_UNAVAILABLE failure: the
+    frontend used to send a shared static goal_id for every learner, while
+    college_goals.goal_id was globally unique. The backend must namespace
+    goal identity per user and must not let SEMESTER scope silently narrow
+    to a single target subject.
+    """
+    alice_plan_resp = client.get("/api/college/plans/current", headers=AUTH_HEADERS_ALICE)
+    assert alice_plan_resp.status_code == 200
+    alice_plan = alice_plan_resp.json()
+    assert alice_plan["user_id"] == ALICE_UID
+    assert alice_plan["goal_id"] == f"goal_{ALICE_UID}_sem3_prep"
+
+    context_payload = {
+        "university_id": "univ_aicte_model",
+        "branch": EngineeringBranch.COMPUTER_SCIENCE.value,
+        "semester": 3,
+        "subjects": ["CS-301", "CS-302"],
+        "exam_window": {"start": "2026-11-20", "end": "2026-12-05"},
+        "available_hours_per_week": 16,
+        "learning_style_preferences": ["prefers visual diagrams", "worked examples first"]
+    }
+    resp_ctx = client.post("/api/college/academic-context", json=context_payload, headers=AUTH_HEADERS_BOB)
+    assert resp_ctx.status_code == 200
+
+    # Same legacy requested goal_id Alice used; Bob must get his own goal row.
+    resp = client.post("/api/college/plans/generate", json={"goal_id": "goal_sem3_prep"}, headers=AUTH_HEADERS_BOB)
+    assert resp.status_code == 200
+    bob_plan = resp.json()
+    assert bob_plan["user_id"] == BOB_UID
+    assert bob_plan["goal_id"] == f"goal_{BOB_UID}_sem3_prep"
+    assert bob_plan["goal_id"] != alice_plan["goal_id"]
+    assert len(bob_plan["phases"]) == 4
+
+    # SEMESTER scope ignores a single-subject target instead of narrowing.
+    resp_semester = client.post(
+        "/api/college/plans/generate",
+        json={"goal_id": "goal_semester", "scope": "SEMESTER",
+              "target_subject_code_or_id": "CS-301"},
+        headers=AUTH_HEADERS_BOB,
+    )
+    assert resp_semester.status_code == 200
+    semester_plan = resp_semester.json()
+    assert semester_plan["goal_id"] == f"goal_{BOB_UID}_semester"
+    assert len(semester_plan["phases"]) == 4
+
+    # Alice's plan is still hers after Bob's generations.
+    alice_after = client.get("/api/college/plans/current", headers=AUTH_HEADERS_ALICE)
+    assert alice_after.status_code == 200
+    assert alice_after.json()["user_id"] == ALICE_UID
+    assert alice_after.json()["goal_id"] == alice_plan["goal_id"]
 
 
 def test_plan_scope_subject_part():
