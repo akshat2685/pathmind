@@ -13,6 +13,7 @@ per-topic mastery store. `complete_activity` never unlocks on its own.
 from typing import List, Dict, Any, Optional, Tuple
 import asyncio
 import re
+import time
 import uuid
 
 from backend.core.college_schemas import (
@@ -84,6 +85,23 @@ def _resource_match_score(resource: ResourceRecord, phase_title: str) -> int:
         score += 2 * len(title_tokens & _tokens(topic))
     score += len(title_tokens & _tokens(resource.title))
     return score
+
+
+def _resource_engagement(resource: ResourceRecord) -> float:
+    """Real engagement score persisted by the research pipeline.
+
+    0.0 when the resource carries no statistics (hand-seeded rows and
+    everything cached before engagement ranking) — a 0 tie falls back
+    to the deterministic resource_id order, so historical behavior is
+    preserved exactly until real statistics exist.
+    """
+    signals = getattr(resource, "quality_signals", None) or {}
+    if not isinstance(signals, dict):
+        return 0.0
+    try:
+        return float(signals.get("engagement_score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _learn_steps_for(activity_type: str, resource: Optional[ResourceRecord],
@@ -181,6 +199,7 @@ class CollegeLearningService:
         requested scope. Every subject unit becomes a phase (full syllabus).
         """
         with timed_stage("college.plan.generated", user_id=uid, scope=scope.value):
+            gen_started = time.monotonic()
             raw_ctx = await self.store.get_college_academic_context(uid)
             if not raw_ctx:
                 raise ValueError(
@@ -350,7 +369,71 @@ class CollegeLearningService:
             log_event("college.plan.saved", user_id=uid, plan_id=plan_id,
                       phase_count=len(phases),
                       subject_count=len(plan_subjects), outcome="ok")
+            # Round 6: path creation uses the resource pipeline. Warm
+            # the verified cache for the first phase when its subject
+            # has no cached video/notes yet, so the learner opens the
+            # plan to real resources instead of an empty first phase.
+            # Bounded and fail-open — the plan is already ACTIVE and is
+            # returned untouched if research finds or costs anything
+            # unexpected (see _research_first_phase_resources).
+            await self._research_first_phase_resources(
+                uid, plan, prefetched, gen_started)
             return plan
+
+    async def _research_first_phase_resources(
+        self, uid: str, plan: CollegeLearningPlan,
+        prefetched, gen_started: float,
+    ) -> None:
+        """One bounded live-research pass for the plan's first phase.
+
+        Runs only when the first phase's subject lacks a cached VIDEO or
+        a cached NOTES/DOCUMENT. The VERIFIED cache is shared across
+        learners, so each topic is researched once globally, not once
+        per student; later phases keep filling through the dashboard's
+        on-demand research cascade. Never raises: the plan is already
+        saved ACTIVE, and research is an enhancement, not a dependency.
+        """
+        try:
+            if not plan.phases:
+                return
+            elapsed = time.monotonic() - gen_started
+            # Stay comfortably inside the ~60s serverless cap: skip
+            # research when generation itself already ran long, and
+            # never grant research more than 15s.
+            if elapsed > 30.0:
+                log_event("college.plan.research_skipped", user_id=uid,
+                          plan_id=plan.plan_id, outcome="skipped",
+                          error_code="GENERATION_BUDGET")
+                return
+            first = plan.phases[0]
+            subject_id = _subject_id_from_phase_id(
+                first.phase_id, plan.plan_id)
+            if not subject_id:
+                return
+            cached = (prefetched[0].get(subject_id) or []) if prefetched else []
+            has_video = any(r.resource_type == "VIDEO" for r in cached)
+            has_doc = any(r.resource_type in ("NOTES", "DOCUMENT")
+                          for r in cached)
+            if has_video and has_doc:
+                return
+            topic = (first.title.split(": ", 1)[1]
+                     if ": " in first.title else first.title)
+            budget = min(15.0, 40.0 - elapsed)
+            from backend.services.college_resource_pipeline import (
+                CollegeResourcePipeline,
+            )
+            result = await CollegeResourcePipeline().research_topic(
+                subject_id=subject_id, topic=topic,
+                time_budget_seconds=budget)
+            log_event("college.plan.first_phase_researched", user_id=uid,
+                      plan_id=plan.plan_id, subject_id=subject_id,
+                      topic=topic,
+                      added=(result or {}).get("resources_added", 0),
+                      outcome="ok")
+        except Exception as exc:  # fail-open: the plan already shipped
+            log_event("college.plan.research_failed", user_id=uid,
+                      plan_id=plan.plan_id, outcome="error",
+                      error_code=type(exc).__name__)
 
     async def enrich_phase_activities(
         self, uid: str, plan_id: str, phase_id: str,
@@ -821,7 +904,10 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
         activities: List[CollegeActivity] = []
         act_order = 1
 
-        video_res = next((r for r in resources if r.resource_type == "VIDEO"), None)
+        videos = [r for r in resources if r.resource_type == "VIDEO"]
+        # Highest real engagement wins; ties keep cache order (max is
+        # stable), so stat-less caches behave exactly as before.
+        video_res = max(videos, key=_resource_engagement) if videos else None
         if video_res:
             ts_info = video_res.video_timestamps[0] if video_res.video_timestamps else None
             ts_text = (f" Start at {ts_info.start_seconds // 60}:00 and watch till "
@@ -843,8 +929,9 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
             ))
             act_order += 1
 
-        doc_res = next((r for r in resources
-                        if r.resource_type in ["NOTES", "DOCUMENT"]), None)
+        docs = [r for r in resources
+                if r.resource_type in ["NOTES", "DOCUMENT"]]
+        doc_res = max(docs, key=_resource_engagement) if docs else None
         if doc_res:
             sec_info = doc_res.document_sections[0] if doc_res.document_sections else None
             pg_text = (f" Read pages {sec_info.start_page}–{sec_info.end_page} "
@@ -1009,6 +1096,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                                 candidates,
                                 key=lambda r: (
                                     _resource_match_score(r, phase.title),
+                                    _resource_engagement(r),
                                     r.resource_id,
                                 ),
                             )
@@ -1049,6 +1137,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                             videos,
                             key=lambda r: (
                                 _resource_match_score(r, phase.title),
+                                _resource_engagement(r),
                                 r.resource_id))
                         synthesized.append(CollegeActivity(
                             activity_id=f"act_{phase.phase_id}_auto_watch",
@@ -1073,6 +1162,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                             docs,
                             key=lambda r: (
                                 _resource_match_score(r, phase.title),
+                                _resource_engagement(r),
                                 r.resource_id))
                         synthesized.append(CollegeActivity(
                             activity_id=f"act_{phase.phase_id}_auto_read",

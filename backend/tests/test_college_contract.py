@@ -145,27 +145,50 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
     assert diag["assessment_id"].startswith("diag_")
     assert diag["title"]
     questions = diag["questions"]
-    assert len(questions) == 5
+    # Hybrid RAG diagnostic: verified PYQs anchor, the stub LLM tops up
+    # the uncovered topics (5-6 questions total, never PYQ-displacing).
+    assert 5 <= len(questions) <= 6
     for q in questions:
         assert q["question_id"] and q["question_text"]
         assert q["question_type"] in ("MCQ", "SHORT_ANSWER")
         assert q["topic"]
 
-    # 3. Submit: 4 correct, 1 wrong (dq3) -> exercises both buckets.
-    answers = {"dq1": "O(log n)", "dq2": "Sorted", "dq3": "Stack",
-               "dq4": "last in first out", "dq5": "data and next"}
+    # 3. Submit against the questions actually returned. Trees correct,
+    # Graphs deliberately wrong, Stacks exact; the two verified-PYQ
+    # short answers carry no rubric anywhere, so they grade Unknown —
+    # honest no-conclusion, never invented marks.
+    answer_by_topic = {
+        "Trees": "Sorted",
+        "Graphs": "Stack",  # deliberate miss (correct: "Queue")
+        "Stacks": "last in first out",
+    }
+    answers = {
+        q["question_id"]: answer_by_topic.get(
+            q["topic"],
+            "Contiguous storage allows index arithmetic; a linked list "
+            "must traverse node by node.")
+        for q in questions
+    }
     sub = client.post("/api/college/assessments/submit",
                       json={"assessment_id": diag["assessment_id"],
                             "answers": answers},
                       headers=AUTH_BOB)
     assert sub.status_code == 200
     result = sub.json()
-    # 30/35 = 85.7%
-    assert result["score"] == pytest.approx(85.7, abs=0.1)
+    # Gradable marks: Trees 5/5 + Stacks 10/10, Graphs 0/5; the two
+    # 5-mark PYQs are ungradable -> 15/30 = 50.0%.
+    assert result["score"] == pytest.approx(50.0, abs=0.1)
     assert result["mastery_status"] in ("MASTERED", "PARTIALLY_MASTERED")
     assert result["feedback"]
     assert len(result["topic_results"]) == 5
     assert all(t["topic"] for t in result["topic_results"])
+    outcome_by_topic = {t["topic"]: t["outcome"]
+                        for t in result["topic_results"]}
+    assert outcome_by_topic["Trees"] == "MASTERED"
+    assert outcome_by_topic["Stacks"] == "MASTERED"
+    assert outcome_by_topic["Graphs"] == "REINFORCEMENT_REQUIRED"
+    assert outcome_by_topic["Linked Lists"] == "INSUFFICIENT_EVIDENCE"
+    assert outcome_by_topic["Arrays"] == "INSUFFICIENT_EVIDENCE"
 
     # 4. Baseline derives strengths/weaknesses/gaps from the mastery store.
     base = client.get("/api/college/baseline", headers=AUTH_BOB)
@@ -177,11 +200,13 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
         for entry in body[bucket]:
             by_topic[entry["topic"]] = bucket
             assert "mastery_score" in entry and "outcome" in entry
-    assert by_topic["Arrays"] == "strengths"          # 5/5 -> MASTERED
     assert by_topic["Trees"] == "strengths"           # 5/5 -> MASTERED
     assert by_topic["Stacks"] == "strengths"          # 10/10 -> MASTERED
-    assert by_topic["Linked Lists"] == "strengths"    # 10/10 -> MASTERED
     assert by_topic["Graphs"] in ("weaknesses", "gaps")  # 0/5 -> not mastered
+    # The verified-PYQ topics graded Unknown: recorded as gaps (no
+    # conclusion), never dressed up as strengths.
+    assert by_topic["Linked Lists"] == "gaps"
+    assert by_topic["Arrays"] == "gaps"
     assert sum(len(body[b]) for b in ("strengths", "weaknesses", "gaps")) == 5
 
 

@@ -194,22 +194,24 @@ class CollegeAssessmentService:
 
     async def generate_diagnostic_assessment(self, uid: str) -> CollegeAssessment:
         """
-        Dynamic/hybrid diagnostic (replaces the old LLM-only author):
+        Hybrid-RAG diagnostic (round 6: Gemini is optional, never a
+        dependency):
 
-          learner context -> verified-source retrieval (curriculum / PYQs /
-          resources / prior mastery) -> Gemini drafts candidate probes and
-          selects the 5-6 highest-information ones -> assessment.
+          learner context -> verified-source retrieval (curriculum /
+          PYQs / resources / prior mastery) -> the diagnostic is BUILT
+          from retrieved material: real verified PYQs first, curriculum
+          topic probes filling the remaining slots -> assessment.
 
-        Gemini is the reasoning layer, never the source of verified facts:
-        questions grounded in retrieved records carry verified_* source
-        labels; anything Gemini invents is labeled model_generated. When
-        Gemini is unavailable or returns unusable output, the diagnostic
-        falls back to real retrieved material (verified PYQs, then
-        curriculum topic probes) whose answers grade as
-        INSUFFICIENT_EVIDENCE until a grader can judge them — the flow
-        never dead-ends and never fabricates a baseline. Only a learner
-        with no profile raises; only a learner with neither grounded
-        material nor a model gets an honest DIAGNOSTIC_UNAVAILABLE.
+        When Gemini is reachable it may ADD questions, but only for
+        topics the retrieved material does not already cover, and every
+        added question passes the same strict validation — it can
+        enrich the diagnostic, never block, shrink, or replace it.
+        Verified material keeps verified_* source labels; anything the
+        model invents is labeled model_generated. Short answers without
+        a rubric grade as INSUFFICIENT_EVIDENCE (Unknown), never a fake
+        score. Only a learner with no profile raises; only a learner
+        with neither grounded material nor a model gets an honest
+        DIAGNOSTIC_UNAVAILABLE.
         """
         with timed_stage("college.assessment.diagnostic_generated", user_id=uid):
             raw_profile = await self.store.get_college_user_profile(uid)
@@ -228,31 +230,49 @@ class CollegeAssessmentService:
             branch = retrieval.branch or profile.get(
                 "supported_path") or "GENERAL_OTHER"
 
-            questions: List[CollegeAssessmentQuestion] = []
-            authored_by = "retrieval_fallback"
+            # Hybrid RAG is the generator of record: real verified PYQs
+            # anchor the diagnostic and can never be displaced. Gemini,
+            # when reachable, only ADDS validated questions for topics
+            # the retrieved material does not already cover; curriculum
+            # probes fill whatever slots remain. Gemini being down,
+            # slow, or thin can no longer block or shrink the flow.
+            questions = self._rag_pyq_questions(retrieval)
+            authored_by = "hybrid_rag"
             model = _get_gemini_model()
-            if model is not None:
+            if model is not None and len(questions) < 6:
                 try:
-                    questions = self._generate_diagnostic_with_llm(
+                    authored = self._generate_diagnostic_with_llm(
                         model, profile, retrieval)
-                    if len(questions) >= 4:
-                        authored_by = "gemini+retrieval"
-                    else:
-                        log_event(
-                            "college.assessment.diagnostic_llm_insufficient",
-                            user_id=uid, question_count=len(questions),
-                            outcome="degraded")
-                        questions = []
                 except ValueError as exc:
-                    # Provider/parse failure: fall back to grounded material
-                    # instead of the old hard DIAGNOSTIC_UNAVAILABLE.
+                    # Provider/parse failure: the grounded set ships
+                    # as-is instead of the old hard failure.
                     log_event(
                         "college.assessment.diagnostic_llm_fallback",
                         user_id=uid, outcome="degraded",
                         error_code=str(exc)[:120])
-
-            if not questions:
-                questions = self._fallback_diagnostic_questions(retrieval)
+                    authored = []
+                covered = {str(q.topic or "").strip().lower()
+                           for q in questions}
+                added = 0
+                for q in authored:
+                    if len(questions) >= 6:
+                        break
+                    key = str(q.topic or "").strip().lower()
+                    if not key or key in covered:
+                        continue
+                    questions.append(q)
+                    covered.add(key)
+                    added += 1
+                if added:
+                    authored_by = "hybrid_rag+gemini"
+                elif authored:
+                    log_event(
+                        "college.assessment.diagnostic_llm_insufficient",
+                        user_id=uid, question_count=len(authored),
+                        outcome="degraded")
+            questions.extend(
+                self._rag_curriculum_probes(retrieval, questions))
+            questions = questions[:6]
 
             if len(questions) < 3:
                 raise ValueError(
@@ -477,13 +497,8 @@ reference answer. Never invent subject ids."""
     )
 
     @staticmethod
-    def _fallback_diagnostic_questions(retrieval):
-        """
-        Grounded fallback when Gemini cannot author: real verified PYQs
-        first (actual university exam questions), then curriculum topic
-        probes. No invented answers or rubrics — short answers without a
-        rubric grade as INSUFFICIENT_EVIDENCE (Unknown), never a fake score.
-        """
+    def _rag_pyq_questions(retrieval):
+        """Real verified PYQs as diagnostic questions (never invented)."""
         questions: List[CollegeAssessmentQuestion] = []
         for q in retrieval.pyq_questions[:4]:
             topic = (q.get("topics") or [None])[0]
@@ -505,62 +520,82 @@ reference answer. Never invent subject ids."""
                 probe="application",
                 source="verified_pyq",
             ))
+        return questions
 
-        if len(questions) < 5:
-            mastered = {
-                str(m.get("topic") or "").strip().lower()
-                for m in (retrieval.known_masteries or [])
-                if str(m.get("outcome") or "").upper().startswith("MASTER")
-            }
-            used = {str(q.topic or "").strip().lower() for q in questions}
-            # Per-subject probe candidates: real knowledge topics only,
-            # deduped, never re-probing demonstrated mastery.
-            per_subject: List[List[Tuple[str, Any]]] = []
-            for sub in retrieval.curriculum_subjects:
-                topics: List[Tuple[str, Any]] = []
-                seen_local = set()
-                for unit in sub.get("units", []):
-                    for topic in (unit.get("topics") or []):
-                        label = str(topic).strip()
-                        key = label.lower()
-                        if (len(label) < 3 or key in seen_local
-                                or key in used or key in mastered
-                                or CollegeAssessmentService._META_TOPIC_RE.search(label)):
-                            continue
-                        seen_local.add(key)
-                        topics.append((label, sub))
-                per_subject.append(topics)
+    @staticmethod
+    def _rag_curriculum_probes(retrieval, existing, target_total: int = 6):
+        """
+        Curriculum topic probes filling the slots `existing` leaves open.
 
-            templates = CollegeAssessmentService._FALLBACK_PROBE_TEMPLATES
-            probe_no = 0
-            # Round-robin across subjects so one subject's first unit can
-            # never dominate the diagnostic; rotate the probe framing.
-            while len(questions) < 6:
-                progressed = False
-                for topics in per_subject:
-                    if len(questions) >= 6:
-                        break
-                    if not topics:
+        Round-robin across subjects so one subject's first unit can never
+        dominate the diagnostic; rotates the probe framing; skips
+        course-admin meta topics, topics already covered by `existing`,
+        and topics with demonstrated mastery. No invented answers or
+        rubrics — these grade as INSUFFICIENT_EVIDENCE (Unknown) until a
+        grader can judge them, never a fake score.
+        """
+        questions: List[CollegeAssessmentQuestion] = []
+        mastered = {
+            str(m.get("topic") or "").strip().lower()
+            for m in (retrieval.known_masteries or [])
+            if str(m.get("outcome") or "").upper().startswith("MASTER")
+        }
+        used = {str(q.topic or "").strip().lower() for q in existing}
+        # Per-subject probe candidates: real knowledge topics only,
+        # deduped, never re-probing demonstrated mastery.
+        per_subject: List[List[Tuple[str, Any]]] = []
+        for sub in retrieval.curriculum_subjects:
+            topics: List[Tuple[str, Any]] = []
+            seen_local = set()
+            for unit in sub.get("units", []):
+                for topic in (unit.get("topics") or []):
+                    label = str(topic).strip()
+                    key = label.lower()
+                    if (len(label) < 3 or key in seen_local
+                            or key in used or key in mastered
+                            or CollegeAssessmentService._META_TOPIC_RE.search(label)):
                         continue
-                    label, sub = topics.pop(0)
-                    text, probe = templates[probe_no % len(templates)]
-                    probe_no += 1
-                    questions.append(CollegeAssessmentQuestion(
-                        question_id=(
-                            f"dq_curr_{sub['subject_id']}_{len(questions)}"),
-                        question_text=text.format(
-                            topic=label,
-                            subject=sub.get("name", sub["subject_id"])),
-                        question_type="SHORT_ANSWER",
-                        topic=label,
-                        marks=5,
-                        probe=probe,
-                        source="verified_curriculum",
-                    ))
-                    progressed = True
-                if not progressed:
+                    seen_local.add(key)
+                    topics.append((label, sub))
+            per_subject.append(topics)
+
+        templates = CollegeAssessmentService._FALLBACK_PROBE_TEMPLATES
+        probe_no = 0
+        while len(existing) + len(questions) < target_total:
+            progressed = False
+            for topics in per_subject:
+                if len(existing) + len(questions) >= target_total:
                     break
-        return questions[:6]
+                if not topics:
+                    continue
+                label, sub = topics.pop(0)
+                text, probe = templates[probe_no % len(templates)]
+                probe_no += 1
+                questions.append(CollegeAssessmentQuestion(
+                    question_id=(
+                        f"dq_curr_{sub['subject_id']}_"
+                        f"{len(existing) + len(questions)}"),
+                    question_text=text.format(
+                        topic=label,
+                        subject=sub.get("name", sub["subject_id"])),
+                    question_type="SHORT_ANSWER",
+                    topic=label,
+                    marks=5,
+                    probe=probe,
+                    source="verified_curriculum",
+                ))
+                progressed = True
+            if not progressed:
+                break
+        return questions
+
+    @staticmethod
+    def _fallback_diagnostic_questions(retrieval):
+        """The pure-RAG diagnostic: verified PYQs, then curriculum probes."""
+        anchored = CollegeAssessmentService._rag_pyq_questions(retrieval)
+        probes = CollegeAssessmentService._rag_curriculum_probes(
+            retrieval, anchored)
+        return (anchored + probes)[:6]
 
     def _generate_questions_with_llm(
         self, model, subject_id: str, topic_title: str, topic_tags: List[str]

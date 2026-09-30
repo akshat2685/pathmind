@@ -1,8 +1,9 @@
 """
 Dynamic/hybrid diagnostic + plan-generation hardening tests.
 
-Covers the reworked onboarding diagnostic (retrieval-grounded, Gemini as
-reasoning layer, honest fallback) and the plan-generation failure contract.
+Covers the onboarding diagnostic (hybrid RAG generates from verified
+retrieval; Gemini is an optional top-up for uncovered topics only, never
+a dependency) and the plan-generation failure contract.
 All Gemini access is stubbed via backend.core.gemini.get_gemini_model —
 no real API key is ever consumed here.
 """
@@ -120,7 +121,8 @@ def _setup_bob_me():
 
 
 def test_gemini_diagnostic_grounded_and_evidence_shaped(monkeypatch):
-    """Happy path: retrieval + Gemini -> labeled questions -> evidence."""
+    """Hybrid contract: verified PYQs anchor, Gemini only tops up topics
+    the retrieved material does not already cover -> evidence."""
     _setup_alice()
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: ValidModel())
 
@@ -133,13 +135,20 @@ def test_gemini_diagnostic_grounded_and_evidence_shaped(monkeypatch):
     assert all(q.get("source") for q in questions)
     assert {q["source"] for q in questions} <= {
         "verified_curriculum", "verified_pyq", "model_generated"}
+    # The retrieved real PYQs are always in the set (never displaced by
+    # the model), and the model contributed only uncovered topics.
+    assert any(q["source"] == "verified_pyq" for q in questions)
+    assert any(q["source"] == "model_generated" for q in questions)
+    topics = [q["topic"] for q in questions]
+    assert len(topics) == len({t.lower() for t in topics})
 
-    # Answer: dq1 correct (O(1)), dq2/dq3 wrong, shorts strong.
+    # Answer: Scheduling MCQ correct, Paging MCQ wrong, shorts strong.
     answers = {}
     for q in questions:
         if q["question_type"] == "MCQ":
             answers[q["question_id"]] = (
-                q["options"][0] if q["question_id"] == "dq1" else q["options"][2])
+                q["options"][1] if q["topic"] == "Scheduling"
+                else q["options"][2])
         else:
             answers[q["question_id"]] = (
                 "Contiguous memory allows index arithmetic; linked lists "
@@ -157,8 +166,11 @@ def test_gemini_diagnostic_grounded_and_evidence_shaped(monkeypatch):
         assert tr["status_label"] in {"Strong", "Partial", "Weak", "Unknown"}
         assert tr["likely_issue"]
     by_topic = {tr["topic"]: tr for tr in result["topic_results"]}
-    assert by_topic["Linked Lists"]["status_label"] == "Strong"
-    assert by_topic["Scheduling"]["status_label"] in {"Weak", "Partial"}
+    assert by_topic["Scheduling"]["status_label"] == "Strong"
+    assert by_topic["Paging"]["status_label"] == "Weak"
+    # The real PYQ has no rubric: even inside the hybrid flow its answer
+    # grades honestly as Unknown, never a fabricated score.
+    assert by_topic["Linked Lists"]["status_label"] == "Unknown"
 
     r3 = client.get("/api/college/baseline", headers=ALICE)
     assert r3.status_code == 200
@@ -246,9 +258,18 @@ def test_diagnostic_unavailable_only_when_nothing_exists(monkeypatch):
     assert "DIAGNOSTIC_UNAVAILABLE" in r.json()["detail"]
 
 
-def test_plan_reflects_diagnostic_evidence(monkeypatch):
-    """Weak diagnostic topic -> guided phase in the SAME existing planner."""
+def test_plan_reflects_diagnostic_evidence(fake_backend, monkeypatch):
+    """Diagnostic topic mastery -> planner guidance bands (same planner)."""
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: ValidModel())
+    # A unit Alice has fully mastered on earlier evidence (e.g. a prior
+    # checkpoint): the planner must plan revision, not a re-teach.
+    alice_uid = "11111111-1111-4111-8111-111111111111"
+    for topic in ("Trees", "Graphs"):
+        fake_backend.client.table("learner_topic_mastery").insert({
+            "user_id": alice_uid, "subject_id": "CS-301", "topic": topic,
+            "mastery_score": 0.9, "outcome": "MASTERED",
+            "evidence_ref": "seeded_prior_checkpoint",
+        }).execute()
     r = client.post("/api/college/plans/generate",
                     json={"scope": "SEMESTER"}, headers=ALICE)
     assert r.status_code == 200, r.text
@@ -258,22 +279,35 @@ def test_plan_reflects_diagnostic_evidence(monkeypatch):
         guidance = phase["unlock_rule"].get("diagnostic_guidance")
         assert guidance is not None
         assert guidance["band"] in {"weak", "partial", "mastered", "unknown"}
-    ll_phase = next(
-        p for p in plan["phases"]
-        if "Linked Lists" in (p["unlock_rule"].get("required_topics") or []))
-    ll_guidance = ll_phase["unlock_rule"]["diagnostic_guidance"]
-    assert ll_guidance["topics"]
-    # Alice aced the Linked Lists MCQ in the first test -> mastered band,
-    # light-revision objective (not a full re-teach).
-    assert ll_guidance["band"] == "mastered"
-    assert ll_phase["objective"].startswith(
+
+    def phase_covering(topic):
+        return next(
+            p for p in plan["phases"]
+            if topic in (p["unlock_rule"].get("required_topics") or []))
+
+    # Fully mastered unit -> mastered band, light-revision objective.
+    trees_phase = phase_covering("Trees")
+    trees_guidance = trees_phase["unlock_rule"]["diagnostic_guidance"]
+    assert trees_guidance["topics"]
+    assert trees_guidance["band"] == "mastered"
+    assert trees_phase["objective"].startswith(
         "Quick revision — you already know this well")
-    # She missed the Scheduling MCQ -> weak band, guided objective.
-    sched_phase = next(
-        p for p in plan["phases"]
-        if "Scheduling" in (p["unlock_rule"].get("required_topics") or []))
-    assert sched_phase["unlock_rule"]["diagnostic_guidance"]["band"] == "weak"
-    assert sched_phase["objective"].startswith(
+    # Per-topic evidence flows through verbatim: Scheduling was aced in
+    # the diagnostic; its phase-mate is still Unknown, so the phase is
+    # targeted ("partial"), not a full re-teach.
+    sched_phase = phase_covering("Scheduling")
+    sched_guidance = sched_phase["unlock_rule"]["diagnostic_guidance"]
+    assert {"topic": "Scheduling", "outcome": "MASTERED"} in (
+        sched_guidance["topics"])
+    assert sched_guidance["band"] == "partial"
+    # Paging was missed -> weak band drives its phase, guided objective,
+    # even though Virtual Memory in the same unit was mastered.
+    paging_phase = phase_covering("Paging")
+    paging_guidance = paging_phase["unlock_rule"]["diagnostic_guidance"]
+    assert {"topic": "Paging", "outcome": "REINFORCEMENT_REQUIRED"} in (
+        paging_guidance["topics"])
+    assert paging_guidance["band"] == "weak"
+    assert paging_phase["objective"].startswith(
         "Start here — learn the basics step by step")
 
 

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 import re
 import time
@@ -86,6 +87,59 @@ def tier_for_domain(domain: str) -> str:
     if "youtube.com" in d or "youtu.be" in d:
         return "D"  # promoted to B only if an official channel is confirmed
     return "D"
+
+
+def _tier_rank(tier: str) -> int:
+    return {"A": 4, "B": 3, "C": 2, "D": 1}.get(tier, 1)
+
+
+def _engagement_score(quality_signals: Any) -> float:
+    """Deterministic engagement signal from real platform statistics.
+
+    Log-scaled views (reach), like/view ratio (approval), log-scaled
+    comments (discussion depth). Returns 0.0 when no statistics exist —
+    documents and hand-seeded rows carry none, so their relative order
+    is exactly what it was before engagement ranking existed. The
+    numbers ranked here are real YouTube Data API statistics captured
+    at research time, never estimates or model guesses.
+    """
+    if not isinstance(quality_signals, dict):
+        return 0.0
+
+    def _num(key: str) -> float:
+        try:
+            return float(quality_signals.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    views = _num("view_count")
+    if views <= 0:
+        return 0.0
+    likes = _num("like_count")
+    comments = _num("comment_count")
+    return (math.log10(views + 1) * 10.0
+            + min(likes / views, 0.25) * 40.0
+            + math.log10(comments + 1) * 2.0)
+
+
+def _candidate_rank_key(cand: Dict[str, Any]):
+    """Best-first ordering for research candidates.
+
+    Institutional tier first (the existing trust philosophy), engagement
+    second — so a heavily-watched, well-liked lecture beats an obscure
+    upload from the same tier, and the deadline-bounded verification
+    step spends itself on the strongest material first.
+    """
+    url = cand.get("url") or ""
+    domain = (urllib.parse.urlparse(url).netloc or "").lower()
+    domain = domain.replace("www.", "")
+    tier = tier_for_domain(domain)
+    if cand.get("kind") == "VIDEO" and tier == "D":
+        channel = (cand.get("quality_signals", {})
+                   .get("channel_title") or "").lower()
+        if any(h in channel for h in _OFFICIAL_YT_HANDLES):
+            tier = "B"
+    return (_tier_rank(tier), _engagement_score(cand.get("quality_signals")))
 
 
 def _chapter_ts_to_seconds(ts: str) -> int:
@@ -220,6 +274,12 @@ class CollegeResourcePipeline:
                         seen_urls.add(url)
                         candidates.append({"kind": "VIDEO", **video})
 
+            # Rank best-first before verifying: verification is the
+            # deadline-bounded step, so it must spend itself on the
+            # strongest candidates (institutional tier, then real
+            # engagement) rather than whatever order search returned.
+            candidates.sort(key=_candidate_rank_key, reverse=True)
+
             # 3. Verify reachability + persist the survivors.
             added: List[Dict[str, Any]] = []
             async with httpx.AsyncClient(
@@ -309,6 +369,11 @@ class CollegeResourcePipeline:
             "domain": domain, "tier": tier,
             "reachability_checked_at": now, "reachable": True,
         })
+        # Persist the engagement score alongside the raw statistics so
+        # plan-time attachment can rank without recomputing (and so the
+        # raw views/likes/comments stay auditable on the record).
+        quality_signals["engagement_score"] = round(
+            _engagement_score(quality_signals), 3)
 
         if cand["kind"] == "VIDEO":
             timestamps = await self._video_timestamps(cand, http)
@@ -353,6 +418,7 @@ class CollegeResourcePipeline:
                 "verification_status": "VERIFIED",
                 "last_verified_at": now,
                 "learner_preference_metadata": {"researched": True},
+                "quality_signals": quality_signals,
             }
             client.table("resource_records").insert(row).execute()
             # learning_resources is the read-model get_verified_resources serves.

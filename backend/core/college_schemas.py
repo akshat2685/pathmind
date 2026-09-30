@@ -219,6 +219,11 @@ class ResourceRecord(BaseModel):
     video_timestamps: List[VideoTimestamp] = Field(default_factory=list)
     document_sections: List[DocumentSection] = Field(default_factory=list)
     learner_preference_metadata: Dict[str, Any] = Field(default_factory=dict)
+    # Real engagement statistics persisted by the research pipeline
+    # (YouTube view/like/comment counts + a derived engagement_score).
+    # Empty for hand-seeded or pre-round-6 rows — readers must treat
+    # absence as "no signal", never as a fabricated zero-quality mark.
+    quality_signals: Dict[str, Any] = Field(default_factory=dict)
     last_verified_at: Optional[str] = None
 
 # --- PYQ Models ---
