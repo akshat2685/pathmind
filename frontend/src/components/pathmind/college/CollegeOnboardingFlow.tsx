@@ -300,6 +300,11 @@ export function CollegeOnboardingFlow() {
           setError(res.error || "Could not start the diagnostic assessment. Please try again.");
         }
       }
+    } catch {
+      // apiClient already converts network failures into { ok: false },
+      // so this only fires on an unexpected throw — never leave the
+      // learner on a dead screen ("runtime error") without a way on.
+      setError("Could not start the diagnostic assessment. Please try again.");
     } finally {
       setDiagLoading(false);
     }
@@ -323,6 +328,8 @@ export function CollegeOnboardingFlow() {
       } else {
         setError(res.error || "Could not evaluate your answers. Please try again.");
       }
+    } catch {
+      setError("Could not evaluate your answers. Please try again.");
     } finally {
       setDiagLoading(false);
     }
@@ -410,6 +417,11 @@ export function CollegeOnboardingFlow() {
       }
       window.dispatchEvent(new Event("pathmind:refresh"));
       router.push("/");
+    } catch {
+      // Never surface a raw runtime error on the final step: profile and
+      // academic context are already saved by this point, so the learner
+      // can simply retry plan generation.
+      setError("Something went wrong while building your plan. Everything you entered is saved — please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -734,7 +746,15 @@ export function CollegeOnboardingFlow() {
                         continue onboarding and take a checkpoint later from your study plan.
                       </p>
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={beginDiagnostic}
+                        disabled={diagLoading}
+                        className="px-6 py-3 bg-[#fdfae7] text-[#252321] font-semibold text-sm rounded-md border-2 border-[#252321] cursor-pointer disabled:opacity-60"
+                      >
+                        {diagLoading ? "Preparing questions…" : "Retry diagnostic"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => {

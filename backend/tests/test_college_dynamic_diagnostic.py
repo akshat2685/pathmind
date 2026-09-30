@@ -303,8 +303,14 @@ def test_plan_generation_failure_contract(monkeypatch):
     assert r.json()["detail"]["code"] == "PERSISTENCE_UNAVAILABLE"
 
 
-def test_plan_llm_enrichment_bounded_for_large_plans(fake_backend, monkeypatch):
-    """26-phase plan: generation-time LLM enrichment capped at 8 phases."""
+def test_plan_generation_is_static_first_for_large_plans(fake_backend,
+                                                        monkeypatch):
+    """26-phase plan: generation makes NO LLM calls (static-first).
+
+    Supersedes the round-2 head-8 enrichment cap: generation-time AI
+    enrichment put every plan one slow Gemini call away from the ~60s
+    serverless cap. All phases now ship static and upgrade on demand.
+    """
     client_fake = fake_backend.client
     client_fake.table("universities").insert({
         "university_id": "rtu", "name": "Rajasthan Technical University",
@@ -347,14 +353,25 @@ def test_plan_llm_enrichment_bounded_for_large_plans(fake_backend, monkeypatch):
     }, headers=BOB)
     assert r.status_code == 200, r.text
 
-    monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: ValidModel())
+    counting_model = ValidModel()
+    llm_calls = []
+    _orig_generate = counting_model.generate_content
+
+    def _counting_generate(prompt):
+        llm_calls.append(prompt)
+        return _orig_generate(prompt)
+
+    counting_model.generate_content = _counting_generate
+    monkeypatch.setattr(gemini_mod, "get_gemini_model",
+                        lambda: counting_model)
     r = client.post("/api/college/plans/generate",
                     json={"scope": "SEMESTER"}, headers=BOB)
     assert r.status_code == 200, r.text
     plan = r.json()
     assert len(plan["phases"]) == 26
-    enriched = [p for p in plan["phases"] if p["ai_enriched"]]
-    assert len(enriched) == 8
-    assert all(p["order"] <= 8 for p in enriched)
-    # Tail phases still carry real activities (never empty shells).
+    # Static-first: no phase is AI-enriched at generation time...
+    assert not [p for p in plan["phases"] if p["ai_enriched"]]
+    # ...no LLM call happened while generating...
+    assert llm_calls == []
+    # ...and every phase still carries real activities (never empty shells).
     assert all(p["activities"] for p in plan["phases"])

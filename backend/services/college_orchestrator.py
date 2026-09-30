@@ -13,10 +13,7 @@ from backend.core.config import settings
 from backend.core.college_logging import log_event
 from backend.core.gemini import LLMServiceError, classify_llm_error
 from backend.core.college_schemas import (
-    EngineeringBranch,
     AcademicContext,
-    CollegeActivity,
-    TodaySchedule
 )
 from backend.services.academic_service import AcademicService
 from backend.services.college_learning_service import CollegeLearningService
@@ -130,8 +127,9 @@ class CollegeOrchestrator:
                 return text
             except Exception as exc:
                 error_code = classify_llm_error(exc)
-                logger.warning("Mentor LLM attempt %d/3 failed: %s (%s)",
-                               attempt + 1, type(exc).__name__, error_code)
+                logger.warning("Mentor LLM attempt %d/3 failed: %s (%s): %s",
+                               attempt + 1, type(exc).__name__, error_code,
+                               str(exc)[:240])
                 # Quota exhaustion, a rejected key and a retired model do
                 # not heal between retries — fail fast instead of burning
                 # the serverless budget (and more quota) on doomed calls.
