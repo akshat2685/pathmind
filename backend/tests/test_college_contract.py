@@ -120,7 +120,14 @@ def _fake_diagnostic_model():
 
 def test_diagnostic_submit_and_baseline_flow(monkeypatch):
     """Full onboarding-diagnostic contract: generate -> submit -> baseline."""
-    # Stub the LLM so the diagnostic author runs without network.
+    # Round 7: the ADK assessment-agent seam is the author of record.
+    # Stub it to return the fixed diagnostic payload (recording the
+    # call), and keep the direct-model stub for grading.
+    async def _fake_agent_generation(agent_key, prompt):
+        return _fake_diagnostic_model().generate_content(prompt).text
+
+    monkeypatch.setattr(assessment_service_module, "run_agent_generation",
+                        _fake_agent_generation)
     monkeypatch.setattr(assessment_service_module, "_get_gemini_model",
                         _fake_diagnostic_model)
 
@@ -144,9 +151,13 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
     diag = resp.json()
     assert diag["assessment_id"].startswith("diag_")
     assert diag["title"]
+    # Round 7 provenance: the payload names the authoring path — the
+    # ADK assessment agent authored this set.
+    assert diag["authored_by"] == "adk:assessment_agent"
     questions = diag["questions"]
-    # Hybrid RAG diagnostic: verified PYQs anchor, the stub LLM tops up
-    # the uncovered topics (5-6 questions total, never PYQ-displacing).
+    # Agent-authored diagnostic on hybrid-RAG evidence: 5-6 questions;
+    # verified PYQs fill only topics the authored set left uncovered
+    # (here both PYQ topics are already covered, so the set stays 5).
     assert 5 <= len(questions) <= 6
     for q in questions:
         assert q["question_id"] and q["question_text"]
@@ -154,9 +165,9 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
         assert q["topic"]
 
     # 3. Submit against the questions actually returned. Trees correct,
-    # Graphs deliberately wrong, Stacks exact; the two verified-PYQ
-    # short answers carry no rubric anywhere, so they grade Unknown —
-    # honest no-conclusion, never invented marks.
+    # Graphs deliberately wrong, Stacks exact; Arrays is an authored
+    # MCQ answered wrong; the Linked Lists short answer is gradable
+    # (reference + rubric) but off-topic, so it honestly earns 0.
     answer_by_topic = {
         "Trees": "Sorted",
         "Graphs": "Stack",  # deliberate miss (correct: "Queue")
@@ -175,10 +186,10 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
                       headers=AUTH_BOB)
     assert sub.status_code == 200
     result = sub.json()
-    # Gradable marks: Trees 5/5 + Stacks 10/10, Graphs 0/5; the two
-    # 5-mark PYQs are ungradable -> 15/30 = 50.0%.
-    assert result["score"] == pytest.approx(50.0, abs=0.1)
-    assert result["mastery_status"] in ("MASTERED", "PARTIALLY_MASTERED")
+    # Gradable marks: Trees 5/5 + Stacks 10/10, Graphs 0/5, Arrays 0/5,
+    # Linked Lists ungradable -> 15/35 = 42.9% -> REINFORCEMENT_REQUIRED.
+    assert result["score"] == pytest.approx(42.9, abs=0.1)
+    assert result["mastery_status"] == "REINFORCEMENT_REQUIRED"
     assert result["feedback"]
     assert len(result["topic_results"]) == 5
     assert all(t["topic"] for t in result["topic_results"])
@@ -187,14 +198,20 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
     assert outcome_by_topic["Trees"] == "MASTERED"
     assert outcome_by_topic["Stacks"] == "MASTERED"
     assert outcome_by_topic["Graphs"] == "REINFORCEMENT_REQUIRED"
-    assert outcome_by_topic["Linked Lists"] == "INSUFFICIENT_EVIDENCE"
-    assert outcome_by_topic["Arrays"] == "INSUFFICIENT_EVIDENCE"
+    assert outcome_by_topic["Arrays"] == "REINFORCEMENT_REQUIRED"
+    # The authored Linked Lists short answer carries a reference answer
+    # + rubric, so unlike a rubric-less PYQ it IS gradable: the
+    # off-topic answer earns 0 -> Weak, not Unknown.
+    assert outcome_by_topic["Linked Lists"] == "REINFORCEMENT_REQUIRED"
 
     # 4. Baseline derives strengths/weaknesses/gaps from the mastery store.
     base = client.get("/api/college/baseline", headers=AUTH_BOB)
     assert base.status_code == 200
     body = base.json()
-    assert body["topic_count"] == 5  # one mastery record per topic
+    # 5 question topics + 1 assessment-level record: a 42.9% diagnostic
+    # lands on REINFORCEMENT_REQUIRED, which also fires the CONCEPT_GAP
+    # signal that upserts a mastery row keyed by the assessment title.
+    assert body["topic_count"] == 6
     by_topic = {}
     for bucket in ("strengths", "weaknesses", "gaps"):
         for entry in body[bucket]:
@@ -203,11 +220,12 @@ def test_diagnostic_submit_and_baseline_flow(monkeypatch):
     assert by_topic["Trees"] == "strengths"           # 5/5 -> MASTERED
     assert by_topic["Stacks"] == "strengths"          # 10/10 -> MASTERED
     assert by_topic["Graphs"] in ("weaknesses", "gaps")  # 0/5 -> not mastered
-    # The verified-PYQ topics graded Unknown: recorded as gaps (no
-    # conclusion), never dressed up as strengths.
-    assert by_topic["Linked Lists"] == "gaps"
-    assert by_topic["Arrays"] == "gaps"
-    assert sum(len(body[b]) for b in ("strengths", "weaknesses", "gaps")) == 5
+    # Arrays (authored MCQ answered wrong) and Linked Lists (authored
+    # short answer, gradable, earned 0) join the weaknesses — real
+    # negative evidence, not gaps.
+    assert by_topic["Arrays"] == "weaknesses"
+    assert by_topic["Linked Lists"] == "weaknesses"
+    assert sum(len(body[b]) for b in ("strengths", "weaknesses", "gaps")) == 6
 
 
 # ---------------------------------------------------------------------------

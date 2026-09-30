@@ -26,6 +26,32 @@ from backend.core.config import settings
 
 _MODEL = settings.GEMINI_MODEL
 
+# Instruction strings shared by the tool-wired sub-agents (build_agents)
+# and their tool-less one-shot generation twins (build_generation_agent),
+# so a one-shot generation runs under the SAME name/instruction/model as
+# the conversational sub-agent — only the tools differ (none: generation
+# must produce text, never act).
+PLAN_AGENT_INSTRUCTION = (
+    "You are the Study-Plan sub-agent. Build ordered multi-phase "
+    "learning plans via create_study_plan, attach verified resources "
+    "via get_verified_resources, and mark progress via update_progress. "
+    "Phase unlocks are mastery-gated by deterministic rules — you do "
+    "not unlock phases yourself. If resources are not yet verified "
+    "(RESOURCE_ENRICHMENT_PENDING), run trigger_resource_research with "
+    "a small budget (<=30s) and tell the learner enrichment is "
+    "in progress rather than showing unverified links."
+)
+
+ASSESSMENT_AGENT_INSTRUCTION = (
+    "You are the Assessment sub-agent. Before authoring, read "
+    "get_topic_mastery_state and select the learner's weakest topics "
+    "first (adaptive selection). Create checkpoint or diagnostic "
+    "assessments with create_assessment and grade submissions with "
+    "evaluate_assessment. Record weaknesses as learning signals via "
+    "record_learning_signal. You never compute scores by hand — "
+    "the tools do. Question IDs and responses are stored by the tools."
+)
+
 
 def _response_contract() -> str:
     return """
@@ -102,16 +128,7 @@ def build_agents(toolkit: CollegeToolKit,
     plan = LlmAgent(
         name="plan_agent",
         model=_MODEL,
-        instruction=(
-            "You are the Study-Plan sub-agent. Build ordered multi-phase "
-            "learning plans via create_study_plan, attach verified resources "
-            "via get_verified_resources, and mark progress via update_progress. "
-            "Phase unlocks are mastery-gated by deterministic rules — you do "
-            "not unlock phases yourself. If resources are not yet verified "
-            "(RESOURCE_ENRICHMENT_PENDING), run trigger_resource_research with "
-            "a small budget (<=30s) and tell the learner enrichment is "
-            "in progress rather than showing unverified links."
-        ),
+        instruction=PLAN_AGENT_INSTRUCTION,
         tools=toolkit.as_function_tools([
             "get_academic_context", "get_current_subjects",
             "get_verified_curriculum", "get_verified_resources",
@@ -122,15 +139,7 @@ def build_agents(toolkit: CollegeToolKit,
     assessment = LlmAgent(
         name="assessment_agent",
         model=_MODEL,
-        instruction=(
-            "You are the Assessment sub-agent. Before authoring, read "
-            "get_topic_mastery_state and select the learner's weakest topics "
-            "first (adaptive selection). Create checkpoint or diagnostic "
-            "assessments with create_assessment and grade submissions with "
-            "evaluate_assessment. Record weaknesses as learning signals via "
-            "record_learning_signal. You never compute scores by hand — "
-            "the tools do. Question IDs and responses are stored by the tools."
-        ),
+        instruction=ASSESSMENT_AGENT_INSTRUCTION,
         tools=toolkit.as_function_tools([
             "get_topic_mastery_state", "create_assessment",
             "evaluate_assessment", "record_learning_signal",
@@ -226,4 +235,40 @@ def build_agents(toolkit: CollegeToolKit,
     }
 
 
-__all__ = ["build_agents", "CollegeToolKit", "_gemini_available"]
+_GENERATION_AGENT_SPECS = {
+    "plan": ("plan_agent", PLAN_AGENT_INSTRUCTION),
+    "assessment": ("assessment_agent", ASSESSMENT_AGENT_INSTRUCTION),
+}
+
+
+def build_generation_agent(agent_key: str) -> LlmAgent:
+    """
+    Tool-less one-shot generation twin of a named sub-agent.
+
+    Same name, instruction, and model as the tool-wired sub-agent built
+    by build_agents, but with NO tools: it exists to author text in a
+    single bounded Runner turn (diagnostic questions, plan
+    personalization), never to act on the store. Services run it via
+    college_adk_runtime.run_agent_generation and validate its output
+    with the same deterministic validators as any other model output.
+
+    Raises RuntimeError when google-adk is not importable (callers fall
+    back honestly) and ValueError for an unknown agent_key.
+    """
+    if not _ADK_IMPORT_OK or LlmAgent is None:
+        raise RuntimeError("google-adk is not importable in this environment")
+    try:
+        name, instruction = _GENERATION_AGENT_SPECS[agent_key]
+    except KeyError:
+        raise ValueError(f"unknown generation agent: {agent_key!r}")
+    return LlmAgent(
+        name=name,
+        model=_MODEL,
+        instruction=instruction,
+        tools=[],
+    )
+
+
+__all__ = ["build_agents", "build_generation_agent", "CollegeToolKit",
+           "_gemini_available", "PLAN_AGENT_INSTRUCTION",
+           "ASSESSMENT_AGENT_INSTRUCTION"]

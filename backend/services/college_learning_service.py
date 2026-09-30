@@ -12,6 +12,7 @@ per-topic mastery store. `complete_activity` never unlocks on its own.
 
 from typing import List, Dict, Any, Optional, Tuple
 import asyncio
+import json
 import re
 import time
 import uuid
@@ -102,6 +103,60 @@ def _resource_engagement(resource: ResourceRecord) -> float:
         return float(signals.get("engagement_score") or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _resource_quality(resource: ResourceRecord) -> float:
+    """The quality signal that ranks a resource of this kind (AJ's rule).
+
+    Videos: real engagement (views/likes/comments — the most-watched,
+    best-liked lecture on the topic wins). Documents, notes, and free
+    online courses found via Tavily: the search engine's SEO/AEO
+    relevance score persisted under quality_signals["search_score"]
+    (0..1), with engagement as a fallback for rows that carry no score.
+    Trust is enforced separately by verification + reachability — it
+    does not outrank quality at pick time.
+    """
+    if (resource.resource_type or "") == "VIDEO":
+        return _resource_engagement(resource)
+    signals = getattr(resource, "quality_signals", None) or {}
+    if isinstance(signals, dict):
+        for key in ("search_score", "tavily_score"):
+            value = signals.get(key)
+            if value is not None:
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    continue
+    return _resource_engagement(resource)
+
+
+def _resource_pick_key(resource: ResourceRecord, match_title: str):
+    """Attachment order: an on-topic resource always beats an off-topic
+    one (gate), then kind-native quality decides, then match depth,
+    then the deterministic resource_id."""
+    match = _resource_match_score(resource, match_title)
+    return (1 if match > 0 else 0, _resource_quality(resource),
+            match, resource.resource_id)
+
+
+#: One-shot ADK generation seam (college_adk_runtime.run_agent_generation).
+#: Bound LAZILY into this module's namespace on first use: a top-level
+#: import of the runtime would cycle (college_adk_tools imports this
+#: service, and the runtime imports the tools). Tests patch this module
+#: attribute to stub the seam AND record that the ADK path was really
+#: invoked — a green suite that never exercised the seam does not count
+#: as proof the agent authored anything.
+run_agent_generation = None
+
+
+def _agent_generation():
+    """Resolve the ADK one-shot generation callable (lazy, patchable)."""
+    global run_agent_generation
+    if run_agent_generation is None:
+        from backend.services.college_adk_runtime import (
+            run_agent_generation as _impl)
+        run_agent_generation = _impl
+    return run_agent_generation
 
 
 def _learn_steps_for(activity_type: str, resource: Optional[ResourceRecord],
@@ -220,17 +275,21 @@ class CollegeLearningService:
             phase_order = 1
 
             # Collect phase specs first (order preserved), then build
-            # activities concurrently. Generation is STATIC-FIRST: no LLM
-            # call happens while a plan is being generated, for any scope.
-            # A single Gemini call costs ~30s+ (and the AI endpoint is
-            # intermittently unreachable from the serverless runtime), so
-            # generation-time enrichment put every plan one slow call away
-            # from the ~60s serverless cap — the failure learners hit as a
-            # dead "Embark on Study Plan" click / runtime error. Every
-            # phase ships with the deterministic sequence (real verified
-            # resources + PYQs), and any single phase can be upgraded to
-            # AI-personalized activities on demand via
-            # enrich_phase_activities ("Personalize with AI").
+            # activities concurrently. Phase/activity assembly is
+            # STATIC-FIRST: no LLM call happens while phases are being
+            # assembled, for any scope — a single Gemini call costs
+            # ~30s+ (and the AI endpoint is intermittently unreachable
+            # from the serverless runtime), so per-phase LLM enrichment
+            # put every plan one slow call away from the ~60s serverless
+            # cap. Every phase ships with the deterministic sequence
+            # (real verified resources + PYQs). Round 7 adds ONE bounded
+            # ADK plan-agent pass AFTER assembly (_personalize_plan)
+            # that rewrites objectives + technique guidance from the
+            # learner's diagnostic evidence and aspiration — fail-open:
+            # any failure ships the static plan untouched, labeled
+            # authored_by="static_fallback". Any single phase can also
+            # be upgraded on demand via enrich_phase_activities
+            # ("Personalize with AI").
             phase_specs: List[Tuple[int, Any, Any, int]] = []
             for semester, sub in scoped_subjects:
                 if sub.subject_id not in seen_subjects:
@@ -362,6 +421,13 @@ class CollegeLearningService:
                 # hierarchy is persisted.
                 status="DRAFT",
             )
+            # Round 7: one bounded ADK plan-agent personalization pass
+            # BEFORE persist — objectives/techniques rewritten from the
+            # diagnostic evidence + aspiration. Fail-open by design:
+            # _personalize_plan never raises, and plan.authored_by
+            # records which path actually happened.
+            await self._personalize_plan(uid, plan, ctx, scope,
+                                         gen_started)
             await self.store.save_college_learning_plan(
                 uid, plan.model_dump(mode="json"))
             await self.store.activate_college_learning_plan(uid, plan_id)
@@ -379,6 +445,154 @@ class CollegeLearningService:
             await self._research_first_phase_resources(
                 uid, plan, prefetched, gen_started)
             return plan
+
+    async def _personalize_plan(
+        self, uid: str, plan: CollegeLearningPlan, ctx: AcademicContext,
+        scope: PlanScope, gen_started: float,
+    ) -> None:
+        """One bounded ADK plan-agent pass over the assembled static plan.
+
+        The agent sees a compact brief (aspiration, scope, and per phase:
+        id/title/subject/topics/diagnostic band) and may rewrite each
+        phase's objective, focus topics, and learn technique. It may not
+        invent resources — verified material attaches deterministically
+        from the cache — and unknown phase_ids are ignored. Runs only
+        while the generation budget allows (skipped past 25s so the
+        response stays inside the serverless window). NEVER raises: any
+        failure leaves the static plan untouched. plan.authored_by is
+        set on every path and logged as college.plan.authored — mode
+        says "adk" ONLY when the seam actually returned text that
+        changed >=1 phase.
+        """
+        try:
+            if time.monotonic() - gen_started >= 25.0:
+                plan.authored_by = "static_fallback"
+                log_event("college.plan.authored", user_id=uid,
+                          plan_id=plan.plan_id, mode="static_fallback",
+                          outcome="skipped",
+                          error_code="GENERATION_BUDGET")
+                return
+            aspiration = ""
+            if ctx is not None:
+                exam_window = getattr(ctx, "exam_window", None) or {}
+                if isinstance(exam_window, dict):
+                    aspiration = str(
+                        exam_window.get("aspiration") or "")[:300]
+            brief_phases = []
+            for phase in plan.phases:
+                rule = phase.unlock_rule or {}
+                guidance = rule.get("diagnostic_guidance") or {}
+                brief_phases.append({
+                    "phase_id": phase.phase_id,
+                    "title": phase.title,
+                    "subject_id": _subject_id_from_phase_id(
+                        phase.phase_id, plan.plan_id),
+                    "topics": list(rule.get("required_topics") or [])[:8],
+                    "band": guidance.get("band", "unknown"),
+                })
+            payload = {"aspiration": aspiration, "scope": scope.value,
+                       "phases": brief_phases}
+            prompt = (
+                "You are personalizing a study plan for one learner. "
+                "Below is a JSON brief: the learner's aspiration, the "
+                "plan scope, and each phase with its diagnostic band "
+                "(weak = evidence of gaps, partial = some evidence, "
+                "mastered = already strong, unknown = no evidence yet).\n"
+                "Rules:\n"
+                "- Weak phases come first in your wording: start from "
+                "the basics, step by step. Mastered phases get quick "
+                "revision wording (spaced recall), never full re-teaching.\n"
+                "- Match the work to the aspiration when it is stated.\n"
+                "- focus_topics: the topics in that phase to hit first "
+                "(weakest first). technique: one concrete how-to-learn "
+                "method for this phase (e.g. active recall with worked "
+                "examples, timed PYQ drills, teach-back summaries).\n"
+                "- Keep each objective to at most 2 short sentences in "
+                "plain simple language a student understands.\n"
+                "- NEVER invent resources, URLs, book titles, or "
+                "channels — verified material is attached separately by "
+                "the system.\n"
+                "- Include every phase_id from the brief, unchanged.\n"
+                "Return ONLY JSON of this shape: {\"phases\": "
+                "[{\"phase_id\": \"...\", \"objective\": \"...\", "
+                "\"focus_topics\": [\"...\"], \"technique\": \"...\"}]}\n\n"
+                f"BRIEF:\n{json.dumps(payload)}"
+            )
+            raw = await _agent_generation()("plan", prompt)
+            applied = self._apply_plan_personalization(plan, raw)
+            if applied:
+                plan.authored_by = "adk:plan_agent"
+                log_event("college.plan.authored", user_id=uid,
+                          plan_id=plan.plan_id, mode="adk",
+                          phases_personalized=applied, outcome="ok")
+            else:
+                plan.authored_by = "static_fallback"
+                log_event("college.plan.authored", user_id=uid,
+                          plan_id=plan.plan_id, mode="static_fallback",
+                          outcome="degraded",
+                          error_code="NO_APPLICABLE_PHASES")
+        except Exception as exc:
+            plan.authored_by = "static_fallback"
+            log_event("college.plan.authored", user_id=uid,
+                      plan_id=plan.plan_id, mode="static_fallback",
+                      outcome="error", error_code=type(exc).__name__)
+
+    @staticmethod
+    def _apply_plan_personalization(plan: CollegeLearningPlan,
+                                    raw: Optional[str]) -> int:
+        """Apply the plan agent's JSON to the plan, defensively.
+
+        Returns how many phases actually changed. Unknown phase_ids are
+        ignored; every string is capped; the technique and focus topics
+        ride inside unlock_rule.diagnostic_guidance (existing schema —
+        no migration). Malformed input changes nothing.
+        """
+        text = (raw or "").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:]
+        try:
+            data = json.loads(text.strip())
+        except Exception:
+            return 0
+        if not isinstance(data, dict):
+            return 0
+        items = data.get("phases")
+        if not isinstance(items, list):
+            return 0
+        by_id = {p.phase_id: p for p in plan.phases}
+        applied = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            phase = by_id.get(str(item.get("phase_id") or ""))
+            if phase is None:
+                continue
+            changed = False
+            objective = str(item.get("objective") or "").strip()
+            if objective:
+                phase.objective = objective[:800]
+                changed = True
+            rule = dict(phase.unlock_rule or {})
+            guidance = dict(rule.get("diagnostic_guidance") or {})
+            technique = str(item.get("technique") or "").strip()
+            if technique:
+                guidance["technique"] = technique[:300]
+                changed = True
+            focus = item.get("focus_topics")
+            if isinstance(focus, list):
+                topics = [str(t).strip()[:120] for t in focus
+                          if str(t).strip()][:8]
+                if topics:
+                    guidance["focus_topics"] = topics
+                    changed = True
+            if changed:
+                if guidance:
+                    rule["diagnostic_guidance"] = guidance
+                    phase.unlock_rule = rule
+                applied += 1
+        return applied
 
     async def _research_first_phase_resources(
         self, uid: str, plan: CollegeLearningPlan,
@@ -905,9 +1119,13 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
         act_order = 1
 
         videos = [r for r in resources if r.resource_type == "VIDEO"]
-        # Highest real engagement wins; ties keep cache order (max is
+        # On-topic first, then the most-watched/best-liked lecture
+        # (round 7 quality-first ranking); ties keep cache order (max is
         # stable), so stat-less caches behave exactly as before.
-        video_res = max(videos, key=_resource_engagement) if videos else None
+        match_title = f"{sub.code}: {unit.title}"
+        video_res = (max(videos,
+                         key=lambda r: _resource_pick_key(r, match_title))
+                     if videos else None)
         if video_res:
             ts_info = video_res.video_timestamps[0] if video_res.video_timestamps else None
             ts_text = (f" Start at {ts_info.start_seconds // 60}:00 and watch till "
@@ -931,7 +1149,9 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
 
         docs = [r for r in resources
                 if r.resource_type in ["NOTES", "DOCUMENT"]]
-        doc_res = max(docs, key=_resource_engagement) if docs else None
+        doc_res = (max(docs,
+                       key=lambda r: _resource_pick_key(r, match_title))
+                   if docs else None)
         if doc_res:
             sec_info = doc_res.document_sections[0] if doc_res.document_sections else None
             pg_text = (f" Read pages {sec_info.start_page}–{sec_info.end_page} "
@@ -1094,11 +1314,8 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                         if candidates:
                             best = max(
                                 candidates,
-                                key=lambda r: (
-                                    _resource_match_score(r, phase.title),
-                                    _resource_engagement(r),
-                                    r.resource_id,
-                                ),
+                                key=lambda r: _resource_pick_key(
+                                    r, phase.title),
                             )
                             act.resource = best
                             # Persisted on the next phase save, so the link
@@ -1135,10 +1352,8 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                     if videos and "WATCH" not in present:
                         best = max(
                             videos,
-                            key=lambda r: (
-                                _resource_match_score(r, phase.title),
-                                _resource_engagement(r),
-                                r.resource_id))
+                            key=lambda r: _resource_pick_key(
+                                r, phase.title))
                         synthesized.append(CollegeActivity(
                             activity_id=f"act_{phase.phase_id}_auto_watch",
                             user_id=plan.user_id,
@@ -1160,10 +1375,8 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                     if docs and "READ" not in present:
                         best = max(
                             docs,
-                            key=lambda r: (
-                                _resource_match_score(r, phase.title),
-                                _resource_engagement(r),
-                                r.resource_id))
+                            key=lambda r: _resource_pick_key(
+                                r, phase.title))
                         synthesized.append(CollegeActivity(
                             activity_id=f"act_{phase.phase_id}_auto_read",
                             user_id=plan.user_id,

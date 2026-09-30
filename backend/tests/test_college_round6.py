@@ -67,7 +67,7 @@ def test_engagement_score_uses_real_statistics():
 
 
 # ---------------------------------------------------------------------------
-# Research verifies the strongest candidates first (tier, then engagement)
+# Research verifies the strongest candidates first (round 7: quality FIRST)
 # ---------------------------------------------------------------------------
 
 def test_research_verifies_best_candidates_first(monkeypatch):
@@ -88,9 +88,13 @@ def test_research_verifies_best_candidates_first(monkeypatch):
     monkeypatch.setattr(pipeline_mod.httpx, "AsyncClient", DummyClient)
 
     async def fake_web(self, query, deadline):
+        # A Tavily-found free course: SEO/AEO relevance 0.92 -> quality 92.
         return [{
-            "url": "https://nptel.ac.in/courses/xyz", "title": "NPTEL doc",
-            "provider": "nptel.ac.in", "quality_signals": {},
+            "url": "https://www.coursera.org/learn/linked-lists",
+            "title": "Top scored course", "provider": "coursera.org",
+            "quality_signals": {"search_engine": "tavily",
+                                "search_score": 0.92,
+                                "tavily_score": 0.92},
         }]
 
     async def fake_youtube(self, query, deadline):
@@ -130,12 +134,16 @@ def test_research_verifies_best_candidates_first(monkeypatch):
         subject_id="CS-301", topic="Linked Lists",
         time_budget_seconds=30))
     assert result["resources_added"] == 4
-    # Institutional tier outranks raw views: the NPTEL page (.ac.in,
-    # tier A) and the official-channel video (promoted to B) verify
-    # before the viral generic upload (tier D); engagement breaks ties
-    # within a tier (Viral before Obscure).
-    assert order == ["NPTEL doc", "NPTEL lecture",
-                     "Viral generic", "Obscure upload"]
+    # Round 7 (AJ's rule): quality FIRST — views+likes engagement for
+    # videos, Tavily SEO/AEO relevance score for documents/courses;
+    # institutional tier only breaks ties. So the top-scored course
+    # (0.92 -> 92) outranks every video, and among videos the viral
+    # generic upload (~71 engagement) beats the official-channel NPTEL
+    # lecture (~42) despite its lower tier — engagement is king within
+    # videos; the reachability+verification gate still decides what is
+    # allowed in at all.
+    assert order == ["Top scored course", "Viral generic",
+                     "NPTEL lecture", "Obscure upload"]
 
 
 # ---------------------------------------------------------------------------

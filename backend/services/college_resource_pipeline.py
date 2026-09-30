@@ -122,13 +122,35 @@ def _engagement_score(quality_signals: Any) -> float:
             + math.log10(comments + 1) * 2.0)
 
 
-def _candidate_rank_key(cand: Dict[str, Any]):
-    """Best-first ordering for research candidates.
+def _candidate_quality(cand: Dict[str, Any]) -> float:
+    """Kind-native quality signal, ranked FIRST (AJ's qualification rule).
 
-    Institutional tier first (the existing trust philosophy), engagement
-    second — so a heavily-watched, well-liked lecture beats an obscure
-    upload from the same tier, and the deadline-bounded verification
-    step spends itself on the strongest material first.
+    Videos: real engagement (views/likes/comments) — the most-watched,
+    best-liked lecture on the topic wins. Documents and free online
+    courses found via Tavily: the search engine's SEO/AEO relevance
+    score (0..1), scaled x100 so it sits in the same numeric range as
+    engagement. Missing scores rank 0 — no signal, no boost.
+    """
+    qs = cand.get("quality_signals")
+    if cand.get("kind") == "VIDEO":
+        return _engagement_score(qs)
+    if isinstance(qs, dict):
+        for key in ("search_score", "tavily_score"):
+            try:
+                return float(qs.get(key)) * 100.0
+            except (TypeError, ValueError):
+                continue
+    return 0.0
+
+
+def _candidate_rank_key(cand: Dict[str, Any]):
+    """Best-first ordering for research candidates (round 7).
+
+    Quality FIRST: engagement for videos, Tavily SEO/AEO relevance for
+    documents and free courses (see _candidate_quality). Institutional
+    tier only breaks ties — trust is still enforced absolutely by the
+    mandatory reachability verification below, so an obscure page no
+    longer outranks the resource learners actually watch and like.
     """
     url = cand.get("url") or ""
     domain = (urllib.parse.urlparse(url).netloc or "").lower()
@@ -139,7 +161,7 @@ def _candidate_rank_key(cand: Dict[str, Any]):
                    .get("channel_title") or "").lower()
         if any(h in channel for h in _OFFICIAL_YT_HANDLES):
             tier = "B"
-    return (_tier_rank(tier), _engagement_score(cand.get("quality_signals")))
+    return (_candidate_quality(cand), _tier_rank(tier))
 
 
 def _chapter_ts_to_seconds(ts: str) -> int:
@@ -374,6 +396,20 @@ class CollegeResourcePipeline:
         # raw views/likes/comments stay auditable on the record).
         quality_signals["engagement_score"] = round(
             _engagement_score(quality_signals), 3)
+        if cand["kind"] != "VIDEO":
+            # Persist the Tavily SEO/AEO relevance score under the
+            # stable "search_score" key so plan-time attachment ranks
+            # documents by the same signal that ordered research.
+            # YouTube rows rank by engagement_score instead and are
+            # left untouched.
+            raw_score = quality_signals.get(
+                "search_score", quality_signals.get("tavily_score"))
+            if raw_score is not None:
+                try:
+                    quality_signals["search_score"] = round(
+                        float(raw_score), 4)
+                except (TypeError, ValueError):
+                    pass
 
         if cand["kind"] == "VIDEO":
             timestamps = await self._video_timestamps(cand, http)
@@ -553,6 +589,7 @@ class CollegeResourcePipeline:
                     .lower().replace("www.", ""),
                 "quality_signals": {
                     "search_engine": "tavily",
+                    "search_score": r.get("score"),
                     "tavily_score": r.get("score"),
                 },
             })

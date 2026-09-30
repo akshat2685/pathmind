@@ -65,6 +65,26 @@ def _get_gemini_model():
     return _shared()
 
 
+#: One-shot ADK generation seam (college_adk_runtime.run_agent_generation).
+#: Bound LAZILY into this module's namespace on first use: a top-level
+#: import of the runtime would cycle (college_adk_tools imports this
+#: service, and the runtime imports the tools). Tests patch this module
+#: attribute to stub the seam AND record that the ADK path was really
+#: invoked — a green suite that never exercised the seam does not count
+#: as proof the agent authored anything.
+run_agent_generation = None
+
+
+def _agent_generation():
+    """Resolve the ADK one-shot generation callable (lazy, patchable)."""
+    global run_agent_generation
+    if run_agent_generation is None:
+        from backend.services.college_adk_runtime import (
+            run_agent_generation as _impl)
+        run_agent_generation = _impl
+    return run_agent_generation
+
+
 async def grade_short_answer_with_llm(
     *,
     question_text: str,
@@ -194,24 +214,26 @@ class CollegeAssessmentService:
 
     async def generate_diagnostic_assessment(self, uid: str) -> CollegeAssessment:
         """
-        Hybrid-RAG diagnostic (round 6: Gemini is optional, never a
-        dependency):
+        Diagnostic authored by the ADK assessment agent on hybrid-RAG
+        evidence (round 7; AJ's corrected spec — Gemini AUTHORS,
+        retrieval GROUNDS):
 
           learner context -> verified-source retrieval (curriculum /
-          PYQs / resources / prior mastery) -> the diagnostic is BUILT
-          from retrieved material: real verified PYQs first, curriculum
-          topic probes filling the remaining slots -> assessment.
+          PYQs / resources / prior mastery) -> the assessment agent's
+          one-shot generation drafts ~10 probes and selects 5-6 against
+          that evidence (strictly validated; verified_* claims are
+          downgraded when retrieval lacks the material) -> verified PYQs
+          fill any topic the authored set left uncovered -> assessment.
 
-        When Gemini is reachable it may ADD questions, but only for
-        topics the retrieved material does not already cover, and every
-        added question passes the same strict validation — it can
-        enrich the diagnostic, never block, shrink, or replace it.
-        Verified material keeps verified_* source labels; anything the
-        model invents is labeled model_generated. Short answers without
-        a rubric grade as INSUFFICIENT_EVIDENCE (Unknown), never a fake
-        score. Only a learner with no profile raises; only a learner
-        with neither grounded material nor a model gets an honest
-        DIAGNOSTIC_UNAVAILABLE.
+        Honest fallback chain, each step labeled in `authored_by`:
+        ADK generation ("adk:assessment_agent") -> direct Gemini call
+        ("gemini_direct") when the ADK seam fails -> the round-6
+        grounded assembly of real verified PYQs + curriculum probes
+        ("rag_fallback") when no LLM authored anything. Short answers
+        without a rubric grade as INSUFFICIENT_EVIDENCE (Unknown),
+        never a fake score. Only a learner with no profile raises;
+        only a learner whose final set still has <3 questions gets an
+        honest DIAGNOSTIC_UNAVAILABLE — questions are never invented.
         """
         with timed_stage("college.assessment.diagnostic_generated", user_id=uid):
             raw_profile = await self.store.get_college_user_profile(uid)
@@ -230,31 +252,36 @@ class CollegeAssessmentService:
             branch = retrieval.branch or profile.get(
                 "supported_path") or "GENERAL_OTHER"
 
-            # Hybrid RAG is the generator of record: real verified PYQs
-            # anchor the diagnostic and can never be displaced. Gemini,
-            # when reachable, only ADDS validated questions for topics
-            # the retrieved material does not already cover; curriculum
-            # probes fill whatever slots remain. Gemini being down,
-            # slow, or thin can no longer block or shrink the flow.
-            questions = self._rag_pyq_questions(retrieval)
-            authored_by = "hybrid_rag"
+            # Round 7 (AJ's corrected spec): the ADK assessment agent
+            # is the primary AUTHOR, writing against the hybrid-RAG
+            # evidence above; real verified PYQs then fill topics the
+            # authored set left uncovered (never displacing authored
+            # questions). The round-6 grounded assembly (PYQs + probes)
+            # is now the FALLBACK for when no LLM authored anything.
+            authored: List[CollegeAssessmentQuestion] = []
+            llm_via: Optional[str] = None
             model = _get_gemini_model()
-            if model is not None and len(questions) < 6:
-                try:
-                    authored = self._generate_diagnostic_with_llm(
-                        model, profile, retrieval)
-                except ValueError as exc:
-                    # Provider/parse failure: the grounded set ships
-                    # as-is instead of the old hard failure.
-                    log_event(
-                        "college.assessment.diagnostic_llm_fallback",
-                        user_id=uid, outcome="degraded",
-                        error_code=str(exc)[:120])
-                    authored = []
+            try:
+                authored, llm_via = await self._generate_diagnostic_with_llm(
+                    model, profile, retrieval)
+            except ValueError as exc:
+                # ADK + direct model both failed or produced unusable
+                # output: the grounded fallback ships instead of the
+                # old hard failure.
+                log_event(
+                    "college.assessment.diagnostic_llm_fallback",
+                    user_id=uid, outcome="degraded",
+                    error_code=str(exc)[:120])
+                authored, llm_via = [], None
+
+            if len(authored) >= 3:
+                # The LLM-authored set is the diagnostic (>=3 valid
+                # questions): keep it intact and fill uncovered topics
+                # with real verified PYQs up to 6.
+                questions = list(authored)
                 covered = {str(q.topic or "").strip().lower()
                            for q in questions}
-                added = 0
-                for q in authored:
+                for q in self._rag_pyq_questions(retrieval):
                     if len(questions) >= 6:
                         break
                     key = str(q.topic or "").strip().lower()
@@ -262,16 +289,18 @@ class CollegeAssessmentService:
                         continue
                     questions.append(q)
                     covered.add(key)
-                    added += 1
-                if added:
-                    authored_by = "hybrid_rag+gemini"
-                elif authored:
+                authored_by = ("adk:assessment_agent" if llm_via == "adk"
+                               else "gemini_direct")
+            else:
+                # No LLM authored anything usable: ship the grounded
+                # round-6 assembly, honestly labeled.
+                if authored:
                     log_event(
                         "college.assessment.diagnostic_llm_insufficient",
                         user_id=uid, question_count=len(authored),
                         outcome="degraded")
-            questions.extend(
-                self._rag_curriculum_probes(retrieval, questions))
+                questions = self._fallback_diagnostic_questions(retrieval)
+                authored_by = "rag_fallback"
             questions = questions[:6]
 
             if len(questions) < 3:
@@ -290,7 +319,19 @@ class CollegeAssessmentService:
                 title=f"Diagnostic Assessment: {branch.replace('_', ' ').title()}",
                 questions=questions,
                 status="AVAILABLE",
+                authored_by=authored_by,
             )
+            # Provenance is a payload field (above) AND a log line named
+            # after the agent that ran: mode says "adk" ONLY when the
+            # ADK generation call actually returned text that authored
+            # >=1 question — never for the direct-call or RAG paths.
+            log_event(
+                "college.diagnostic.authored", user_id=uid,
+                assessment_id=assessment.assessment_id,
+                mode=("adk" if authored_by == "adk:assessment_agent"
+                      else authored_by),
+                authored_by=authored_by,
+                question_count=len(questions), outcome="ok")
             await self.store.save_college_assessment(
                 uid, assessment.model_dump(mode="json"))
             log_event("college.assessment.diagnostic_saved", user_id=uid,
@@ -302,13 +343,20 @@ class CollegeAssessmentService:
                       subject_count=len(subject_ids), outcome="ok")
             return assessment
 
-    def _generate_diagnostic_with_llm(self, model, profile, retrieval):
+    async def _generate_diagnostic_with_llm(self, model, profile, retrieval):
         """
-        Gemini authors ~10 candidate probes against the retrieved context
-        and selects the 5-6 highest-information ones (single call: a second
-        selection round-trip risks the serverless window on the free tier).
-        Output is strictly validated; unusable output raises ValueError so
-        the caller falls back to grounded material.
+        The ADK assessment agent authors ~10 candidate probes against
+        the retrieved context and selects the 5-6 highest-information
+        ones (single call: a second selection round-trip risks the
+        serverless window on the free tier).
+
+        Returns (questions, via): via is "adk" when the text came back
+        from the ADK generation seam and "gemini_direct" when only the
+        legacy direct model call produced it — the caller turns that
+        into the payload's authored_by, so the label never claims ADK
+        when the seam did not actually return text. Output is strictly
+        validated; unusable output raises ValueError so the caller
+        falls back to grounded material.
         """
         subject_ids = retrieval.subject_ids or retrieval.context_subject_ids
         subjects_line = ", ".join(subject_ids) if subject_ids else (
@@ -356,9 +404,31 @@ Return ONLY a JSON array of the selected 5-6 questions. Each item:
 MCQs must include "options" and "answer" (letter or exact option text).
 SHORT_ANSWER must include "rubric" and may include "answer" as a short
 reference answer. Never invent subject ids."""
-        response = self._generate_content_or_unavailable(
-            model, prompt, "DIAGNOSTIC")
-        text = response.text.strip()
+        # ADK-first: the assessment agent's one-shot generation is the
+        # primary author. Only when the seam FAILS (ADK missing, no key,
+        # runner error, timeout, empty reply) do we spend a direct model
+        # call on the same prompt — and the returned `via` keeps the
+        # provenance honest about which path produced the text.
+        text = None
+        via = None
+        try:
+            adk_text = await _agent_generation()("assessment", prompt)
+            if adk_text and adk_text.strip():
+                text, via = adk_text.strip(), "adk"
+        except Exception as exc:
+            log_event(
+                "college.assessment.diagnostic_adk_failed",
+                outcome="degraded", error_code=type(exc).__name__)
+            text = None
+        if text is None:
+            if model is None:
+                raise ValueError(
+                    "DIAGNOSTIC_UNAVAILABLE: assessment agent and direct "
+                    "model both unavailable")
+            response = self._generate_content_or_unavailable(
+                model, prompt, "DIAGNOSTIC")
+            text = response.text.strip()
+            via = "gemini_direct"
         if text.startswith("```"):
             text = text.strip("`")
             if text.lower().startswith("json"):
@@ -372,7 +442,7 @@ reference answer. Never invent subject ids."""
         if not isinstance(gen_qs, list):
             raise ValueError(
                 "DIAGNOSTIC_UNAVAILABLE: authored questions were not a list")
-        return self._validate_generated_questions(gen_qs, retrieval)
+        return self._validate_generated_questions(gen_qs, retrieval), via
 
     @staticmethod
     def _validate_generated_questions(gen_qs, retrieval):

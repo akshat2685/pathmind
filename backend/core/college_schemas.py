@@ -2,7 +2,6 @@ from enum import Enum
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime, timezone
-import uuid
 
 def current_iso_time() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -371,6 +370,12 @@ class CollegeLearningPlan(BaseModel):
     scope: PlanScope = PlanScope.SEMESTER
     version: int = 1
     status: str = "ACTIVE"
+    # Provenance of the plan's objectives/techniques: "adk:plan_agent"
+    # only when the ADK plan agent actually authored them (text returned
+    # by run_agent_generation and applied); "static_fallback" when the
+    # deterministic static plan shipped untouched. Additive + defaulted,
+    # so pre-round-7 persisted plans read back honestly as static.
+    authored_by: str = "static_fallback"
     created_at: str = Field(default_factory=current_iso_time)
 
     phases: List[CollegePlanPhase] = Field(default_factory=list)
@@ -407,6 +412,12 @@ class CollegeAssessment(BaseModel):
     title: str
     questions: List[CollegeAssessmentQuestion] = Field(default_factory=list)
     status: str = "AVAILABLE"
+    # Provenance of the question set: "adk:assessment_agent" when the
+    # ADK assessment agent authored >=1 question, "gemini_direct" when
+    # only the direct Gemini call did, "rag_fallback" when no LLM
+    # authored anything (pure retrieved-material diagnostic). The value
+    # always names the path that actually produced the questions.
+    authored_by: Optional[str] = None
     created_at: str = Field(default_factory=current_iso_time)
 
 class CollegeAssessmentSubmission(BaseModel):
