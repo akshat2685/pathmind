@@ -41,6 +41,35 @@ function masteryBadge(status?: string): string {
   }
 }
 
+// Resource hunts already attempted in this browser session. Persisted in
+// sessionStorage so leaving and returning to the dashboard (or remounting
+// it) never restarts the auto-research cascade from phase 1 — that repeat
+// churn was a big part of the post-onboarding lag.
+const HUNT_STORAGE_KEY = "pathmind.attemptedResourceHunts";
+
+function readAttemptedHunts(): string[] {
+  try {
+    const raw = sessionStorage.getItem(HUNT_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((x) => typeof x === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistAttemptedHunts(attempted: Set<string>) {
+  try {
+    sessionStorage.setItem(
+      HUNT_STORAGE_KEY,
+      JSON.stringify([...attempted].slice(-32))
+    );
+  } catch {
+    /* storage unavailable (private mode) — hunts stay per-mount */
+  }
+}
+
 // phase_id format: phase_{plan_id}_{subject_id}_s{semester}_u{unit}
 function subjectIdFromPhaseId(phaseId: string, planId: string): string | null {
   const m = /^phase_(.*)_s\d+_u\d+$/.exec(phaseId || "");
@@ -236,9 +265,14 @@ export function CollegeDashboard() {
   // Current level (plan phase / unit title) the vault is biased toward;
   // set when arriving from a path phase, cleared on manual subject change.
   const [pyqTopic, setPyqTopic] = useState<string>("");
+  const [pyqLoading, setPyqLoading] = useState(false);
   // True once the learner picks a PYQ subject manually — until then the
   // vault follows the plan's current phase.
   const pyqSubjectTouched = useRef(false);
+  // Identical in-flight vault query (the mount sequence can ask twice:
+  // subject list first, then the plan-follow effect). One network search
+  // per distinct query is enough.
+  const pyqInFlight = useRef<string>("");
   const [activeAssessment, setActiveAssessment] = useState<any>(null);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
   const [assessmentResult, setAssessmentResult] = useState<any>(null);
@@ -409,7 +443,15 @@ export function CollegeDashboard() {
     try {
       const planRes = await apiClient.get<any>("/api/college/plans/current");
       if (planRes.ok) {
-        setLearningPlan(planRes.data);
+        // Skip the state write when nothing actually changed: a fresh
+        // object identity on every fetch re-rendered the whole plan
+        // tree and re-fired the auto-research effect, which is what
+        // made the dashboard feel laggy after onboarding.
+        setLearningPlan((prev: any) =>
+          prev && JSON.stringify(prev) === JSON.stringify(planRes.data)
+            ? prev
+            : planRes.data
+        );
       }
     } catch (err) {
       console.error("Failed to load plan", err);
@@ -435,7 +477,13 @@ export function CollegeDashboard() {
     topic: string = pyqTopic
   ) => {
     if (!universityId) return;
+    // The mount sequence can issue the same query twice (subject list,
+    // then the plan-follow effect) — one search per distinct query.
+    const queryKey = `${universityId}|${subjectId}|${scope}|${level}|${topic}`;
+    if (pyqInFlight.current === queryKey) return;
+    pyqInFlight.current = queryKey;
     setPyqError(null);
+    setPyqLoading(true);
     try {
       const subj = pyqSubjects.find((s: any) => s.subject_id === subjectId);
       const params = new URLSearchParams({
@@ -463,6 +511,9 @@ export function CollegeDashboard() {
     } catch (err) {
       setPyqData(null);
       setPyqError(err instanceof Error ? err.message : "Failed to load PYQs.");
+    } finally {
+      if (pyqInFlight.current === queryKey) pyqInFlight.current = "";
+      setPyqLoading(false);
     }
   };
 
@@ -625,6 +676,15 @@ export function CollegeDashboard() {
     }
   };
 
+  // Restore this session's already-attempted hunts before the cascade
+  // below runs, so a remount never restarts it from phase 1.
+  useEffect(() => {
+    readAttemptedHunts().forEach((id) =>
+      attemptedResourcePhases.current.add(id)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Resource research on load: every phase that is missing a learning link —
   // a WATCH/READ activity with no verified resource, or no WATCH/READ slot
   // at all — gets researched one phase at a time, in plan order, LOCKED
@@ -651,6 +711,7 @@ export function CollegeDashboard() {
     // Mark attempted before any early return below so one unparseable or
     // unfillable phase can never stall the cascade for the phases after it.
     attemptedResourcePhases.current.add(phase.phase_id);
+    persistAttemptedHunts(attemptedResourcePhases.current);
     const subjectId = subjectIdFromPhaseId(phase.phase_id, learningPlan.plan_id);
     if (!subjectId) return;
     setResourceHuntPhaseId(phase.phase_id);
@@ -658,18 +719,24 @@ export function CollegeDashboard() {
     const topic = String(phase.title || "").replace(/^[^:]+:\s*/, "");
     (async () => {
       try {
-        await apiClient.post<any>("/api/college/resources/enrich", {
+        const res = await apiClient.post<any>("/api/college/resources/enrich", {
           subject_id: subjectId,
           topic,
           subject_name: subj?.name,
           time_budget_seconds: 30,
         });
+        // Refetch the plan ONLY when the hunt actually added material.
+        // Refetching after every hunt (even empty ones) re-rendered the
+        // whole plan tree up to 8 times back-to-back — the post-diagnose
+        // lag. An empty hunt changes nothing the plan read would show.
+        if (res.ok && ((res.data as any)?.resources_added ?? 0) > 0) {
+          loadCurrentPlan();
+        }
       } catch {
         /* Research failure stays silent here: activities keep their
            how-to-learn steps and the Personalize button can retry. */
       } finally {
         setResourceHuntPhaseId(null);
-        loadCurrentPlan();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1193,7 +1260,8 @@ export function CollegeDashboard() {
                 </div>
                 <h3 className="text-2xl font-bold text-[#252321]">Previous Year Questions (PYQs)</h3>
                 <p className="font-serif italic text-xs text-[#68635e]">
-                  Drawn from official university examination archives when available.
+                  Real papers from the university's official archive and
+                  public exam archives — never invented.
                 </p>
               </div>
 
@@ -1284,7 +1352,18 @@ export function CollegeDashboard() {
             )}
 
             {/* PYQ Results */}
-            {!pyqData || pyqData.status === "PYQ_NOT_AVAILABLE" ? (
+            {pyqLoading && (!pyqData || pyqData.status === "PYQ_NOT_AVAILABLE") ? (
+              <div className="p-8 border border-dashed border-[#252321]/30 rounded-md bg-white/50 text-center">
+                <span className="material-symbols-outlined text-3xl text-[#68635e] mb-2 animate-pulse">
+                  hourglass_top
+                </span>
+                <h4 className="font-bold text-sm text-[#252321]">Searching the archives…</h4>
+                <p className="text-xs text-[#68635e] mt-1 max-w-md mx-auto">
+                  Looking for real papers on the university's official site and
+                  public exam archives. This can take up to half a minute.
+                </p>
+              </div>
+            ) : !pyqData || pyqData.status === "PYQ_NOT_AVAILABLE" ? (
               <div className="p-8 border border-dashed border-[#a65959] rounded-md bg-[#ffdad6]/20 text-center">
                 <span className="material-symbols-outlined text-3xl text-[#a65959] mb-2">
                   info
@@ -1294,12 +1373,20 @@ export function CollegeDashboard() {
                   {pyqData?.message ||
                     "Verified previous year examination questions are currently unavailable for this subject from official repositories. No synthetic questions are substituted."}
                 </p>
+                {pyqData?.has_more_levels && (
+                  <button
+                    onClick={() => reloadPYQs(pyqScope, pyqLevel + 1)}
+                    className="mt-3 px-3 py-1.5 rounded border border-[#252321] bg-[#252321] text-[#fdfae7] text-xs font-bold hover:opacity-90"
+                  >
+                    Unlock Level {pyqLevel + 1} — older papers →
+                  </button>
+                )}
               </div>
             ) : pyqData.papers ? (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#68635e]">
                   <span>
-                    {pyqData.level_label} • {pyqData.total_found} paper{pyqData.total_found === 1 ? "" : "s"} from official university sources
+                    {pyqData.level_label} • {pyqData.total_found} paper{pyqData.total_found === 1 ? "" : "s"} found
                   </span>
                   <span className="text-[#4a654e] font-bold">{pyqData.status}</span>
                 </div>
@@ -1316,7 +1403,11 @@ export function CollegeDashboard() {
                             {p.year ? `Exam year: ${p.year} • ` : ""}
                             Source: {p.source_domain || "university archive"} •
                             Trust tier {p.trust_tier || "A"} •
-                            {p.retrieval === "realtime" ? " found live on the official site" : " curated archive"}
+                            {p.source_kind === "archive"
+                              ? " public exam archive — a mirror, not the university's own site; cross-check with the official paper"
+                              : p.retrieval === "realtime"
+                                ? " found live on the official site"
+                                : " curated archive"}
                           </p>
                         </div>
                         {p.download_url && (

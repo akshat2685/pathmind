@@ -927,12 +927,19 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 if sid and sid not in subjects:
                     subjects.append(sid)
             resources_by_subject: Dict[str, List[ResourceRecord]] = {}
-            for sid in subjects:
+
+            # Fetch every phase subject's cached resources in parallel:
+            # this pass runs on every plan read, and N sequential
+            # round-trips (one per subject) made the dashboard feel
+            # stuck right after onboarding.
+            async def _load_subject_resources(sid: str):
                 try:
-                    resources_by_subject[sid] = (
-                        await get_resources_for_subject(sid))
+                    return sid, await get_resources_for_subject(sid)
                 except Exception:
-                    resources_by_subject[sid] = []
+                    return sid, []
+
+            resources_by_subject = dict(await asyncio.gather(
+                *(_load_subject_resources(sid) for sid in subjects)))
             by_id = {
                 r.resource_id: r
                 for records in resources_by_subject.values()
