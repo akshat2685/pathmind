@@ -777,6 +777,11 @@ export function CollegeOnboardingFlow() {
                               <span className="text-xs font-note-handwritten font-bold text-[#68635e]">
                                 {q.topic}
                               </span>
+                              {(diagAnswers[q.question_id] || "").trim() !== "" && (
+                                <span className="text-[10px] font-bold text-[#4a654e]">
+                                  ✓ Answered
+                                </span>
+                              )}
                               {q.source && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border border-[#252321]/20 text-[#68635e] font-bold">
                                   {q.source === "verified_pyq"
@@ -792,26 +797,31 @@ export function CollegeOnboardingFlow() {
                           {q.question_type === "MCQ" && q.options && (
                             <div className="space-y-2 pt-1">
                               {q.options.map((opt: string) => (
-                                <label
+                                <button
+                                  type="button"
                                   key={opt}
-                                  className={`p-3 rounded-md border block text-xs cursor-pointer transition-all ${
+                                  aria-pressed={diagAnswers[q.question_id] === opt}
+                                  onClick={() =>
+                                    setDiagAnswers((prev) => ({ ...prev, [q.question_id]: opt }))
+                                  }
+                                  className={`p-3 rounded-md border flex w-full items-start gap-2.5 text-left text-xs cursor-pointer transition-all ${
                                     diagAnswers[q.question_id] === opt
                                       ? "border-[#4a654e] bg-[#4a654e]/10 font-bold"
                                       : "border-[#252321]/20 hover:border-[#252321] bg-white/60"
                                   }`}
                                 >
-                                  <input
-                                    type="radio"
-                                    name={q.question_id}
-                                    value={opt}
-                                    checked={diagAnswers[q.question_id] === opt}
-                                    onChange={() =>
-                                      setDiagAnswers((prev) => ({ ...prev, [q.question_id]: opt }))
-                                    }
-                                    className="mr-2.5 accent-[#4a654e]"
-                                  />
-                                  {opt}
-                                </label>
+                                  <span
+                                    aria-hidden="true"
+                                    className={`shrink-0 leading-none ${
+                                      diagAnswers[q.question_id] === opt
+                                        ? "text-[#4a654e]"
+                                        : "text-[#68635e]"
+                                    }`}
+                                  >
+                                    {diagAnswers[q.question_id] === opt ? "●" : "○"}
+                                  </span>
+                                  <span>{opt}</span>
+                                </button>
                               ))}
                             </div>
                           )}
@@ -831,7 +841,16 @@ export function CollegeOnboardingFlow() {
                       ))}
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-bold text-[#68635e]">
+                        Answered{" "}
+                        {
+                          (diagAssessment.questions || []).filter(
+                            (q: any) => (diagAnswers[q.question_id] || "").trim() !== ""
+                          ).length
+                        }{" "}
+                        of {(diagAssessment.questions || []).length}
+                      </span>
                       <button
                         type="button"
                         disabled={diagLoading}

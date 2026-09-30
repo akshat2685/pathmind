@@ -99,65 +99,66 @@ def _learn_steps_for(activity_type: str, resource: Optional[ResourceRecord],
     if activity_type == "WATCH":
         if resource is not None:
             return [
-                f"Open the linked video: \"{resource.title}\" ({resource.provider}).",
-                "Watch actively — pause at every new definition, diagram or "
-                "derivation and write it down in your own words before you "
-                "press play again.",
-                "When the video ends, close it and recall the 3 most "
-                "important ideas out loud or on paper. No peeking.",
-                "Whatever you could not recall is your real gap — note it; "
-                "the reading and practice steps that follow target exactly "
-                "that.",
+                f"Open the video: \"{resource.title}\" ({resource.provider}).",
+                "Watch in small parts. Pause after every new definition "
+                "or diagram, and write it down in your own simple words.",
+                "When the video ends, close it and write the 3 most "
+                "important points from memory. Do not look back yet.",
+                "Now check what you missed. Those are your weak points — "
+                "the next steps in this phase will fix exactly those.",
             ]
         return [
-            f"Find a lecture or video on {topic_hint} from a source you "
-            "trust (your class recordings, NPTEL, or a well-rated channel).",
-            "Watch actively — pause at every new definition or derivation "
-            "and write it in your own words before continuing.",
-            "At the end, close the video and recall the 3 key ideas from "
-            "memory; note what you missed for the steps that follow.",
+            f"Find one good video on {topic_hint} — your class recording, "
+            "an NPTEL lecture, or a channel you already trust.",
+            "Watch in small parts. Pause after every new definition or "
+            "diagram, and write it down in your own simple words.",
+            "When it ends, close it and write the 3 most important points "
+            "from memory. Note what you missed — the next steps fix that.",
         ]
     if activity_type == "READ":
         if resource is not None:
             return [
-                f"Open the linked material: \"{resource.title}\" "
+                f"Open the material: \"{resource.title}\" "
                 f"({resource.provider}).",
-                "Skim the headings and diagrams first so you have a map, "
-                "then read one section at a time.",
-                "After each section, close the material and write a 3–5 "
-                "line summary from memory.",
-                "Underline every term you cannot explain in one plain "
-                "sentence — those are the gaps to clear before the "
-                "checkpoint.",
+                "First look at all the headings and diagrams. This gives "
+                "you a map of what is coming.",
+                "Read one section at a time. After each section, close "
+                "the material and write a short summary (3–5 lines) from "
+                "memory.",
+                "Underline every word you cannot explain in one simple "
+                "sentence. Clear those before you take the checkpoint.",
             ]
         return [
             f"Use your textbook or class notes for {topic_hint}.",
-            "Skim headings first, then read one section at a time, writing "
-            "a 3–5 line closed-book summary after each section.",
-            "Mark every term you cannot explain in one sentence — clear "
-            "those before moving on.",
+            "First look at all the headings, then read one section at a "
+            "time. After each section, write a short summary (3–5 lines) "
+            "from memory, without looking.",
+            "Mark every word you cannot explain in one simple sentence. "
+            "Clear those before you move on.",
         ]
     if activity_type == "SOLVE_PYQ":
         return [
-            "Attempt it timed, in exam conditions — no notes, no pausing, "
-            "exactly like the real paper.",
-            "Only after the time is up, compare with the marking scheme or "
-            "your notes and score yourself honestly.",
-            "Log every lost mark with its error type: concept gap, wrong "
-            "formula, calculation slip, or ran out of time.",
-            "Redo each question you lost marks on, from scratch, the next "
-            "day.",
+            "Set a timer and solve like a real exam — no notes, no "
+            "phone, no pausing.",
+            "When the time is over, check your answers with the marking "
+            "scheme or your notes. Give yourself honest marks.",
+            "For every mark you lost, write one line about what went "
+            "wrong: did not know the concept, wrong formula, silly "
+            "mistake, or ran out of time.",
+            "Tomorrow, solve the questions you got wrong again — from a "
+            "blank page, without seeing the answers first.",
         ]
     # PRACTICE (and any other type): attempt-first problem solving.
     return [
-        "Attempt every problem closed-book first. Struggling for a few "
-        "minutes before seeing a solution is where the learning happens.",
-        "For each problem you miss or get stuck on, write down exactly "
-        "where your reasoning broke — not just the right answer.",
-        "After reviewing, redo the problem from a blank page. Reading a "
-        "solution is not the same as being able to produce it.",
-        "Finish by stating the core idea of "
-        f"{topic_hint} in 2–3 sentences without looking at your notes.",
+        "Try every problem yourself first, book closed. Struggling for a "
+        "few minutes before you see the answer is how you actually learn.",
+        "If you get stuck or go wrong, write down exactly where your "
+        "thinking went wrong — not just the correct answer.",
+        "Then solve the same problem again from a blank page. Reading an "
+        "answer is not the same as solving it yourself.",
+        "At the end, say the main idea of "
+        f"{topic_hint} in 2–3 simple sentences, without looking at your "
+        "notes.",
     ]
 
 
@@ -297,15 +298,15 @@ class CollegeLearningService:
                 if not outcomes:
                     return "unknown", "", evidence
                 if "REINFORCEMENT_REQUIRED" in outcomes:
-                    return "weak", "Guided intensive learning first — ", evidence
+                    return "weak", "Start here — learn the basics step by step: ", evidence
                 if "PARTIALLY_MASTERED" in outcomes:
                     return ("partial",
-                            "Targeted explanation + practice — ", evidence)
+                            "Focus on your weak topics first: ", evidence)
                 if all(o == "MASTERED" for o in outcomes):
                     return ("mastered",
-                            "Light revision with spaced retrieval — ",
+                            "Quick revision — you already know this well: ",
                             evidence)
-                return "partial", "Targeted explanation + practice — ", evidence
+                return "partial", "Focus on your weak topics first: ", evidence
 
             for (semester, sub, unit, order), (activities, used_llm) in zip(
                     phase_specs, built_per_phase):
@@ -318,8 +319,11 @@ class CollegeLearningService:
                     order=order,
                     title=f"{sub.code}: {unit.title}",
                     objective=(objective_prefix +
-                               f"Master fundamental theories and exam problems "
-                               f"for {sub.name} (Semester {semester}, Unit {unit.unit})."),
+                               f"Learn {unit.title} ({sub.name}, Semester "
+                               f"{semester}, Unit {unit.unit}). By the end "
+                               f"you should be able to explain the main "
+                               f"ideas in your own simple words and solve "
+                               f"exam questions from this unit."),
                     ai_enriched=used_llm,
                     status="AVAILABLE" if order == 1 else "LOCKED",
                     # Schema §16 unlock rule: demonstrated mastery required.
@@ -762,11 +766,12 @@ Return ONLY a valid JSON array of activities in the best learning order. Each ac
     "type": "WATCH|READ|PRACTICE|SOLVE_PYQ",
     "resource_id": "id from above if applicable",
     "pyq_id": "id from above if applicable",
-    "title": "short engaging title",
-    "instructions": "personalized instructions",
-    "steps": ["concrete step 1", "concrete step 2", "concrete step 3"],
+    "title": "short title in simple, plain words",
+    "instructions": "1-2 short sentences in simple, direct English: exactly what the student should do first, how long it should take, and what they will be able to do after. No jargon, no buzzwords, no complicated words.",
+    "steps": ["one short, simple step", "one action per step"],
     "minutes": 30
 }}
+Write for a first-year student reading this on a phone: short sentences, everyday words, one clear action per step. If a sentence needs a technical term, explain that term in the same sentence.
 "steps" = 2-4 concrete instructions for HOW to learn this, not what it is:
 for WATCH, active viewing (pause and write each definition in your own words,
 then recall the key ideas with the video closed); for READ, skim-then-read
@@ -833,8 +838,8 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
         video_res = next((r for r in resources if r.resource_type == "VIDEO"), None)
         if video_res:
             ts_info = video_res.video_timestamps[0] if video_res.video_timestamps else None
-            ts_text = (f" Watch from {ts_info.start_seconds // 60}:00 to "
-                       f"{ts_info.end_seconds // 60}:00 for '{ts_info.purpose}'.") if ts_info else " Watch the core foundational module."
+            ts_text = (f" Start at {ts_info.start_seconds // 60}:00 and watch till "
+                       f"{ts_info.end_seconds // 60}:00 — this part covers '{ts_info.purpose}'.") if ts_info else " Watch it fully once."
             activities.append(CollegeActivity(
                 activity_id=f"act_{phase_id}_{act_order}",
                 user_id=uid,
@@ -845,7 +850,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 resource=video_res,
                 resource_id=video_res.resource_id,
                 order=act_order,
-                instructions=f"Engage with {video_res.title} from {video_res.provider}.{ts_text}",
+                instructions=f"Watch \"{video_res.title}\" ({video_res.provider}).{ts_text}",
                 learn_steps=_learn_steps_for("WATCH", video_res, list(unit.topics)),
                 estimated_minutes=video_res.estimated_minutes,
                 status=status,
@@ -856,8 +861,8 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                         if r.resource_type in ["NOTES", "DOCUMENT"]), None)
         if doc_res:
             sec_info = doc_res.document_sections[0] if doc_res.document_sections else None
-            pg_text = (f" Study pages {sec_info.start_page}–{sec_info.end_page} "
-                       f"covering '{sec_info.section_title}'.") if sec_info else " Read the essential concept summary."
+            pg_text = (f" Read pages {sec_info.start_page}–{sec_info.end_page} "
+                       f"(this section is about '{sec_info.section_title}').") if sec_info else " Read the full notes once."
             activities.append(CollegeActivity(
                 activity_id=f"act_{phase_id}_{act_order}",
                 user_id=uid,
@@ -868,7 +873,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 resource=doc_res,
                 resource_id=doc_res.resource_id,
                 order=act_order,
-                instructions=f"Review official notes from {doc_res.provider}.{pg_text}",
+                instructions=f"Read the notes from {doc_res.provider}.{pg_text}",
                 learn_steps=_learn_steps_for("READ", doc_res, list(unit.topics)),
                 estimated_minutes=doc_res.estimated_minutes,
                 status=status,
@@ -883,7 +888,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
             activity_type=ActivityType.PRACTICE,
             title=f"Solve Practice Problems: {unit.topics[0] if unit.topics else unit.title}",
             order=act_order,
-            instructions=f"Derive and solve foundational numericals and concept problems for {', '.join(unit.topics[:3])}.",
+            instructions=f"Solve practice problems on: {', '.join(unit.topics[:3])}. Try each problem yourself first — check the answer only after you have written your own.",
             learn_steps=_learn_steps_for("PRACTICE", None, list(unit.topics)),
             estimated_minutes=30,
             status=status,
@@ -902,7 +907,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 pyq_question=target_pyq,
                 pyq_question_id=target_pyq.question_id,
                 order=act_order,
-                instructions=f"Solve authentic university past question ({target_pyq.marks} marks): {target_pyq.question_text}",
+                instructions=f"Solve this real university question ({target_pyq.marks} marks). Set a timer, use no notes, then check your answer honestly. Question: {target_pyq.question_text}",
                 learn_steps=_learn_steps_for("SOLVE_PYQ", None, list(unit.topics)),
                 estimated_minutes=25,
                 status=status,
@@ -1019,8 +1024,14 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 # synthesize the slots generation would have produced.
                 # Deterministic ids — a later phase save persists them as
                 # ordinary activities.
+                # Locked phases get the slots too: a learner browsing the
+                # path ahead should see a learning link for every topic, not
+                # only for the phase they are on. Completion stays gated
+                # server-side (checkpoint mastery), so a visible link never
+                # unlocks anything by itself.
                 if sid and cached and phase.status in ("AVAILABLE",
-                                                       "IN_PROGRESS"):
+                                                       "IN_PROGRESS",
+                                                       "LOCKED"):
                     present = {a.activity_type.value
                                for a in phase.activities}
                     unit_title = (phase.title.split(": ", 1)[1]
@@ -1047,8 +1058,9 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                             resource_id=best.resource_id,
                             order=1,
                             instructions=(
-                                f"Engage with {best.title} "
-                                f"from {best.provider}."),
+                                f"Watch \"{best.title}\" "
+                                f"({best.provider}). Follow the steps "
+                                f"below while you watch."),
                             learn_steps=_learn_steps_for("WATCH", best, []),
                             estimated_minutes=best.estimated_minutes,
                             status="AVAILABLE",
@@ -1070,8 +1082,9 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                             resource_id=best.resource_id,
                             order=2,
                             instructions=(
-                                f"Review official notes "
-                                f"from {best.provider}."),
+                                f"Read \"{best.title}\" "
+                                f"({best.provider}). Follow the steps "
+                                f"below while you read."),
                             learn_steps=_learn_steps_for("READ", best, []),
                             estimated_minutes=best.estimated_minutes,
                             status="AVAILABLE",
@@ -1079,6 +1092,51 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                     if synthesized:
                         phase.activities = (
                             synthesized + list(phase.activities))
+
+                # Every phase assigns previous-year practice for its own
+                # level: one SOLVE_PYQ step that sends the learner to the
+                # PYQ Vault scoped to this subject and unit. Synthesized
+                # even when no questions are seeded — the vault runs its
+                # live official-domain search when the learner opens it,
+                # and reports honestly when nothing is verified yet.
+                if sid and phase.status != "COMPLETED":
+                    present_types = {a.activity_type.value
+                                     for a in phase.activities}
+                    if "SOLVE_PYQ" not in present_types:
+                        unit_title = (phase.title.split(": ", 1)[1]
+                                      if ": " in phase.title
+                                      else phase.title)
+                        phase.activities = list(phase.activities) + [
+                            CollegeActivity(
+                                activity_id=(
+                                    f"act_{phase.phase_id}_auto_pyq"),
+                                user_id=plan.user_id,
+                                plan_id=plan.plan_id,
+                                phase_id=phase.phase_id,
+                                activity_type=ActivityType.SOLVE_PYQ,
+                                title=(f"Solve Previous-Year Questions: "
+                                       f"{unit_title}"),
+                                resource_id=None,
+                                pyq_question_id=None,
+                                order=max((a.order
+                                           for a in phase.activities),
+                                          default=0) + 1,
+                                instructions=(
+                                    "Open the PYQ Vault for this subject "
+                                    "and pick the most recent "
+                                    "previous-year paper. Sit in exam "
+                                    "conditions — no notes, timer on — "
+                                    f"and solve the {unit_title} "
+                                    "questions first. Then check every "
+                                    "mistake and write down why you got "
+                                    "it wrong. If no verified paper is "
+                                    "available yet, do the practice "
+                                    "problems above instead."),
+                                estimated_minutes=45,
+                                status="AVAILABLE",
+                                learn_steps=_learn_steps_for(
+                                    "SOLVE_PYQ", None, [unit_title]),
+                            )]
         except Exception as exc:
             log_event("college.plan.decorate_failed", user_id=plan.user_id,
                       outcome="error", error_code=type(exc).__name__)

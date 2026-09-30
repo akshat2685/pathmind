@@ -55,8 +55,9 @@ function ResourceCard({ resource }: { resource: any }) {
   if (!resource) {
     return (
       <p className="text-[11px] font-serif italic text-[#68635e] pt-1">
-        No verified resource attached to this activity yet — it relies on your own
-        materials and the checkpoint below.
+        No video or notes linked for this topic yet. PathMind keeps searching
+        for verified material automatically — till then, use your class notes
+        and the steps below.
       </p>
     );
   }
@@ -232,10 +233,17 @@ export function CollegeDashboard() {
   const [pyqError, setPyqError] = useState<string | null>(null);
   const [pyqScope, setPyqScope] = useState<"subject" | "program">("subject");
   const [pyqLevel, setPyqLevel] = useState<number>(1);
+  // Current level (plan phase / unit title) the vault is biased toward;
+  // set when arriving from a path phase, cleared on manual subject change.
+  const [pyqTopic, setPyqTopic] = useState<string>("");
+  // True once the learner picks a PYQ subject manually — until then the
+  // vault follows the plan's current phase.
+  const pyqSubjectTouched = useRef(false);
   const [activeAssessment, setActiveAssessment] = useState<any>(null);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
   const [assessmentResult, setAssessmentResult] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submittingAssessment, setSubmittingAssessment] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [enrichingPhaseId, setEnrichingPhaseId] = useState<string | null>(null);
   // Activity ids with a Mark-Done request in flight (optimistic UI lock).
@@ -423,7 +431,8 @@ export function CollegeDashboard() {
     universityId: string,
     subjectId: string,
     scope: "subject" | "program" = pyqScope,
-    level: number = pyqLevel
+    level: number = pyqLevel,
+    topic: string = pyqTopic
   ) => {
     if (!universityId) return;
     setPyqError(null);
@@ -441,6 +450,9 @@ export function CollegeDashboard() {
       // University paper archives are filed by subject CODE (e.g. 7CS4-01);
       // without it the search only ever tries the subject name.
       if (subj?.code) params.set("subject_code", subj.code);
+      // The learner's current level (plan phase / unit) biases retrieval
+      // toward that unit's papers.
+      if (topic) params.set("topic", topic);
       const res = await apiClient.get<any>(`/api/college/pyq/search?${params.toString()}`);
       if (res.ok) {
         setPyqData(res.data);
@@ -459,6 +471,42 @@ export function CollegeDashboard() {
     setPyqLevel(level);
     loadPYQs(academicContext?.university_id, pyqSubjectId, scope, level);
   };
+
+  // Path → vault: a phase's "Solve Previous-Year Questions" step opens the
+  // PYQ Vault scoped to that phase's subject and level (unit), starting at
+  // the most recent papers.
+  const openPyqForPhase = (phase: any) => {
+    const sid = subjectIdFromPhaseId(phase.phase_id, learningPlan.plan_id);
+    const unit = String(phase.title || "").replace(/^[^:]+:\s*/, "");
+    pyqSubjectTouched.current = true;
+    setPyqTopic(unit);
+    if (sid) {
+      setPyqSubjectId(sid);
+      setPyqScope("subject");
+      setPyqLevel(1);
+      loadPYQs(academicContext?.university_id, sid, "subject", 1, unit);
+    }
+    setActiveTab("pyq");
+  };
+
+  // Until the learner picks a PYQ subject manually, the vault follows the
+  // plan: it opens on the current phase's subject and level rather than
+  // the first subject in the curriculum list.
+  useEffect(() => {
+    if (pyqSubjectTouched.current) return;
+    if (!learningPlan?.phases?.length || pyqSubjects.length === 0) return;
+    const current =
+      learningPlan.phases.find(
+        (p: any) => p.status === "IN_PROGRESS" || p.status === "AVAILABLE"
+      ) || learningPlan.phases[0];
+    const sid = subjectIdFromPhaseId(current.phase_id, learningPlan.plan_id);
+    if (!sid || sid === pyqSubjectId) return;
+    const unit = String(current.title || "").replace(/^[^:]+:\s*/, "");
+    setPyqSubjectId(sid);
+    setPyqTopic(unit);
+    loadPYQs(academicContext?.university_id, sid, "subject", 1, unit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learningPlan, pyqSubjects]);
 
   const loadMemories = async () => {
     try {
@@ -577,25 +625,34 @@ export function CollegeDashboard() {
     }
   };
 
-  // One-shot resource research on load: if the phase the learner is on has
-  // WATCH/READ activities with no verified resource attached, run the live
-  // research pipeline once for that (subject, unit). Results are cached
-  // server-side as VERIFIED rows shared by every learner, so this is a
-  // once-per-topic cost; the plan reload then links them via attach-on-read.
+  // Resource research on load: every phase that is missing a learning link —
+  // a WATCH/READ activity with no verified resource, or no WATCH/READ slot
+  // at all — gets researched one phase at a time, in plan order, LOCKED
+  // phases included, so the whole path shows a link for every topic rather
+  // than only the phase the learner is on. Results are cached server-side
+  // as VERIFIED rows shared by every learner, so this is a once-per-topic
+  // cost; the plan reload then links them via attach-on-read. Bounded per
+  // session so one long plan cannot burn the shared search quotas in a
+  // single sitting — the next visit picks up where this one stopped.
   useEffect(() => {
     if (!learningPlan?.phases || resourceHuntPhaseId) return;
+    if (attemptedResourcePhases.current.size >= 8) return;
     const phase = learningPlan.phases.find((p: any) => {
-      if (p.status === "LOCKED" || p.status === "COMPLETED") return false;
-      return (p.activities || []).some(
-        (a: any) =>
-          (a.activity_type === "WATCH" || a.activity_type === "READ") && !a.resource
+      if (p.status === "COMPLETED") return false;
+      if (attemptedResourcePhases.current.has(p.phase_id)) return false;
+      const slots = (p.activities || []).filter(
+        (a: any) => a.activity_type === "WATCH" || a.activity_type === "READ"
       );
+      const hasWatch = slots.some((a: any) => a.activity_type === "WATCH");
+      const hasRead = slots.some((a: any) => a.activity_type === "READ");
+      return !hasWatch || !hasRead || slots.some((a: any) => !a.resource);
     });
     if (!phase) return;
-    if (attemptedResourcePhases.current.has(phase.phase_id)) return;
+    // Mark attempted before any early return below so one unparseable or
+    // unfillable phase can never stall the cascade for the phases after it.
+    attemptedResourcePhases.current.add(phase.phase_id);
     const subjectId = subjectIdFromPhaseId(phase.phase_id, learningPlan.plan_id);
     if (!subjectId) return;
-    attemptedResourcePhases.current.add(phase.phase_id);
     setResourceHuntPhaseId(phase.phase_id);
     const subj = pyqSubjects.find((s: any) => s.subject_id === subjectId);
     const topic = String(phase.title || "").replace(/^[^:]+:\s*/, "");
@@ -619,8 +676,12 @@ export function CollegeDashboard() {
   }, [learningPlan, pyqSubjects]);
 
   const handleSubmitAssessment = async () => {
-    if (!activeAssessment) return;
-    setActionError(null);    try {
+    if (!activeAssessment || submittingAssessment) return;
+    setActionError(null);
+    // Lock the button while a submission is in flight: a burst of duplicate
+    // submits writes duplicate learning signals for a single attempt.
+    setSubmittingAssessment(true);
+    try {
       const res = await apiClient.post<any>("/api/college/assessments/submit", {
         assessment_id: activeAssessment.assessment_id,
         answers: answers,
@@ -637,6 +698,8 @@ export function CollegeDashboard() {
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not evaluate your submission.");
+    } finally {
+      setSubmittingAssessment(false);
     }
   };
 
@@ -1070,7 +1133,15 @@ export function CollegeDashboard() {
                                 )}
                               </div>
 
-                              <div>
+                              <div className="flex flex-col items-end gap-2">
+                                {act.activity_type === "SOLVE_PYQ" && !isLocked && (
+                                  <button
+                                    onClick={() => openPyqForPhase(phase)}
+                                    className="px-3 py-1.5 rounded text-xs font-bold bg-[#a65959] text-white hover:opacity-90 cursor-pointer whitespace-nowrap"
+                                  >
+                                    Open PYQ Vault for this level →
+                                  </button>
+                                )}
                                 {!isLocked && !isDone && (
                                   <button
                                     onClick={() => handleCompleteActivity(act.activity_id)}
@@ -1135,8 +1206,10 @@ export function CollegeDashboard() {
                   <select
                     value={pyqSubjectId}
                     onChange={(e) => {
+                      pyqSubjectTouched.current = true;
+                      setPyqTopic("");
                       setPyqSubjectId(e.target.value);
-                      loadPYQs(academicContext?.university_id, e.target.value, pyqScope, pyqLevel);
+                      loadPYQs(academicContext?.university_id, e.target.value, pyqScope, pyqLevel, "");
                     }}
                     className="px-3 py-1.5 text-xs rounded border border-[#252321] bg-white"
                   >
@@ -1166,27 +1239,27 @@ export function CollegeDashboard() {
                   Whole program
                 </button>
               </div>
-              {pyqScope === "program" && (
-                <div className="flex items-center gap-1.5 text-xs">
-                  <span className="font-bold text-[#68635e]">Level:</span>
-                  {[1, 2, 3].map((l) => (
-                    <button
-                      key={l}
-                      onClick={() => reloadPYQs("program", l)}
-                      disabled={pyqData && !pyqData.has_more_levels && l > pyqLevel}
-                      className={`w-7 h-7 rounded-full border border-[#252321] font-bold ${
-                        pyqLevel === l ? "bg-[#a65959] text-white" : "bg-white text-[#252321]"
-                      } disabled:opacity-40`}
-                      title={l === 1 ? "Most recent papers" : l === 2 ? "Wider bank" : "Full archive"}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                  <span className="text-[#68635e] italic">
-                    {pyqData?.level_label || "Level 1 — most recent papers first"}
-                  </span>
-                </div>
-              )}
+              {/* Level window: recent papers first, older ones unlock —
+                  applies to both scopes, never the whole archive at once */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="font-bold text-[#68635e]">Level:</span>
+                {[1, 2, 3].map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => reloadPYQs(pyqScope, l)}
+                    disabled={pyqData && !pyqData.has_more_levels && l > pyqLevel}
+                    className={`w-7 h-7 rounded-full border border-[#252321] font-bold ${
+                      pyqLevel === l ? "bg-[#a65959] text-white" : "bg-white text-[#252321]"
+                    } disabled:opacity-40`}
+                    title={l === 1 ? "Most recent papers" : l === 2 ? "Wider bank" : "Full archive"}
+                  >
+                    {l}
+                  </button>
+                ))}
+                <span className="text-[#68635e] italic">
+                  {pyqData?.level_label || "Level 1 — most recent papers first"}
+                </span>
+              </div>
             </div>
 
             {/* What exactly these papers are scoped to — nothing is ever hardcoded */}
@@ -1199,6 +1272,9 @@ export function CollegeDashboard() {
                     ? ` • ${pyqSubjects.find((s: any) => s.subject_id === pyqSubjectId).name} only`
                     : " • pick a subject above")
                 : " • all subjects of this semester, in levels"}
+              {pyqScope === "subject" && pyqTopic
+                ? ` • Your current level: ${pyqTopic}`
+                : ""}
             </p>
 
             {pyqError && (
@@ -1261,7 +1337,7 @@ export function CollegeDashboard() {
                 </div>
                 {pyqData.has_more_levels && (
                   <button
-                    onClick={() => reloadPYQs("program", pyqLevel + 1)}
+                    onClick={() => reloadPYQs(pyqScope, pyqLevel + 1)}
                     className="w-full py-2 rounded border border-dashed border-[#252321]/40 text-xs font-bold text-[#252321] hover:bg-white/60"
                   >
                     Unlock Level {pyqLevel + 1} — wider question bank →
@@ -1379,32 +1455,40 @@ export function CollegeDashboard() {
                         <span className="text-xs font-note-handwritten font-bold text-[#68635e] shrink-0">
                           {q.topic}
                           {q.marks !== undefined && q.marks !== null && ` • ${q.marks} marks`}
+                          {(answers[q.question_id] || "").trim() !== "" && (
+                            <span className="ml-2 text-[#4a654e]">✓ Answered</span>
+                          )}
                         </span>
                       </div>
 
                       {q.question_type === "MCQ" && q.options && (
                         <div className="space-y-2 pt-1">
                           {q.options.map((opt: string) => (
-                            <label
+                            <button
+                              type="button"
                               key={opt}
-                              className={`p-3 rounded-md border block text-xs cursor-pointer transition-all ${
+                              aria-pressed={answers[q.question_id] === opt}
+                              onClick={() =>
+                                setAnswers((prev) => ({ ...prev, [q.question_id]: opt }))
+                              }
+                              className={`p-3 rounded-md border flex w-full items-start gap-2.5 text-left text-xs cursor-pointer transition-all ${
                                 answers[q.question_id] === opt
                                   ? "border-[#4a654e] bg-[#4a654e]/10 font-bold"
                                   : "border-[#252321]/20 hover:border-[#252321] bg-white/60"
                               }`}
                             >
-                              <input
-                                type="radio"
-                                name={q.question_id}
-                                value={opt}
-                                checked={answers[q.question_id] === opt}
-                                onChange={() =>
-                                  setAnswers((prev) => ({ ...prev, [q.question_id]: opt }))
-                                }
-                                className="mr-2.5 accent-[#4a654e]"
-                              />
-                              {opt}
-                            </label>
+                              <span
+                                aria-hidden="true"
+                                className={`shrink-0 leading-none ${
+                                  answers[q.question_id] === opt
+                                    ? "text-[#4a654e]"
+                                    : "text-[#68635e]"
+                                }`}
+                              >
+                                {answers[q.question_id] === opt ? "●" : "○"}
+                              </span>
+                              <span>{opt}</span>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -1425,12 +1509,22 @@ export function CollegeDashboard() {
                 </div>
 
                 {/* Submit Assessment Button */}
-                <div className="flex justify-end">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-[#68635e]">
+                    Answered{" "}
+                    {
+                      (activeAssessment.questions || []).filter(
+                        (q: any) => (answers[q.question_id] || "").trim() !== ""
+                      ).length
+                    }{" "}
+                    of {(activeAssessment.questions || []).length}
+                  </span>
                   <button
                     onClick={handleSubmitAssessment}
-                    className="px-6 py-3 bg-[#4a654e] text-white font-bold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_#252321] cursor-pointer"
+                    disabled={submittingAssessment}
+                    className="px-6 py-3 bg-[#4a654e] text-white font-bold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_#252321] cursor-pointer disabled:cursor-wait disabled:opacity-60"
                   >
-                    Submit for Evaluation
+                    {submittingAssessment ? "Evaluating…" : "Submit for Evaluation"}
                   </button>
                 </div>
 

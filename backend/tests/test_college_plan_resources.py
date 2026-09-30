@@ -288,3 +288,220 @@ def test_pyq_realtime_search_uses_subject_code(monkeypatch):
     assert result == []
     assert any("7CS4-01" in q for q in captured)
     assert any("Internet of Things" in q for q in captured)
+
+
+# ---------------------------------------------------------------------------
+# 6. Locked phases browsing: every topic shows a link, not just the current
+# ---------------------------------------------------------------------------
+
+def test_locked_phase_gets_link_slots_when_cache_fills(monkeypatch):
+    """A LOCKED phase with no WATCH/READ slots gains them (with links) once
+    verified resources are cached, so browsing the path ahead shows a
+    learning link for every topic. Completed phases stay untouched."""
+    import backend.services.college_learning_service as learning_mod
+    from backend.core.college_schemas import (
+        ActivityType, CollegeActivity, CollegeLearningPlan, CollegePlanPhase,
+        ResourceRecord,
+    )
+    from backend.services.college_learning_service import CollegeLearningService
+
+    video = ResourceRecord(
+        resource_id="res_lock_video", title="Linked Lists Lecture",
+        resource_type="VIDEO", provider="Test Provider",
+        url="https://example.edu/video/locked-ll", source_id="src_test",
+        source_tier="B", estimated_minutes=35, topic_ids=["Linked Lists"])
+    notes = ResourceRecord(
+        resource_id="res_lock_notes", title="Linked Lists Notes",
+        resource_type="NOTES", provider="Test Provider",
+        url="https://example.edu/notes/locked-ll", source_id="src_test",
+        source_tier="B", estimated_minutes=20, topic_ids=["Linked Lists"])
+
+    async def _fake_resources(subject_id):
+        return [video, notes] if subject_id == "CS-301" else []
+
+    monkeypatch.setattr(learning_mod, "get_resources_for_subject",
+                        _fake_resources)
+
+    def _phase(suffix, status):
+        phase_id = f"phase_plan_locktest_CS-301_s3_{suffix}"
+        return CollegePlanPhase(
+            phase_id=phase_id, user_id=ALICE_UID, plan_id="plan_locktest",
+            order=2, title="CS-301: Linked Lists",
+            objective="Learn linked lists.", status=status,
+            activities=[CollegeActivity(
+                activity_id=f"act_lock_{suffix}", user_id=ALICE_UID,
+                plan_id="plan_locktest", phase_id=phase_id,
+                activity_type=ActivityType.PRACTICE,
+                title="Practice problems", order=3,
+                instructions="Solve the problem set.")])
+
+    plan = CollegeLearningPlan(
+        plan_id="plan_locktest", user_id=ALICE_UID, goal_id="goal_locktest",
+        phases=[_phase("u2", "LOCKED"), _phase("u3", "COMPLETED")])
+
+    decorated = asyncio.run(CollegeLearningService()._decorate_plan(plan))
+    locked, completed = decorated.phases
+
+    watch = next(a for a in locked.activities
+                 if a.activity_type == ActivityType.WATCH)
+    read = next(a for a in locked.activities
+                if a.activity_type == ActivityType.READ)
+    assert watch.resource is not None
+    assert watch.resource.url == "https://example.edu/video/locked-ll"
+    assert read.resource is not None
+    assert read.resource.url == "https://example.edu/notes/locked-ll"
+    assert len(watch.learn_steps) >= 3 and len(read.learn_steps) >= 3
+    # Completed phases are history — no new slots synthesized into them.
+    assert not any(a.activity_type == ActivityType.WATCH
+                   for a in completed.activities)
+
+
+# ---------------------------------------------------------------------------
+# 7. PYQ vault: previous-year papers only, level-windowed, level-biased
+# ---------------------------------------------------------------------------
+
+def test_realtime_pyq_filters_non_papers_and_topic_ranks_first(monkeypatch):
+    """The vault must show previous-year papers — not every official PDF.
+    Syllabi/notices are dropped even when they carry the subject code, and
+    papers matching the learner's current level (unit) rank first."""
+    queries = []
+    hits = [
+        {"url": "https://rtu.ac.in/syllabus/7cs4-01.pdf",
+         "title": "RTU Syllabus 7CS4-01 Internet of Things",
+         "snippet": "Scheme and syllabus for semester 7",
+         "source_domain": "rtu.ac.in", "trust_tier": "A",
+         "tavily_score": 0.9},
+        {"url": "https://rtu.ac.in/exam-notice-2026",
+         "title": "RTU Examination Notice 2026",
+         "snippet": "All students are informed that...",
+         "source_domain": "rtu.ac.in", "trust_tier": "A",
+         "tavily_score": 0.8},
+        {"url": "https://rtu.ac.in/papers/7cs4-01-2025.pdf",
+         "title": "RTU 7CS4-01 Question Paper 2025",
+         "snippet": "End semester examination",
+         "source_domain": "rtu.ac.in", "trust_tier": "A",
+         "tavily_score": 0.7},
+        {"url": "https://rtu.ac.in/papers/iot-sensor-networks-2024.pdf",
+         "title": "Internet of Things Sensor Networks Previous Year "
+                  "Question Paper 2024",
+         "snippet": "Answer any five questions",
+         "source_domain": "rtu.ac.in", "trust_tier": "A",
+         "tavily_score": 0.6},
+    ]
+
+    async def _fake_domains(university_id):
+        return ["rtu.ac.in"]
+
+    async def _fake_search(query, include_domains, max_results=10):
+        queries.append(query)
+        return hits
+
+    monkeypatch.setattr(pyq_mod, "_get_official_domains", _fake_domains)
+    monkeypatch.setattr(pyq_mod, "_tavily_search_official", _fake_search)
+
+    papers = asyncio.run(pyq_mod.realtime_pyq_search(
+        university_id="rtu", branch="CSE", semester=7,
+        subject_name="Internet of Things", subject_code="7CS4-01",
+        topic="Sensor Networks", scope="subject"))
+
+    urls = [p["url"] for p in papers]
+    # Non-papers are gone, not just ranked last.
+    assert "https://rtu.ac.in/syllabus/7cs4-01.pdf" not in urls
+    assert "https://rtu.ac.in/exam-notice-2026" not in urls
+    # The current level's paper leads.
+    assert urls[0] == ("https://rtu.ac.in/papers/"
+                       "iot-sensor-networks-2024.pdf")
+    assert "https://rtu.ac.in/papers/7cs4-01-2025.pdf" in urls
+    # The level (unit) actually reached the search queries.
+    assert any("Sensor Networks" in q for q in queries)
+
+
+def test_subject_scope_is_level_windowed(monkeypatch):
+    """Subject scope starts at the most recent papers and unlocks older
+    ones by level — never the whole archive at once."""
+    canned = [
+        {"paper_id": "p_new", "url": "https://rtu.ac.in/a.pdf",
+         "year": 2026, "title": "IoT Question Paper 2026"},
+        {"paper_id": "p_old", "url": "https://rtu.ac.in/b.pdf",
+         "year": 2023, "title": "IoT Question Paper 2023"},
+        {"paper_id": "p_undated", "url": "https://rtu.ac.in/c.pdf",
+         "year": None, "title": "IoT Question Paper"},
+    ]
+
+    async def _no_seeded(university_id, subject_id):
+        return []
+
+    async def _fake_realtime(**kwargs):
+        return list(canned)
+
+    monkeypatch.setattr(pyq_mod, "_seeded_papers", _no_seeded)
+    monkeypatch.setattr(pyq_mod, "realtime_pyq_search", _fake_realtime)
+
+    level1 = asyncio.run(pyq_mod.get_pyqs_scoped(
+        university_id="rtu", branch="CSE", semester=7, subject_id="s1",
+        subject_name="IoT", scope="subject", level=1))
+    ids1 = {p["paper_id"] for p in level1["papers"]}
+    assert ids1 == {"p_new", "p_undated"}
+    assert level1["has_more_levels"] is True
+    assert level1["level_label"].startswith("Level 1")
+
+    level3 = asyncio.run(pyq_mod.get_pyqs_scoped(
+        university_id="rtu", branch="CSE", semester=7, subject_id="s1",
+        subject_name="IoT", scope="subject", level=3))
+    assert {p["paper_id"] for p in level3["papers"]} == {
+        "p_new", "p_old", "p_undated"}
+    assert level3["has_more_levels"] is False
+
+
+# ---------------------------------------------------------------------------
+# 8. The path assigns previous-year practice for every level
+# ---------------------------------------------------------------------------
+
+def test_decorate_plan_assigns_pyq_step_per_phase(monkeypatch):
+    """Each unfinished phase gains exactly one SOLVE_PYQ step pointing at
+    its own level — even with an empty resource cache and no seeded
+    questions — and re-decorating never duplicates it."""
+    import backend.services.college_learning_service as learning_mod
+    from backend.core.college_schemas import (
+        ActivityType, CollegeActivity, CollegeLearningPlan, CollegePlanPhase,
+    )
+    from backend.services.college_learning_service import CollegeLearningService
+
+    async def _no_resources(subject_id):
+        return []
+
+    monkeypatch.setattr(learning_mod, "get_resources_for_subject",
+                        _no_resources)
+
+    def _phase(suffix, status):
+        phase_id = f"phase_plan_pyqtest_CS-301_s3_{suffix}"
+        return CollegePlanPhase(
+            phase_id=phase_id, user_id=ALICE_UID, plan_id="plan_pyqtest",
+            order=1, title="CS-301: Linked Lists",
+            objective="Learn linked lists.", status=status,
+            activities=[CollegeActivity(
+                activity_id=f"act_pyq_{suffix}", user_id=ALICE_UID,
+                plan_id="plan_pyqtest", phase_id=phase_id,
+                activity_type=ActivityType.PRACTICE,
+                title="Practice problems", order=3,
+                instructions="Solve the problem set.")])
+
+    plan = CollegeLearningPlan(
+        plan_id="plan_pyqtest", user_id=ALICE_UID, goal_id="goal_pyqtest",
+        phases=[_phase("u1", "AVAILABLE"), _phase("u2", "COMPLETED")])
+
+    svc = CollegeLearningService()
+    decorated = asyncio.run(svc._decorate_plan(plan))
+    active, done = decorated.phases
+
+    pyq_steps = [a for a in active.activities
+                 if a.activity_type == ActivityType.SOLVE_PYQ]
+    assert len(pyq_steps) == 1
+    assert "Linked Lists" in pyq_steps[0].title
+    assert len(pyq_steps[0].learn_steps) >= 3
+    assert not any(a.activity_type == ActivityType.SOLVE_PYQ
+                   for a in done.activities)
+
+    again = asyncio.run(svc._decorate_plan(decorated))
+    assert len([a for a in again.phases[0].activities
+                if a.activity_type == ActivityType.SOLVE_PYQ]) == 1

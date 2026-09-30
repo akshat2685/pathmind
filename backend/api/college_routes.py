@@ -337,6 +337,7 @@ async def search_pyq_endpoint(
     subject_id: Optional[str] = Query(None),
     subject_name: Optional[str] = Query(None),
     subject_code: Optional[str] = Query(None, description="Subject code as filed by the university (e.g. 7CS4-01) — paper archives are indexed by code"),
+    topic: Optional[str] = Query(None, description="Current level (plan phase / unit title) — biases retrieval toward that unit's papers"),
     scope: str = Query("subject", description="subject = this subject only; program = whole branch, progressive levels"),
     level: int = Query(1, ge=1, le=3),
 ):
@@ -346,7 +347,7 @@ async def search_pyq_endpoint(
     return await get_pyqs_scoped(
         university_id=university_id, branch=branch, semester=semester,
         subject_id=subject_id, subject_name=subject_name,
-        subject_code=subject_code,
+        subject_code=subject_code, topic=topic,
         scope=scope, level=level,
     )
 
@@ -454,6 +455,7 @@ async def submit_assessment_endpoint(
         result = await assessment_service.evaluate_submission(uid=person_id, submission=submission)
         log_event("college.route.assessment_submitted", user_id=person_id,
                   assessment_id=submission.assessment_id,
+                  answer_count=len(submission.answers or {}),
                   mastery_status=result.mastery_status, outcome="ok")
         return result
     except ValueError as ve:

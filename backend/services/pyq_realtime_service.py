@@ -180,6 +180,7 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
                              semester: int,
                              subject_name: Optional[str] = None,
                              subject_code: Optional[str] = None,
+                             topic: Optional[str] = None,
                              scope: str = "subject",
                              max_results: int = 10) -> List[Dict[str, Any]]:
     """
@@ -209,6 +210,12 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
                 f"{univ_short} {subject_code} question paper",
                 f"{subject_code} {subject_name} question paper pdf",
             ] + queries
+        if topic:
+            # The learner's current level (plan phase): bias retrieval
+            # toward papers for this unit instead of the whole subject.
+            queries.append(
+                f"{univ_short} {subject_code or subject_name} {topic} "
+                f"question paper")
     else:
         queries = [
             f"{univ_short} {branch} semester {semester} question papers",
@@ -227,6 +234,10 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
     ]
 
     code_l = (subject_code or "").strip().lower()
+    topic_tokens = {
+        t for t in re.findall(r"[a-z0-9]+", (topic or "").lower())
+        if len(t) >= 4 and t not in ("unit", "part", "course", "subject")
+    }
 
     def _relevance(p: Dict[str, Any]) -> int:
         # Prefer hits that actually look like question papers over generic
@@ -241,8 +252,23 @@ async def realtime_pyq_search(*, university_id: str, branch: str,
                 score += 2
         if blob.rstrip("/").endswith(".pdf"):
             score += 1
+        # Official archives index syllabi, schemes and notices by the same
+        # subject code — they are not previous-year papers and must never
+        # reach the vault, even when the code matches.
+        for kw in ("syllabus", "scheme of", "curriculum", "notice",
+                   "circular", "timetable", "time table", "date sheet",
+                   "datesheet", "result"):
+            if kw in blob:
+                score -= 4
+        if topic_tokens:
+            blob_tokens = set(re.findall(r"[a-z0-9]+", blob))
+            score += 2 * min(len(topic_tokens & blob_tokens), 2)
         return score
 
+    # The vault shows previous-year papers only — never every official PDF
+    # the search happens to surface. Hits with no paper signal at all
+    # (syllabi, notices, circulars) are dropped, not just ranked last.
+    papers = [p for p in papers if _relevance(p) >= 2]
     # Most relevant first, then most recent; undated papers last.
     papers.sort(key=lambda p: (-_relevance(p), p["year"] is None, -(p["year"] or 0)))
     return papers
@@ -261,12 +287,15 @@ async def get_pyqs_scoped(*, university_id: str, branch: str, semester: int,
                           subject_id: Optional[str] = None,
                           subject_name: Optional[str] = None,
                           subject_code: Optional[str] = None,
+                          topic: Optional[str] = None,
                           scope: str = "subject",
                           level: int = 1) -> Dict[str, Any]:
     """
     Learner-scoped PYQ retrieval.
 
     scope="subject": only this subject's papers (e.g. Physics, Sem 1).
+    Level-windowed like the program scope: start with the most recent
+    papers, unlock older ones on demand.
     scope="program": the branch/semester's papers in progressive levels.
     """
     scope = scope if scope in ("subject", "program") else "subject"
@@ -282,7 +311,7 @@ async def get_pyqs_scoped(*, university_id: str, branch: str, semester: int,
         realtime = await realtime_pyq_search(
             university_id=university_id, branch=branch, semester=semester,
             subject_name=subject_name, subject_code=subject_code,
-            scope=scope, max_results=10)
+            topic=topic, scope=scope, max_results=10)
         known_urls = {p["url"] for p in papers if p.get("url")}
         papers.extend([p for p in realtime if p["url"] not in known_urls])
 
@@ -291,9 +320,14 @@ async def get_pyqs_scoped(*, university_id: str, branch: str, semester: int,
         papers = apply_program_level(papers, level)
         has_more = level < 3
     else:
-        level_label = "Single subject"
-        papers = papers[:10]
-        has_more = False
+        # Subject scope is level-windowed too: the learner starts with the
+        # most recent papers for their level and unlocks older ones on
+        # demand — never the whole archive at once.
+        level_label = PROGRAM_LEVELS[level][0]
+        windowed = apply_program_level(papers, level)
+        has_more = (level < 3 and len(apply_program_level(papers, level + 1))
+                    > len(windowed))
+        papers = windowed
 
     if not papers:
         where = (f"for {subject_name or subject_id}" if scope == "subject"
