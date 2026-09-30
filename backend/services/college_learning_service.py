@@ -12,7 +12,6 @@ per-topic mastery store. `complete_activity` never unlocks on its own.
 
 from typing import List, Dict, Any, Optional, Tuple
 import asyncio
-import concurrent.futures
 import re
 import uuid
 
@@ -195,7 +194,6 @@ class CollegeLearningService:
             effective_goal_id = await self._ensure_goal(uid, goal_id, scope)
 
             plan_id = f"plan_{uid}_{scope.value.lower()}_{uuid.uuid4().hex[:6]}"
-            model = self._get_gemini_model()
 
             phases: List[CollegePlanPhase] = []
             plan_subjects: List[LearningPlanSubject] = []
@@ -203,16 +201,17 @@ class CollegeLearningService:
             phase_order = 1
 
             # Collect phase specs first (order preserved), then build
-            # activities concurrently. Serial per-phase Gemini calls are what
-            # blew the ~60s serverless cap on whole-program generation; a
-            # bounded semaphore keeps free-tier rate limits in check while
-            # cutting wall-clock time ~8x. For large plans (whole-program is
-            # 87 phases for RTU CSE) even 8x concurrency cannot fit the ~60s
-            # serverless window, so generation is tiered: small plans get LLM
-            # activities for every phase, large plans get them for the head
-            # phases only and the deterministic static sequence for the tail.
-            # Tail phases are fully usable (real resources + PYQs) and can be
-            # upgraded to AI-personalized activities on demand.
+            # activities concurrently. Generation is STATIC-FIRST: no LLM
+            # call happens while a plan is being generated, for any scope.
+            # A single Gemini call costs ~30s+ (and the AI endpoint is
+            # intermittently unreachable from the serverless runtime), so
+            # generation-time enrichment put every plan one slow call away
+            # from the ~60s serverless cap — the failure learners hit as a
+            # dead "Embark on Study Plan" click / runtime error. Every
+            # phase ships with the deterministic sequence (real verified
+            # resources + PYQs), and any single phase can be upgraded to
+            # AI-personalized activities on demand via
+            # enrich_phase_activities ("Personalize with AI").
             phase_specs: List[Tuple[int, Any, Any, int]] = []
             for semester, sub in scoped_subjects:
                 if sub.subject_id not in seen_subjects:
@@ -231,21 +230,6 @@ class CollegeLearningService:
                     "CURRICULUM_NOT_FOUND: no verified curriculum units cover "
                     "the requested scope.")
 
-            # Tiered generation with a hard latency bound. A single phase
-            # LLM call costs ~30s+ on the free tier, so enriching EVERY
-            # phase at generation time can push mid-size plans (9-16 phases
-            # = two sequential LLM rounds) past the ~60s serverless window
-            # and kill plan generation outright — the failure learners hit
-            # as a dead "Generate plan" click. Bound generation-time LLM
-            # enrichment to the FIRST 8 phases (one concurrent round);
-            # later phases ship with the deterministic sequence (real
-            # verified resources + PYQs) and any single phase can still be
-            # upgraded on demand via enrich_phase_activities.
-            _LLM_HEAD_PHASES = 8
-
-            def _wants_llm(order: int) -> bool:
-                return order <= _LLM_HEAD_PHASES
-
             _concurrency = asyncio.Semaphore(8)
 
             # One batch fetch for all subjects (3 queries in a thread)
@@ -260,12 +244,12 @@ class CollegeLearningService:
             ) -> Tuple[List[CollegeActivity], bool]:
                 semester, sub, unit, order = spec
                 async with _concurrency:
-                    # model=None forces the deterministic static sequence
-                    # (no LLM call) for tail phases of large plans.
+                    # model=None: deterministic static sequence, no LLM
+                    # call at generation time (see static-first note above).
                     return await self._build_phase_activities(
                         uid, plan_id, ctx.university_id, semester, sub, unit,
                         order, ctx.available_hours_per_week,
-                        model if _wants_llm(order) else None,
+                        None,
                         prefetched=prefetched)
 
             built_per_phase = await asyncio.gather(
@@ -522,22 +506,24 @@ class CollegeLearningService:
             return [(ctx.semester, s) for s in matched]
 
         if scope == PlanScope.WHOLE_PROGRAM:
-            # get_curriculum is blocking (sync supabase-py): fetch all 8
-            # semesters in worker threads instead of ~32 sequential reads.
-            def _fetch_sem(semester: int):
-                return asyncio.run(
-                    get_curriculum(ctx.university_id, branch, semester))
-
-            def _fetch_all():
-                with concurrent.futures.ThreadPoolExecutor(
-                        max_workers=8) as pool:
-                    return list(pool.map(_fetch_sem, range(1, 9)))
-
+            # Sequential awaits. The previous threaded fetch raced under
+            # serverless CPU limits and silently dropped whole semesters
+            # (a live 8-semester RTU CSE program produced a plan covering
+            # only semesters 3, 4, 5, 7 — get_curriculum swallows fetch
+            # failures into None, so a raced-out semester vanished without
+            # a trace). Eight sequential registry reads cost a few seconds
+            # and cannot drop a semester silently: a semester with no
+            # verified curriculum is logged by name.
             scoped: List[Tuple[int, Any]] = []
-            for semester, curr in zip(
-                    range(1, 9), await asyncio.to_thread(_fetch_all)):
+            for semester in range(1, 9):
+                curr = await get_curriculum(
+                    ctx.university_id, branch, semester)
                 if curr and curr.subjects:
                     scoped.extend((semester, s) for s in curr.subjects)
+                else:
+                    log_event(
+                        "college.plan.whole_program_semester_missing",
+                        user_id=uid, semester=semester, outcome="degraded")
             if not scoped:
                 raise ValueError("CURRICULUM_NOT_FOUND: no verified curricula "
                                  "found for this program.")

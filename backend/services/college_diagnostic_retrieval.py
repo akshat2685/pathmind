@@ -186,6 +186,24 @@ async def retrieve_diagnostic_context(store, uid: str) -> DiagnosticRetrieval:
                       user_id=uid, outcome="error",
                       error_code=type(exc).__name__)
 
+    if (curriculum is None or not curriculum.subjects) \
+            and retrieval.university_id and retrieval.semester:
+        # One retry: get_curriculum swallows transient registry read
+        # failures into None, and an empty curriculum starves the grounded
+        # fallback (fewer than 3 questions -> DIAGNOSTIC_UNAVAILABLE even
+        # though verified material exists — the intermittent dead-end
+        # learners hit on the diagnostic step). One extra read rescues
+        # the transient case; a genuinely unseeded semester still ends
+        # honestly unavailable.
+        try:
+            curriculum = await get_curriculum(
+                retrieval.university_id, branch, int(retrieval.semester))
+        except Exception as exc:
+            log_event(
+                "college.diagnostic.retrieval_curriculum_retry_failed",
+                user_id=uid, outcome="error",
+                error_code=type(exc).__name__)
+
     if curriculum and curriculum.subjects:
         wanted = set(context_subject_ids)
         for sub in curriculum.subjects:
