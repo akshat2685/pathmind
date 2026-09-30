@@ -22,6 +22,21 @@ from backend.core.college_schemas import (
 
 logger = logging.getLogger(__name__)
 
+
+def _persistence_error(action: str, exc: Exception) -> RuntimeError:
+    """Builds a diagnosable persistence error without leaking secrets.
+
+    The old bare "PERSISTENCE_UNAVAILABLE" hid the failing operation and the
+    database error, which made production incidents impossible to triage from
+    the UI. Keep the stable code prefix for clients, and include the action,
+    exception type, and a truncated single-line message for logs/support.
+    """
+    message = " ".join(str(exc).split())[:300] or exc.__class__.__name__
+    return RuntimeError(
+        f"PERSISTENCE_UNAVAILABLE: {action} failed "
+        f"({exc.__class__.__name__}: {message})"
+    )
+
 class CollegeStore:
     """
     Authoritative persistence layer for the College MVP.
@@ -98,8 +113,8 @@ class CollegeStore:
             # on_conflict="user_id" matches the upsert in get_or_create_college_user.
             self.client.table("learners").upsert(data, on_conflict="user_id").execute()
         except Exception as e:
-            logger.error("Failed to save_college_user_profile: %s", str(e))
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+            logger.error("Failed to save_college_user_profile: %s", str(e), exc_info=True)
+            raise _persistence_error("save_college_user_profile", e) from e
 
     # --- Academic Context ---
 
@@ -130,7 +145,7 @@ class CollegeStore:
             
             return AcademicContext(**ctx)
         except Exception as e:
-            logger.error("Failed to get_college_academic_context: %s", str(e))
+            logger.error("Failed to get_college_academic_context: %s", str(e), exc_info=True)
             return None
 
     async def save_college_academic_context(self, uid: str, context_data: dict) -> None:
@@ -159,9 +174,11 @@ class CollegeStore:
                 if subject_rows:
                     self.client.table("learner_context_subjects").insert(subject_rows).execute()
                 
+        except ValueError:
+            raise
         except Exception as e:
-            logger.error("Failed to save_college_academic_context: %s", str(e))
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+            logger.error("Failed to save_college_academic_context: %s", str(e), exc_info=True)
+            raise _persistence_error("save_college_academic_context", e) from e
 
     async def find_program_id(self, university_id: str, branch_values: List[str]) -> Optional[str]:
         """Resolves the canonical program_id for a university + branch.
@@ -201,11 +218,15 @@ class CollegeStore:
 
     async def save_college_goal(self, uid: str, goal_data: dict) -> None:
         try:
-            goal_data["user_id"] = uid
-            self.client.table("college_goals").upsert(goal_data, on_conflict="goal_id").execute()
+            data = dict(goal_data)
+            data["user_id"] = uid
+            # Goals are owned by a learner: conflict on the composite
+            # (user_id, goal_id) key so one learner can never update or steal
+            # another learner's goal row.
+            self.client.table("college_goals").upsert(data, on_conflict="user_id,goal_id").execute()
         except Exception as e:
-            logger.error("Failed to save_college_goal: %s", str(e))
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+            logger.error("Failed to save_college_goal: %s", str(e), exc_info=True)
+            raise _persistence_error("save_college_goal", e) from e
 
     # --- Learning Plan ---
 
@@ -318,13 +339,13 @@ class CollegeStore:
                     self.client.table("learning_activities").upsert(all_acts, on_conflict="activity_id").execute()
                     
         except Exception as e:
-            logger.error("Transaction failed during save_college_learning_plan: %s. Rolling back plan %s", str(e), plan_id)
+            logger.error("Transaction failed during save_college_learning_plan: %s. Rolling back plan %s", str(e), plan_id, exc_info=True)
             # Rollback: Since it's learner owned, we can just delete it and ON DELETE CASCADE will handle children.
             try:
                 self.client.table("learning_plans").delete().eq("plan_id", plan_id).eq("user_id", uid).execute()
             except Exception as rollback_e:
                 logger.error("Failed to rollback learning plan: %s", str(rollback_e))
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+            raise _persistence_error("save_college_learning_plan", e) from e
 
     async def activate_college_learning_plan(self, uid: str, plan_id: str) -> None:
         """
@@ -338,8 +359,8 @@ class CollegeStore:
                 .eq("plan_id", plan_id).eq("user_id", uid).execute()
         except Exception as e:
             logger.error("Failed to activate_college_learning_plan %s: %s",
-                         plan_id, str(e))
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+                         plan_id, str(e), exc_info=True)
+            raise _persistence_error("activate_college_learning_plan", e) from e
 
     async def save_college_phase(self, uid: str, phase_data) -> None:
         """

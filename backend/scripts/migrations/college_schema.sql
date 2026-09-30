@@ -219,7 +219,7 @@ CREATE TABLE IF NOT EXISTS public.learner_context_subjects (
 
 CREATE TABLE IF NOT EXISTS public.college_goals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    goal_id TEXT UNIQUE NOT NULL,
+    goal_id TEXT NOT NULL,
     user_id UUID NOT NULL REFERENCES public.learners(user_id) ON DELETE CASCADE,
     goal_type TEXT DEFAULT 'SEMESTER_EXAM',
     raw_goal TEXT NOT NULL,

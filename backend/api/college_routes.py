@@ -132,7 +132,16 @@ async def update_learner_profile(
     if req.supported_path:
         user["supported_path"] = req.supported_path.value
         
-    await store.save_college_user_profile(person_id, user)
+    try:
+        await store.save_college_user_profile(person_id, user)
+    except RuntimeError as exc:
+        log_event("college.route.profile_save_failed", user_id=person_id,
+                  outcome="error", error_code="PERSISTENCE_UNAVAILABLE",
+                  error_message=str(exc)[:500])
+        raise HTTPException(status_code=503, detail={
+            "code": "PERSISTENCE_UNAVAILABLE",
+            "message": str(exc)[:500],
+        })
     return UserProfile(**user)
 
 # --- 2. Universities & Curricula ---
@@ -166,6 +175,7 @@ async def save_academic_context(
     req: SaveAcademicContextRequest,
     person_id: str = Depends(get_authenticated_person)
 ):
+    _require_supabase_configured()
     try:
         context = await academic_service.save_learner_academic_context(
             uid=person_id,
@@ -185,6 +195,14 @@ async def save_academic_context(
         log_event("college.route.academic_context_failed", user_id=person_id,
                   outcome="error", error_code=str(ve).split(":")[0])
         raise HTTPException(status_code=400, detail=str(ve))
+    except RuntimeError as exc:
+        log_event("college.route.academic_context_failed", user_id=person_id,
+                  outcome="error", error_code="PERSISTENCE_UNAVAILABLE",
+                  error_message=str(exc)[:500])
+        raise HTTPException(status_code=503, detail={
+            "code": "PERSISTENCE_UNAVAILABLE",
+            "message": str(exc)[:500],
+        })
 
 @router.get("/academic-context", response_model=Optional[AcademicContext])
 async def get_academic_context(person_id: str = Depends(get_authenticated_person)):
@@ -193,7 +211,7 @@ async def get_academic_context(person_id: str = Depends(get_authenticated_person
 # --- 3. Learning Plans & Ordered Activities ---
 
 class GeneratePlanRequest(BaseModel):
-    goal_id: Optional[str] = "goal_semester_prep"
+    goal_id: Optional[str] = None
     target_subject_code_or_id: Optional[str] = None
     scope: PlanScope = PlanScope.SEMESTER
 
@@ -206,7 +224,7 @@ async def generate_plan_endpoint(
     try:
         plan = await learning_service.generate_learning_plan(
             uid=person_id,
-            goal_id=req.goal_id or "goal_semester_prep",
+            goal_id=req.goal_id,
             target_subject_code_or_id=req.target_subject_code_or_id,
             scope=req.scope,
         )
@@ -218,6 +236,14 @@ async def generate_plan_endpoint(
                   outcome="error", error_code=str(ve).split(":")[0])
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as exc:
+        if isinstance(exc, RuntimeError) and str(exc).startswith("PERSISTENCE_UNAVAILABLE"):
+            log_event("college.route.plan_failed", user_id=person_id,
+                      outcome="error", error_code="PERSISTENCE_UNAVAILABLE",
+                      error_message=str(exc)[:500])
+            raise HTTPException(status_code=503, detail={
+                "code": "PERSISTENCE_UNAVAILABLE",
+                "message": str(exc)[:500],
+            })
         # Never a bare 500: surface the error code so the cause is diagnosable.
         # Include the exception MESSAGE (not just type) — the type alone
         # ("RuntimeError") is useless for debugging. The message from

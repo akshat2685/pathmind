@@ -130,12 +130,15 @@ class FakeQuery:
             items = self._payload if isinstance(self._payload, list) else [self._payload]
             out = []
             conflict = getattr(self, "_on_conflict", None)
+            conflict_keys = []
+            if conflict:
+                conflict_keys = [k.strip() for k in str(conflict).split(",") if k.strip()]
             for item in items:
                 row = copy.deepcopy(item)
                 target = None
-                if conflict:
+                if conflict_keys:
                     for existing in rows:
-                        if existing.get(conflict) == row.get(conflict):
+                        if all(existing.get(k) == row.get(k) for k in conflict_keys):
                             target = existing
                             break
                 if target is not None:
@@ -245,6 +248,20 @@ class FakeSupabaseAdapter:
         self.client = FakeSupabaseClient()
         self.url = "fake://supabase.test"
         self.key = "fake-key"
+
+    @property
+    def config_error(self):
+        return None
+
+    @property
+    def is_configured(self):
+        return True
+
+    def require_client(self):
+        return self.client
+
+    def verify_client_works(self):
+        return {"ok": True}
 
     async def check_database_health(self):
         return {"status": "ok", "database": "supabase"}

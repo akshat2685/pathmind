@@ -54,7 +54,7 @@ class CollegeLearningService:
     async def generate_learning_plan(
         self,
         uid: str,
-        goal_id: str,
+        goal_id: Optional[str] = None,
         target_subject_code_or_id: Optional[str] = None,
         scope: PlanScope = PlanScope.SEMESTER,
     ) -> CollegeLearningPlan:
@@ -73,7 +73,7 @@ class CollegeLearningService:
             scoped_subjects = await self._resolve_scoped_subjects(
                 uid, ctx, branch, scope, target_subject_code_or_id)
 
-            await self._ensure_goal(uid, goal_id, scope)
+            effective_goal_id = await self._ensure_goal(uid, goal_id, scope)
 
             plan_id = f"plan_{uid}_{scope.value.lower()}_{uuid.uuid4().hex[:6]}"
             model = self._get_gemini_model()
@@ -177,7 +177,7 @@ class CollegeLearningService:
             plan = CollegeLearningPlan(
                 plan_id=plan_id,
                 user_id=uid,
-                goal_id=goal_id,
+                goal_id=effective_goal_id,
                 plan_type=("PROGRAM_PREPARATION" if scope == PlanScope.WHOLE_PROGRAM
                            else "TOPIC_MASTERY" if scope == PlanScope.SUBJECT_PART
                            else "SEMESTER_PREPARATION"),
@@ -354,16 +354,11 @@ class CollegeLearningService:
             raise ValueError("CURRICULUM_NOT_FOUND: no verified curriculum "
                              "for this branch/semester.")
         subject_ids = await self.store.get_context_subject_ids(ctx.context_id)
-        if target_subject_code_or_id:
-            matched = [s for s in curr.subjects
-                       if s.subject_id == target_subject_code_or_id
-                       or s.code == target_subject_code_or_id
-                       or s.name == target_subject_code_or_id]
-            if not matched:
-                raise ValueError(
-                    f"SUBJECT_NOT_FOUND: '{target_subject_code_or_id}' is not in "
-                    f"the verified curriculum.")
-        elif subject_ids:
+        # target_subject_code_or_id is only meaningful for SUBJECT_PART.
+        # A SEMESTER plan covers the learner's chosen context subjects (or
+        # the whole semester when none were chosen); never silently narrow
+        # it to the first selected subject.
+        if subject_ids:
             matched = [s for s in curr.subjects
                        if s.subject_id in subject_ids or s.code in subject_ids]
             if not matched:
@@ -372,17 +367,52 @@ class CollegeLearningService:
             matched = list(curr.subjects)
         return [(ctx.semester, s) for s in matched]
 
-    async def _ensure_goal(self, uid: str, goal_id: str, scope: PlanScope) -> None:
+    @staticmethod
+    def _canonical_goal_id(uid: str, goal_id: Optional[str], scope: PlanScope) -> str:
+        """
+        Builds the authoritative per-user goal ID for a plan request.
+
+        Clients have historically sent shared static IDs such as
+        "goal_semester" for every learner. college_goals.goal_id was globally
+        unique in the first schema, so a second learner asking for the same
+        static ID collided with the first learner's goal row. The backend is
+        the authority here: preserve an already user-namespaced ID, otherwise
+        namespace the requested slug under the learner's uid.
+        """
+        prefix = f"goal_{uid}_"
+        raw = (goal_id or "").strip()
+        if raw.startswith(prefix):
+            return raw
+        slug = re.sub(r"[^a-z0-9_-]+", "_", raw.lower()).strip("_")
+        while slug.startswith("goal_"):
+            slug = slug[len("goal_"):]
+        if not slug:
+            slug = scope.value.lower()
+        return f"{prefix}{slug}"[:160]
+
+    async def _ensure_goal(
+        self, uid: str, goal_id: Optional[str], scope: PlanScope
+    ) -> str:
         """
         learning_plans has an FK to college_goals: make sure the referenced
-        goal exists. Creates the goal the learner actually asked for — never
-        a fabricated one.
+        goal exists for THIS learner. Creates the goal the learner actually
+        asked for — never a fabricated one, and never another learner's row.
+        Returns the effective goal_id the plan must reference.
         """
         raw_goal = await self.store.get_college_goal(uid)
-        if raw_goal and raw_goal.get("goal_id") == goal_id:
-            return
+        existing_goal_id = (
+            raw_goal.get("goal_id") if isinstance(raw_goal, dict)
+            else getattr(raw_goal, "goal_id", None)
+        )
+        if goal_id and existing_goal_id == goal_id:
+            return goal_id
+
+        canonical_goal_id = self._canonical_goal_id(uid, goal_id, scope)
+        if existing_goal_id == canonical_goal_id:
+            return canonical_goal_id
+
         goal = CollegeGoal(
-            goal_id=goal_id,
+            goal_id=canonical_goal_id,
             user_id=uid,
             goal_type="SEMESTER_EXAM",
             scope=scope,
@@ -391,6 +421,7 @@ class CollegeLearningService:
             status="ACTIVE",
         )
         await self.store.save_college_goal(uid, goal.model_dump(mode="json"))
+        return canonical_goal_id
 
     @staticmethod
     def _get_gemini_model():

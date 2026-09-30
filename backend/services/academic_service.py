@@ -91,7 +91,10 @@ class AcademicService:
         # source of truth, no stale fields.
         saved = await self.get_learner_academic_context(uid)
         if saved is None:  # pragma: no cover - defensive; save just succeeded
-            raise RuntimeError("PERSISTENCE_UNAVAILABLE")
+            raise RuntimeError(
+                "PERSISTENCE_UNAVAILABLE: academic context re-read returned "
+                f"no row for {context.context_id}"
+            )
         return saved
 
     async def get_learner_academic_context(self, uid: str) -> Optional[AcademicContext]:
