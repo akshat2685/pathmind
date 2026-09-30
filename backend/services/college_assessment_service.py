@@ -130,8 +130,14 @@ class CollegeAssessmentService:
         try:
             return model.generate_content(prompt)
         except Exception as exc:
+            # Log both the exception type AND message (truncated) so
+            # operators can distinguish 404 (retired model) from 429
+            # (quota) from 400 (bad key) in Vercel logs. Previously only
+            # the type was logged, making diagnosis impossible.
+            exc_msg = str(exc)[:500] if str(exc) else "(no message)"
             log_event(f"college.assessment.{feature.lower()}_llm_failed",
-                      outcome="error", error_code=type(exc).__name__)
+                      outcome="error", error_code=type(exc).__name__,
+                      error_message=exc_msg)
             raise ValueError(
                 f"{feature}_UNAVAILABLE: the AI service could not be reached "
                 f"({type(exc).__name__}); try again later instead of "
