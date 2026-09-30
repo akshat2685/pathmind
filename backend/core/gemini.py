@@ -110,7 +110,35 @@ def get_gemini_model() -> Optional[object]:
     # Prefer the new google.genai SDK (supports gemini-3.5-flash and later)
     try:
         from google import genai as new_genai
-        client = new_genai.Client(api_key=settings.GEMINI_API_KEY)
+        # Explicit request policy — previously the client ran with SDK
+        # defaults: a single attempt per generate_content and no explicit
+        # timeout, so one transient Google 5xx (e.g. 503 "model
+        # overloaded") or one slow read failed the whole call. Now: a
+        # bounded 15s per-attempt timeout, plus one SDK-level retry on
+        # retryable statuses with a short backoff. Callers keep their own
+        # retry loops; worst case stays inside the serverless window.
+        http_options = None
+        try:
+            from google.genai import types as genai_types
+            http_options = genai_types.HttpOptions(
+                timeout=15_000,
+                retry_options=genai_types.HttpRetryOptions(
+                    attempts=2,
+                    initial_delay=1.0,
+                    max_delay=4.0,
+                    exp_base=2.0,
+                    jitter=1.0,
+                    http_status_codes=[429, 500, 502, 503, 504],
+                ),
+            )
+        except Exception:
+            http_options = None
+        if http_options is not None:
+            client = new_genai.Client(
+                api_key=settings.GEMINI_API_KEY, http_options=http_options
+            )
+        else:
+            client = new_genai.Client(api_key=settings.GEMINI_API_KEY)
         return _GenaiModelWrapper(client, settings.GEMINI_MODEL)
     except Exception as exc:
         log_event("college.llm.new_sdk_failed",

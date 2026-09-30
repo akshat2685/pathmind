@@ -985,6 +985,16 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                             candidates = docs or [
                                 r for r in cached
                                 if r.resource_type != "VIDEO"]
+                        elif act_type == "PRACTICE":
+                            # Practice problems are where a learner uses
+                            # worked material: give PRACTICE the same best
+                            # cached material so the card shows a real link
+                            # instead of "no material linked yet" while
+                            # verified notes/videos sit unused in the cache.
+                            candidates = [
+                                r for r in cached
+                                if r.resource_type in ("NOTES", "DOCUMENT")]
+                            candidates = candidates or list(cached)
                         else:
                             candidates = []
                         if candidates:

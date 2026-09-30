@@ -1,6 +1,6 @@
 from enum import Enum
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from datetime import datetime, timezone
 import uuid
 
@@ -163,6 +163,38 @@ class VideoTimestamp(BaseModel):
     start_seconds: int
     end_seconds: int
     purpose: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _heal_legacy_shape(cls, data):
+        # Legacy cache rows written before the writer/reader shapes were
+        # reconciled carry only {label, source, start_seconds}: no
+        # end_seconds, no purpose. A field validator never runs for an
+        # absent key (pydantic raises "Field required" first), so fill
+        # both in here. A missing end means "to the end of the video",
+        # so fall back to the start rather than dropping the resource;
+        # "label" is what the segment is for.
+        if isinstance(data, dict):
+            data = dict(data)
+            if data.get("end_seconds") is None:
+                data["end_seconds"] = data.get("start_seconds") or 0
+            if not data.get("purpose"):
+                data["purpose"] = data.get("label") or "Watch this segment"
+        return data
+
+    @field_validator("end_seconds", mode="before")
+    @classmethod
+    def _default_end_seconds(cls, value, info):
+        if value is None:
+            return info.data.get("start_seconds") or 0
+        return value
+
+    @field_validator("purpose", mode="before")
+    @classmethod
+    def _default_purpose(cls, value, info):
+        if not value:
+            return info.data.get("label") or "Watch this segment"
+        return value
 
 class DocumentSection(BaseModel):
     start_page: int

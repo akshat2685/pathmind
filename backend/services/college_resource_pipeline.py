@@ -577,22 +577,37 @@ class CollegeResourcePipeline:
         description = video.get("description") or ""
         chapters = parse_video_chapters(description)
         if chapters:
-            return [{"start_seconds": c["start_seconds"],
-                     "label": c["label"],
-                     "source": "video_description"} for c in chapters[:12]]
+            stamps = []
+            for idx, chapter in enumerate(chapters[:12]):
+                start = chapter["start_seconds"]
+                end = (chapters[idx + 1]["start_seconds"]
+                       if idx + 1 < len(chapters) else start)
+                stamps.append({"start_seconds": start,
+                               "end_seconds": end,
+                               "label": chapter["label"],
+                               "purpose": chapter["label"],
+                               "source": "video_description"})
+            return stamps
 
         # Optional: transcript check that the topic is actually discussed.
         if await self._transcript_confirms_topic(video):
             minutes = video.get("estimated_minutes") or 20
             thirds = [0, minutes * 60 // 3, minutes * 120 // 3]
             return [{"start_seconds": s,
+                     "end_seconds": (thirds[i + 1]
+                                     if i + 1 < len(thirds) else s),
                      "label": "estimated segment (no chapter markers)",
-                     "source": "estimated"} for s in thirds]
+                     "purpose": "estimated segment (no chapter markers)",
+                     "source": "estimated"}
+                    for i, s in enumerate(thirds)]
 
         # Duration only: still "estimated", never masquerading as chapters.
         minutes = video.get("estimated_minutes")
         if minutes:
-            return [{"start_seconds": 0, "label": "full video",
+            return [{"start_seconds": 0,
+                     "end_seconds": minutes * 60,
+                     "label": "full video",
+                     "purpose": "full video",
                      "source": "estimated"}]
         return []
 
