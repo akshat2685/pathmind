@@ -244,15 +244,15 @@ async def generate_plan_endpoint(
                 "code": "PERSISTENCE_UNAVAILABLE",
                 "message": str(exc)[:500],
             })
-        # Never a bare 500: surface the error code so the cause is diagnosable.
-        # Include the exception MESSAGE (not just type) — the type alone
-        # ("RuntimeError") is useless for debugging. The message from
-        # require_client() names the missing env vars.
-        code = f"PLAN_FAILED:{type(exc).__name__}"
+        # Unexpected server-side failure (DB/AI/infra): 503 with a useful,
+        # diagnosable body — never an unexplained bare 500. The message
+        # names the real cause (e.g. require_client() lists missing env
+        # vars) so support never has to guess from a status code alone.
+        code = f"PLAN_GENERATION_FAILED:{type(exc).__name__}"
         log_event("college.route.plan_failed", user_id=person_id,
                   outcome="error", error_code=code,
                   error_message=str(exc)[:500])
-        raise HTTPException(status_code=500, detail={
+        raise HTTPException(status_code=503, detail={
             "code": code,
             "message": str(exc)[:500],
         })
@@ -409,11 +409,23 @@ async def generate_diagnostic_endpoint(
                   outcome="error", error_code=code)
         raise HTTPException(status_code=status, detail=detail)
     except Exception as exc:
-        # Never a bare 500: surface the error code so the cause is diagnosable.
-        code = f"DIAGNOSTIC_FAILED:{type(exc).__name__}"
+        # Retrieval/Gemini failures degrade inside the service; anything
+        # reaching here is infra (e.g. persistence down). Answer 503 with
+        # the real cause — never an unexplained bare 500.
+        if isinstance(exc, RuntimeError) and str(exc).startswith(
+                "PERSISTENCE_UNAVAILABLE"):
+            raise HTTPException(status_code=503, detail={
+                "code": "PERSISTENCE_UNAVAILABLE",
+                "message": str(exc)[:500],
+            })
+        code = f"DIAGNOSTIC_GENERATION_FAILED:{type(exc).__name__}"
         log_event("college.route.diagnostic_failed", user_id=person_id,
-                  outcome="error", error_code=code)
-        raise HTTPException(status_code=500, detail=code)
+                  outcome="error", error_code=code,
+                  error_message=str(exc)[:500])
+        raise HTTPException(status_code=503, detail={
+            "code": code,
+            "message": str(exc)[:500],
+        })
 
 @router.get("/baseline")
 async def get_baseline_endpoint(

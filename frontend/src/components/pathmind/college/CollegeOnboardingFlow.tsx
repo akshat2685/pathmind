@@ -29,6 +29,11 @@ interface DiagnosticQuestion {
   options?: string[];
   topic: string;
   marks?: number;
+  // Provenance labels from the dynamic diagnostic: verified_* means the
+  // question is grounded in retrieved PathMind records (real syllabus /
+  // real PYQs); model_generated means Gemini authored it.
+  probe?: string;
+  source?: string;
 }
 
 interface DiagnosticResult {
@@ -40,6 +45,9 @@ interface DiagnosticResult {
     mastery_score?: number;
     outcome?: string;
     status?: string;
+    status_label?: string;
+    likely_issue?: string;
+    evidence_note?: string;
   }>;
   feedback: string;
   evaluation_confidence?: number;
@@ -726,8 +734,19 @@ export function CollegeOnboardingFlow() {
                             <h4 className="font-bold text-sm text-[#252321]">
                               Item {idx + 1}. {q.question_text}
                             </h4>
-                            <span className="text-xs font-note-handwritten font-bold text-[#68635e] shrink-0">
-                              {q.topic}
+                            <span className="flex flex-col items-end gap-1 shrink-0">
+                              <span className="text-xs font-note-handwritten font-bold text-[#68635e]">
+                                {q.topic}
+                              </span>
+                              {q.source && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/70 border border-[#252321]/20 text-[#68635e] font-bold">
+                                  {q.source === "verified_pyq"
+                                    ? "Real past exam question (PYQ)"
+                                    : q.source === "verified_curriculum"
+                                    ? "From your verified syllabus"
+                                    : "AI-generated probe"}
+                                </span>
+                              )}
                             </span>
                           </div>
 
@@ -816,12 +835,17 @@ export function CollegeOnboardingFlow() {
                             {diagResult.topic_results.map((t, i) => (
                               <div
                                 key={i}
-                                className="flex items-center justify-between text-xs p-2 rounded border border-[#252321]/20 bg-white/60"
+                                className="text-xs p-2 rounded border border-[#252321]/20 bg-white/60"
                               >
-                                <span className="font-medium">{t.topic}</span>
-                                <span className="font-bold">
-                                  {fmtScore(t.mastery_score)} • {t.outcome || t.status || "—"}
-                                </span>
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{t.topic}</span>
+                                  <span className="font-bold">
+                                    {fmtScore(t.mastery_score)} • {t.status_label || t.outcome || t.status || "—"}
+                                  </span>
+                                </div>
+                                {t.likely_issue && (
+                                  <p className="text-[#68635e] mt-0.5">{t.likely_issue}</p>
+                                )}
                               </div>
                             ))}
                           </div>

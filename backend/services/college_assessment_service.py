@@ -193,10 +193,22 @@ class CollegeAssessmentService:
 
     async def generate_diagnostic_assessment(self, uid: str) -> CollegeAssessment:
         """
-        Onboarding diagnostic: generated from the learner's aspirations, branch
-        and subjects. NOT tied to any learning-plan phase (plan_id/phase_id
-        stay None — never a fake linkage). Requires an LLM; without one we
-        report honest unavailability instead of inventing questions.
+        Dynamic/hybrid diagnostic (replaces the old LLM-only author):
+
+          learner context -> verified-source retrieval (curriculum / PYQs /
+          resources / prior mastery) -> Gemini drafts candidate probes and
+          selects the 5-6 highest-information ones -> assessment.
+
+        Gemini is the reasoning layer, never the source of verified facts:
+        questions grounded in retrieved records carry verified_* source
+        labels; anything Gemini invents is labeled model_generated. When
+        Gemini is unavailable or returns unusable output, the diagnostic
+        falls back to real retrieved material (verified PYQs, then
+        curriculum topic probes) whose answers grade as
+        INSUFFICIENT_EVIDENCE until a grader can judge them — the flow
+        never dead-ends and never fabricates a baseline. Only a learner
+        with no profile raises; only a learner with neither grounded
+        material nor a model gets an honest DIAGNOSTIC_UNAVAILABLE.
         """
         with timed_stage("college.assessment.diagnostic_generated", user_id=uid):
             raw_profile = await self.store.get_college_user_profile(uid)
@@ -206,69 +218,46 @@ class CollegeAssessmentService:
             profile = (raw_profile if isinstance(raw_profile, dict)
                        else raw_profile.model_dump())
 
-            raw_ctx = await self.store.get_college_academic_context(uid)
-            subject_ids: List[str] = []
-            if raw_ctx:
-                subject_ids = await self.store.get_context_subject_ids(
-                    raw_ctx.get("context_id"))
+            from backend.services.college_diagnostic_retrieval import (
+                retrieve_diagnostic_context,
+            )
+            retrieval = await retrieve_diagnostic_context(self.store, uid)
+            subject_ids = (retrieval.subject_ids
+                           or retrieval.context_subject_ids)
+            branch = retrieval.branch or profile.get(
+                "supported_path") or "GENERAL_OTHER"
 
-            raw_goal = await self.store.get_college_goal(uid)
-            aspirations = ""
-            if raw_goal:
-                aspirations = (raw_goal.get("raw_goal")
-                               or raw_goal.get("normalized_goal") or "")
-
-            branch = profile.get("supported_path") or "GENERAL_OTHER"
-
+            questions: List[CollegeAssessmentQuestion] = []
+            authored_by = "retrieval_fallback"
             model = _get_gemini_model()
-            if model is None:
+            if model is not None:
+                try:
+                    questions = self._generate_diagnostic_with_llm(
+                        model, profile, retrieval)
+                    if len(questions) >= 4:
+                        authored_by = "gemini+retrieval"
+                    else:
+                        log_event(
+                            "college.assessment.diagnostic_llm_insufficient",
+                            user_id=uid, question_count=len(questions),
+                            outcome="degraded")
+                        questions = []
+                except ValueError as exc:
+                    # Provider/parse failure: fall back to grounded material
+                    # instead of the old hard DIAGNOSTIC_UNAVAILABLE.
+                    log_event(
+                        "college.assessment.diagnostic_llm_fallback",
+                        user_id=uid, outcome="degraded",
+                        error_code=str(exc)[:120])
+
+            if not questions:
+                questions = self._fallback_diagnostic_questions(retrieval)
+
+            if len(questions) < 3:
                 raise ValueError(
-                    "DIAGNOSTIC_UNAVAILABLE: an AI question author "
-                    "is required to build an honest diagnostic; refusing to "
-                    "invent generic questions")
-
-            prompt = f"""You are the PATHMIND Diagnostic Author. Write a short
-baseline diagnostic for a college engineering learner.
-
-Branch: {branch}
-Subjects: {', '.join(subject_ids) if subject_ids else 'general engineering foundations'}
-Learner aspirations: {aspirations or 'not stated'}
-
-Return ONLY a JSON array of exactly 5 questions: 3 MCQ and 2 SHORT_ANSWER,
-spread across the subjects above. Each item:
-{{"id": "dq1", "text": "...", "type": "MCQ|SHORT_ANSWER",
-  "options": ["A","B","C","D"], "answer": "B",
-  "rubric": "for SHORT_ANSWER: what earns marks", "marks": 5,
-  "topic": "short topic label", "subject_id": "<one of the subjects above>"}}
-MCQs must include "options" and "answer". SHORT_ANSWER must include "rubric".
-Never invent subject ids; use only the subjects listed."""
-            response = self._generate_content_or_unavailable(
-                model, prompt, "DIAGNOSTIC")
-            text = response.text.strip()
-            if text.startswith("```"):
-                text = text.strip("`")
-                if text.lower().startswith("json"):
-                    text = text[4:]
-            try:
-                gen_qs = json.loads(text.strip())
-            except Exception as exc:
-                raise ValueError(
-                    "DIAGNOSTIC_UNAVAILABLE: could not parse "
-                    f"authored questions ({type(exc).__name__})")
-
-            questions = []
-            for i, gq in enumerate(gen_qs, start=1):
-                questions.append(CollegeAssessmentQuestion(
-                    question_id=gq.get("id", f"dq{i}"),
-                    question_text=gq.get("text", "Question"),
-                    question_type=gq.get("type", "MCQ"),
-                    options=gq.get("options", []),
-                    correct_answer=gq.get("answer"),
-                    rubric=gq.get("rubric"),
-                    topic=gq.get("topic") or (subject_ids[(i - 1) % len(subject_ids)]
-                                              if subject_ids else "general"),
-                    marks=gq.get("marks", 5),
-                ))
+                    "DIAGNOSTIC_UNAVAILABLE: no verified curriculum or PYQ "
+                    "material covers this learner yet and the AI question "
+                    "author is unavailable; refusing to invent questions")
 
             assessment = CollegeAssessment(
                 assessment_id=f"diag_{uuid.uuid4().hex[:6]}",
@@ -286,8 +275,227 @@ Never invent subject ids; use only the subjects listed."""
             log_event("college.assessment.diagnostic_saved", user_id=uid,
                       assessment_id=assessment.assessment_id,
                       question_count=len(questions),
+                      authored_by=authored_by,
+                      grounded=retrieval.grounded,
+                      sources=[q.source for q in questions],
                       subject_count=len(subject_ids), outcome="ok")
             return assessment
+
+    def _generate_diagnostic_with_llm(self, model, profile, retrieval):
+        """
+        Gemini authors ~10 candidate probes against the retrieved context
+        and selects the 5-6 highest-information ones (single call: a second
+        selection round-trip risks the serverless window on the free tier).
+        Output is strictly validated; unusable output raises ValueError so
+        the caller falls back to grounded material.
+        """
+        subject_ids = retrieval.subject_ids or retrieval.context_subject_ids
+        subjects_line = ", ".join(subject_ids) if subject_ids else (
+            "general engineering foundations")
+        known = "; ".join(
+            f"{m.get('topic')}={m.get('outcome')}"
+            for m in retrieval.known_masteries[:8]) or "none yet"
+        context_block = retrieval.prompt_context() or (
+            "(no verified curriculum/PYQ material retrieved for this "
+            "learner; rely on the learner context only and label every "
+            "question model_generated)")
+
+        prompt = f"""You are the PATHMIND Diagnostic Author. Build a short
+baseline diagnostic for a college engineering learner.
+
+LEARNER CONTEXT (profile data, not verified facts):
+Branch: {retrieval.branch}
+University: {retrieval.university_id or 'not set'}, Semester: {retrieval.semester or 'not set'}
+Subjects in scope: {subjects_line}
+Learner aspirations: {retrieval.aspirations or 'not stated'}
+Already-known topic evidence (do not re-probe mastered topics): {known}
+
+RETRIEVED SOURCE MATERIAL:
+{context_block}
+
+TASK: First draft about 10 candidate diagnostic probes internally, then
+SELECT the 5-6 with the highest information gain for THIS learner. Prefer
+probes that reveal prerequisite knowledge, conceptual understanding,
+application ability, common misconceptions, and transfer — do not force
+every category. Avoid duplicates, trivia, and anything far outside the
+learner's semester. At least 4 MCQ and at least 1 SHORT_ANSWER.
+
+SOURCE HONESTY (strict): set "source" to "verified_pyq" ONLY when the
+question is adapted from a listed verified PYQ; "verified_curriculum"
+when its topic comes from the verified curriculum above; otherwise
+"model_generated". Never present invented facts as verified.
+
+Return ONLY a JSON array of the selected 5-6 questions. Each item:
+{{"id": "dq1", "text": "...", "type": "MCQ|SHORT_ANSWER",
+  "options": ["A","B","C","D"], "answer": "B",
+  "rubric": "for SHORT_ANSWER: what earns marks", "marks": 5,
+  "topic": "short topic label from the curriculum above",
+  "probe": "prerequisite|concept|application|misconception|transfer",
+  "source": "verified_curriculum|verified_pyq|model_generated"}}
+MCQs must include "options" and "answer" (letter or exact option text).
+SHORT_ANSWER must include "rubric" and may include "answer" as a short
+reference answer. Never invent subject ids."""
+        response = self._generate_content_or_unavailable(
+            model, prompt, "DIAGNOSTIC")
+        text = response.text.strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            if text.lower().startswith("json"):
+                text = text[4:]
+        try:
+            gen_qs = json.loads(text.strip())
+        except Exception as exc:
+            raise ValueError(
+                "DIAGNOSTIC_UNAVAILABLE: could not parse "
+                f"authored questions ({type(exc).__name__})")
+        if not isinstance(gen_qs, list):
+            raise ValueError(
+                "DIAGNOSTIC_UNAVAILABLE: authored questions were not a list")
+        return self._validate_generated_questions(gen_qs, retrieval)
+
+    @staticmethod
+    def _validate_generated_questions(gen_qs, retrieval):
+        """Strictly validate Gemini output; drop anything malformed."""
+        allowed_sources = {"verified_curriculum", "verified_pyq",
+                           "model_generated"}
+        allowed_probes = {"prerequisite", "concept", "application",
+                          "misconception", "transfer"}
+        questions: List[CollegeAssessmentQuestion] = []
+        seen_texts = set()
+        for i, gq in enumerate(gen_qs, start=1):
+            if not isinstance(gq, dict):
+                continue
+            text = str(gq.get("text") or "").strip()
+            if not text or text.lower() in seen_texts:
+                continue
+            qtype = str(gq.get("type") or "MCQ").upper()
+            topic = str(gq.get("topic") or "").strip()
+            if not topic:
+                continue
+            source = str(gq.get("source") or "model_generated")
+            if source not in allowed_sources:
+                source = "model_generated"
+            # Honesty guard: a verified label requires retrieved material.
+            if source == "verified_pyq" and not retrieval.pyq_questions:
+                source = "model_generated"
+            if (source == "verified_curriculum"
+                    and not retrieval.curriculum_subjects):
+                source = "model_generated"
+            probe = str(gq.get("probe") or "concept").lower()
+            if probe not in allowed_probes:
+                probe = "concept"
+            try:
+                marks = int(gq.get("marks") or 5)
+            except (TypeError, ValueError):
+                marks = 5
+            marks = max(1, min(10, marks))
+
+            if qtype == "MCQ":
+                options = [str(o).strip() for o in (gq.get("options") or [])
+                           if str(o).strip()]
+                if len(options) < 3:
+                    continue
+                answer = str(gq.get("answer") or "").strip()
+                if not answer:
+                    continue
+                if len(answer) == 1 and answer.upper() in "ABCD":
+                    if "ABCD".index(answer.upper()) >= len(options):
+                        continue
+                elif answer not in options:
+                    continue
+                questions.append(CollegeAssessmentQuestion(
+                    question_id=str(gq.get("id") or f"dq{i}"),
+                    question_text=text,
+                    question_type="MCQ",
+                    options=options,
+                    correct_answer=answer,
+                    topic=topic,
+                    marks=marks,
+                    probe=probe,
+                    source=source,
+                ))
+            elif qtype == "SHORT_ANSWER":
+                rubric = str(gq.get("rubric") or "").strip()
+                if not rubric:
+                    continue
+                # A model-supplied reference answer powers the deterministic
+                # exact-match grader; it stays model-labeled, never verified.
+                reference = str(gq.get("answer") or "").strip() or None
+                questions.append(CollegeAssessmentQuestion(
+                    question_id=str(gq.get("id") or f"dq{i}"),
+                    question_text=text,
+                    question_type="SHORT_ANSWER",
+                    correct_answer=reference,
+                    rubric=rubric,
+                    topic=topic,
+                    marks=marks,
+                    probe=probe,
+                    source=source,
+                ))
+            else:
+                continue
+            seen_texts.add(text.lower())
+            if len(questions) >= 6:
+                break
+        return questions
+
+    @staticmethod
+    def _fallback_diagnostic_questions(retrieval):
+        """
+        Grounded fallback when Gemini cannot author: real verified PYQs
+        first (actual university exam questions), then curriculum topic
+        probes. No invented answers or rubrics — short answers without a
+        rubric grade as INSUFFICIENT_EVIDENCE (Unknown), never a fake score.
+        """
+        questions: List[CollegeAssessmentQuestion] = []
+        for q in retrieval.pyq_questions[:4]:
+            topic = (q.get("topics") or [None])[0]
+            if not topic:
+                subject = next(
+                    (s for s in retrieval.curriculum_subjects
+                     if s["subject_id"] == q["subject_id"]), None)
+                topic = (subject or {}).get("name") or q["subject_id"]
+            try:
+                marks = int(q.get("marks") or 5)
+            except (TypeError, ValueError):
+                marks = 5
+            questions.append(CollegeAssessmentQuestion(
+                question_id=f"dq_pyq_{q['question_id']}",
+                question_text=q["question_text"],
+                question_type="SHORT_ANSWER",
+                topic=topic,
+                marks=max(1, min(15, marks)),
+                probe="application",
+                source="verified_pyq",
+            ))
+
+        if len(questions) < 5:
+            for sub in retrieval.curriculum_subjects:
+                for unit in sub.get("units", []):
+                    for topic in (unit.get("topics") or [])[:2]:
+                        if any(q.topic == topic for q in questions):
+                            continue
+                        questions.append(CollegeAssessmentQuestion(
+                            question_id=(
+                                f"dq_curr_{sub['subject_id']}_"
+                                f"{unit.get('unit')}_{len(questions)}"),
+                            question_text=(
+                                f"Explain the core idea of '{topic}' "
+                                f"({sub.get('name', sub['subject_id'])}) "
+                                "and give one example of where it is used."),
+                            question_type="SHORT_ANSWER",
+                            topic=topic,
+                            marks=5,
+                            probe="concept",
+                            source="verified_curriculum",
+                        ))
+                        if len(questions) >= 6:
+                            break
+                    if len(questions) >= 6:
+                        break
+                if len(questions) >= 6:
+                    break
+        return questions[:6]
 
     def _generate_questions_with_llm(
         self, model, subject_id: str, topic_title: str, topic_tags: List[str]
@@ -466,6 +674,28 @@ Make the first two MCQs and the last one SHORT_ANSWER.
                 earned_marks += item_score
                 if confidence is not None:
                     confidences.append(confidence)
+                # Evidence model: never overclaim from one question. A
+                # question that still needs review contributes NO conclusion
+                # (Unknown); otherwise the per-question ratio maps to a
+                # Strong/Partial/Weak evidence label with a plain-language
+                # likely issue, so results read as Strengths / Gaps /
+                # Weaknesses / Unknowns rather than a bare pass/fail.
+                ratio = (item_score / marks) if marks > 0 else 0.0
+                evidence_outcome = topic_outcome_from_ratio(
+                    None if requires_review else ratio)
+                status_label, likely_issue = {
+                    "MASTERED": (
+                        "Strong", "Demonstrated on this evidence"),
+                    "PARTIALLY_MASTERED": (
+                        "Partial",
+                        "Likely application/practice gap — targeted practice"),
+                    "REINFORCEMENT_REQUIRED": (
+                        "Weak",
+                        "Likely knowledge/concept gap — guided learning first"),
+                    "INSUFFICIENT_EVIDENCE": (
+                        "Unknown",
+                        "Insufficient evidence — no conclusion drawn yet"),
+                }[evidence_outcome]
                 topic_results.append({
                     "question_id": q.question_id,
                     "topic": q.topic,
@@ -473,6 +703,10 @@ Make the first two MCQs and the last one SHORT_ANSWER.
                     "total_marks": marks,
                     "status": ("STRONG" if item_score >= marks * 0.7
                                else "NEEDS_WORK"),
+                    "outcome": evidence_outcome,
+                    "status_label": status_label,
+                    "likely_issue": likely_issue,
+                    "evidence_note": reasoning,
                     "requires_review": requires_review,
                     "confidence": confidence,
                     "reasoning": reasoning,

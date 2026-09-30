@@ -112,19 +112,20 @@ class CollegeLearningService:
                     "CURRICULUM_NOT_FOUND: no verified curriculum units cover "
                     "the requested scope.")
 
-            # Tiered generation. Small plans (semester / subject-part) get
-            # LLM activities for every phase. Large plans (whole-program is
-            # 87 phases) get the deterministic static sequence for ALL phases
-            # at generation time: a single phase LLM call costs ~30s+ on the
-            # free tier, so even a 3-phase LLM head cannot fit the ~60s
-            # serverless window reliably. Tail/head phases are fully usable
-            # (real resources + PYQs) and any single phase can be upgraded to
-            # AI-personalized activities on demand via enrich_phase_activities.
-            _LLM_FULL_CAP = 16  # at/below: LLM activities for every phase
-            _tiered = len(phase_specs) > _LLM_FULL_CAP
+            # Tiered generation with a hard latency bound. A single phase
+            # LLM call costs ~30s+ on the free tier, so enriching EVERY
+            # phase at generation time can push mid-size plans (9-16 phases
+            # = two sequential LLM rounds) past the ~60s serverless window
+            # and kill plan generation outright — the failure learners hit
+            # as a dead "Generate plan" click. Bound generation-time LLM
+            # enrichment to the FIRST 8 phases (one concurrent round);
+            # later phases ship with the deterministic sequence (real
+            # verified resources + PYQs) and any single phase can still be
+            # upgraded on demand via enrich_phase_activities.
+            _LLM_HEAD_PHASES = 8
 
             def _wants_llm(order: int) -> bool:
-                return not _tiered
+                return order <= _LLM_HEAD_PHASES
 
             _concurrency = asyncio.Semaphore(8)
 
@@ -151,24 +152,70 @@ class CollegeLearningService:
             built_per_phase = await asyncio.gather(
                 *(_build_one(spec) for spec in phase_specs))
 
+            # Diagnostic evidence -> planner. Read the learner's per-topic
+            # mastery store once and let it shape each phase: Weak topics
+            # get guided intensive learning, Partial topics targeted
+            # explanation + practice, Mastered topics only light revision
+            # with spaced retrieval, and topics with no evidence stay
+            # Unknown (planned normally; the checkpoint gathers evidence).
+            # This reuses the existing planner — no second plan system.
+            mastery_by_topic: Dict[str, str] = {}
+            try:
+                for mrow in (await self.store.get_topic_masteries(uid)
+                             or []):
+                    if mrow.get("topic"):
+                        mastery_by_topic[mrow["topic"]] = mrow.get(
+                            "outcome") or ""
+            except Exception as exc:
+                log_event("college.plan.mastery_read_failed", user_id=uid,
+                          outcome="error", error_code=type(exc).__name__)
+
+            def _phase_guidance(unit) -> Tuple[str, str, List[Dict[str, str]]]:
+                evidence = [
+                    {"topic": t, "outcome": mastery_by_topic[t]}
+                    for t in (unit.topics or []) if t in mastery_by_topic
+                ]
+                outcomes = [e["outcome"] for e in evidence]
+                if not outcomes:
+                    return "unknown", "", evidence
+                if "REINFORCEMENT_REQUIRED" in outcomes:
+                    return "weak", "Guided intensive learning first — ", evidence
+                if "PARTIALLY_MASTERED" in outcomes:
+                    return ("partial",
+                            "Targeted explanation + practice — ", evidence)
+                if all(o == "MASTERED" for o in outcomes):
+                    return ("mastered",
+                            "Light revision with spaced retrieval — ",
+                            evidence)
+                return "partial", "Targeted explanation + practice — ", evidence
+
             for (semester, sub, unit, order), (activities, used_llm) in zip(
                     phase_specs, built_per_phase):
                 phase_id = f"phase_{plan_id}_{sub.subject_id}_s{semester}_u{unit.unit}"
+                band, objective_prefix, guidance_evidence = _phase_guidance(unit)
                 phases.append(CollegePlanPhase(
                     phase_id=phase_id,
                     user_id=uid,
                     plan_id=plan_id,
                     order=order,
                     title=f"{sub.code}: {unit.title}",
-                    objective=(f"Master fundamental theories and exam problems "
+                    objective=(objective_prefix +
+                               f"Master fundamental theories and exam problems "
                                f"for {sub.name} (Semester {semester}, Unit {unit.unit})."),
                     ai_enriched=used_llm,
                     status="AVAILABLE" if order == 1 else "LOCKED",
                     # Schema §16 unlock rule: demonstrated mastery required.
+                    # diagnostic_guidance records how diagnostic evidence
+                    # shaped this phase (read by the UI/reporting only;
+                    # unlock evaluation ignores unknown keys).
                     unlock_rule={
                         "type": "ASSESSMENT_MASTERY",
                         "required_assessment_score": UNLOCK_REQUIRED_SCORE,
                         "required_topics": list(unit.topics),
+                        "diagnostic_guidance": {
+                            "band": band,
+                            "topics": guidance_evidence,
+                        },
                     },
                     activities=activities,
                     assessment_id=f"asmt_{phase_id}",

@@ -388,14 +388,20 @@ def test_phase_unlock_requires_mastery(monkeypatch):
 
 
 def test_diagnostic_assessment_honest_without_llm(monkeypatch):
-    """Verify the diagnostic endpoint is honest when no LLM is configured."""
-    # Force the no-LLM path regardless of environment.
+    """New contract (dynamic diagnostic): with no LLM, the endpoint falls
+    back to grounded material — real verified PYQs / curriculum probes —
+    instead of the old hard DIAGNOSTIC_UNAVAILABLE dead-end. It still never
+    invents questions: every fallback question carries a verified_* source.
+    (The 503 remains only when neither a model nor grounded material
+    exists — covered in test_college_dynamic_diagnostic.py.)"""
     monkeypatch.setattr(assessment_service_module, "_get_gemini_model",
                         lambda: None)
     resp = client.post("/api/college/assessments/diagnostic", headers=AUTH_HEADERS_ALICE)
-    # Explicit unavailable, never invented questions
-    assert resp.status_code == 503
-    assert "DIAGNOSTIC_UNAVAILABLE" in resp.json()["detail"]
+    assert resp.status_code == 200
+    questions = resp.json()["questions"]
+    assert len(questions) >= 3
+    assert all(q["source"] in {"verified_pyq", "verified_curriculum"}
+               for q in questions)
 
 
 def test_accountability_schedule_and_commitments():

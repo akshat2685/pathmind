@@ -346,6 +346,13 @@ class CollegeAssessmentQuestion(BaseModel):
     topic: str
     unit: Optional[int] = None
     marks: Optional[int] = None
+    # Diagnostic provenance (persisted inside the questions jsonb — no table
+    # change). probe: prerequisite|concept|application|misconception|transfer.
+    # source: verified_curriculum | verified_pyq | model_generated. Only
+    # verified_* labels may ever be attached to retrieved PathMind records;
+    # Gemini-authored questions are always "model_generated".
+    probe: Optional[str] = None
+    source: Optional[str] = None
 
 class CollegeAssessment(BaseModel):
     assessment_id: str
