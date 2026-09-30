@@ -42,6 +42,124 @@ from backend.services.store import FirestoreStore
 #: Fraction of the phase assessment score required to unlock the next phase.
 UNLOCK_REQUIRED_SCORE = 75.0
 
+_PHASE_ID_RE = re.compile(r"^phase_(.*)_s(\d+)_u(\d+)$")
+
+
+def _subject_id_from_phase_id(phase_id: str, plan_id: str) -> Optional[str]:
+    """phase_id format: phase_{plan_id}_{subject_id}_s{semester}_u{unit}."""
+    m = _PHASE_ID_RE.match(phase_id or "")
+    if not m:
+        return None
+    prefix = m.group(1)
+    expected = f"{plan_id}_"
+    if not prefix.startswith(expected):
+        return None
+    return prefix[len(expected):] or None
+
+
+#: Words that carry no topical signal when matching a resource to a phase.
+_MATCH_STOPWORDS = {
+    "course", "unit", "lecture", "video", "notes", "introduction",
+    "overview", "fundamentals", "basic", "basics", "with", "from",
+    "this", "that", "into", "your",
+}
+
+
+def _resource_match_score(resource: ResourceRecord, phase_title: str) -> int:
+    """Token overlap between a cached resource and a phase title.
+
+    Resources researched for a unit carry the unit/topic in topic_ids, so a
+    topic-matched resource beats a generic subject-level one for that phase.
+    """
+    def _tokens(text: str) -> set:
+        return {
+            t for t in re.split(r"[^a-z0-9]+", (text or "").lower())
+            if len(t) >= 4 and t not in _MATCH_STOPWORDS
+        }
+
+    title_tokens = _tokens(phase_title)
+    if not title_tokens:
+        return 0
+    score = 0
+    for topic in (resource.topic_ids or []):
+        score += 2 * len(title_tokens & _tokens(topic))
+    score += len(title_tokens & _tokens(resource.title))
+    return score
+
+
+def _learn_steps_for(activity_type: str, resource: Optional[ResourceRecord],
+                     topics: Optional[List[str]] = None) -> List[str]:
+    """Deterministic 'how to learn this' method steps for one activity.
+
+    The plan must teach the method, not just name the material: watch with
+    active recall, read with closed-book summaries, practice before checking
+    solutions, PYQs under timed exam conditions with an error log.
+    """
+    topic_hint = (topics[0] if topics else "this topic")
+    if activity_type == "WATCH":
+        if resource is not None:
+            return [
+                f"Open the linked video: \"{resource.title}\" ({resource.provider}).",
+                "Watch actively — pause at every new definition, diagram or "
+                "derivation and write it down in your own words before you "
+                "press play again.",
+                "When the video ends, close it and recall the 3 most "
+                "important ideas out loud or on paper. No peeking.",
+                "Whatever you could not recall is your real gap — note it; "
+                "the reading and practice steps that follow target exactly "
+                "that.",
+            ]
+        return [
+            f"Find a lecture or video on {topic_hint} from a source you "
+            "trust (your class recordings, NPTEL, or a well-rated channel).",
+            "Watch actively — pause at every new definition or derivation "
+            "and write it in your own words before continuing.",
+            "At the end, close the video and recall the 3 key ideas from "
+            "memory; note what you missed for the steps that follow.",
+        ]
+    if activity_type == "READ":
+        if resource is not None:
+            return [
+                f"Open the linked material: \"{resource.title}\" "
+                f"({resource.provider}).",
+                "Skim the headings and diagrams first so you have a map, "
+                "then read one section at a time.",
+                "After each section, close the material and write a 3–5 "
+                "line summary from memory.",
+                "Underline every term you cannot explain in one plain "
+                "sentence — those are the gaps to clear before the "
+                "checkpoint.",
+            ]
+        return [
+            f"Use your textbook or class notes for {topic_hint}.",
+            "Skim headings first, then read one section at a time, writing "
+            "a 3–5 line closed-book summary after each section.",
+            "Mark every term you cannot explain in one sentence — clear "
+            "those before moving on.",
+        ]
+    if activity_type == "SOLVE_PYQ":
+        return [
+            "Attempt it timed, in exam conditions — no notes, no pausing, "
+            "exactly like the real paper.",
+            "Only after the time is up, compare with the marking scheme or "
+            "your notes and score yourself honestly.",
+            "Log every lost mark with its error type: concept gap, wrong "
+            "formula, calculation slip, or ran out of time.",
+            "Redo each question you lost marks on, from scratch, the next "
+            "day.",
+        ]
+    # PRACTICE (and any other type): attempt-first problem solving.
+    return [
+        "Attempt every problem closed-book first. Struggling for a few "
+        "minutes before seeing a solution is where the learning happens.",
+        "For each problem you miss or get stuck on, write down exactly "
+        "where your reasoning broke — not just the right answer.",
+        "After reviewing, redo the problem from a blank page. Reading a "
+        "solution is not the same as being able to produce it.",
+        "Finish by stating the core idea of "
+        f"{topic_hint} in 2–3 sentences without looking at your notes.",
+    ]
+
 
 class CollegeLearningService:
     def __init__(self, store: Optional[FirestoreStore] = None):
@@ -305,6 +423,33 @@ class CollegeLearningService:
         unit = next((u for u in sub.units if u.unit == unit_no), None)
         if unit is None:
             raise ValueError("UNIT_NOT_FOUND")
+
+        # Resources first: if this subject has no cached verified VIDEO,
+        # run the live research pipeline (YouTube Data API + DuckDuckGo/
+        # Tavily web search, reachability-verified, cached as VERIFIED) so
+        # the rebuilt activities link to real material. Research failure
+        # never blocks personalization — building falls back to whatever
+        # is already cached, and the dashboard's attach-on-read pass links
+        # later research into existing plans.
+        try:
+            cached_resources = await get_resources_for_subject(sub.subject_id)
+        except Exception:
+            cached_resources = []
+        if not any(r.resource_type == "VIDEO" for r in cached_resources):
+            try:
+                from backend.services.college_resource_pipeline import (
+                    CollegeResourcePipeline,
+                )
+                await CollegeResourcePipeline().research_topic(
+                    subject_id=sub.subject_id,
+                    topic=unit.title,
+                    subject_name=sub.name,
+                    time_budget_seconds=20,
+                )
+            except Exception as exc:
+                log_event("college.plan.phase_resource_research_failed",
+                          user_id=uid, phase_id=phase_id, outcome="error",
+                          error_code=type(exc).__name__)
 
         model = self._get_gemini_model()
         if model is None:
@@ -619,8 +764,16 @@ Return ONLY a valid JSON array of activities in the best learning order. Each ac
     "pyq_id": "id from above if applicable",
     "title": "short engaging title",
     "instructions": "personalized instructions",
+    "steps": ["concrete step 1", "concrete step 2", "concrete step 3"],
     "minutes": 30
 }}
+"steps" = 2-4 concrete instructions for HOW to learn this, not what it is:
+for WATCH, active viewing (pause and write each definition in your own words,
+then recall the key ideas with the video closed); for READ, skim-then-read
+with a closed-book summary after each section; for PRACTICE, attempt
+closed-book BEFORE checking any solution, then redo from a blank page;
+for SOLVE_PYQ, a timed exam-condition attempt, honest self-scoring, and an
+error log (concept / formula / calculation / time).
 Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_PYQ).
 """
             response = model.generate_content(prompt)
@@ -642,6 +795,13 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 act_type = ga.get("type", "PRACTICE")
                 if act_type not in [e.value for e in ActivityType]:
                     act_type = "PRACTICE"
+                raw_steps = ga.get("steps")
+                steps = [
+                    str(s).strip()[:240] for s in raw_steps
+                    if isinstance(s, str) and str(s).strip()
+                ][:6] if isinstance(raw_steps, list) else []
+                if len(steps) < 2:
+                    steps = _learn_steps_for(act_type, res, list(unit.topics))
                 activities.append(CollegeActivity(
                     activity_id=f"act_{phase_id}_{act_order}",
                     user_id=uid,
@@ -655,6 +815,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                     pyq_question_id=pyq.question_id if pyq else None,
                     order=act_order,
                     instructions=ga.get("instructions", "Follow the study plan."),
+                    learn_steps=steps,
                     estimated_minutes=ga.get("minutes", 30),
                     status=status,
                 ))
@@ -685,6 +846,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 resource_id=video_res.resource_id,
                 order=act_order,
                 instructions=f"Engage with {video_res.title} from {video_res.provider}.{ts_text}",
+                learn_steps=_learn_steps_for("WATCH", video_res, list(unit.topics)),
                 estimated_minutes=video_res.estimated_minutes,
                 status=status,
             ))
@@ -707,6 +869,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 resource_id=doc_res.resource_id,
                 order=act_order,
                 instructions=f"Review official notes from {doc_res.provider}.{pg_text}",
+                learn_steps=_learn_steps_for("READ", doc_res, list(unit.topics)),
                 estimated_minutes=doc_res.estimated_minutes,
                 status=status,
             ))
@@ -721,6 +884,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
             title=f"Solve Practice Problems: {unit.topics[0] if unit.topics else unit.title}",
             order=act_order,
             instructions=f"Derive and solve foundational numericals and concept problems for {', '.join(unit.topics[:3])}.",
+            learn_steps=_learn_steps_for("PRACTICE", None, list(unit.topics)),
             estimated_minutes=30,
             status=status,
         ))
@@ -739,6 +903,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                 pyq_question_id=target_pyq.question_id,
                 order=act_order,
                 instructions=f"Solve authentic university past question ({target_pyq.marks} marks): {target_pyq.question_text}",
+                learn_steps=_learn_steps_for("SOLVE_PYQ", None, list(unit.topics)),
                 estimated_minutes=25,
                 status=status,
             ))
@@ -748,10 +913,183 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
     # Progression
     # ------------------------------------------------------------------
 
+    async def _decorate_plan(
+        self, plan: CollegeLearningPlan,
+    ) -> CollegeLearningPlan:
+        """Attach verified resources + learn steps to a loaded plan.
+
+        Activities persist only `resource_id` (the resource object is a
+        transient API field), so a plan read back from the store arrives
+        link-less unless rehydrated here. This pass:
+          1. re-attaches the exact resource each activity references,
+          2. attaches the best cached VERIFIED resource to WATCH/READ
+             activities that have none (topic-matched to the phase first) —
+             this is how resources researched on demand (dashboard
+             auto-enrich / Personalize) reach already-generated plans,
+          3. fills `learn_steps` (the how-to-learn method) where missing.
+        Guarded: a decoration failure must never break a plan read.
+        """
+        try:
+            subjects: List[str] = []
+            for phase in plan.phases:
+                sid = _subject_id_from_phase_id(phase.phase_id, plan.plan_id)
+                if sid and sid not in subjects:
+                    subjects.append(sid)
+            resources_by_subject: Dict[str, List[ResourceRecord]] = {}
+            for sid in subjects:
+                try:
+                    resources_by_subject[sid] = (
+                        await get_resources_for_subject(sid))
+                except Exception:
+                    resources_by_subject[sid] = []
+            by_id = {
+                r.resource_id: r
+                for records in resources_by_subject.values()
+                for r in records
+            }
+            # Referenced ids outside the phase subjects' caches (stale or
+            # cross-subject links): one batch fetch, best-effort.
+            missing_ids = list(dict.fromkeys(
+                act.resource_id
+                for phase in plan.phases for act in phase.activities
+                if act.resource_id and act.resource_id not in by_id))
+            if missing_ids:
+                try:
+                    from backend.providers.curriculum_registry import (
+                        get_supabase_adapter,
+                    )
+                    adapter = get_supabase_adapter()
+                    if adapter and adapter.client:
+                        res = (
+                            adapter.client.table("learning_resources")
+                            .select("*")
+                            .in_("resource_id", missing_ids)
+                            .execute()
+                        )
+                        for row in (res.data or []):
+                            try:
+                                rec = ResourceRecord(**row)
+                                by_id[rec.resource_id] = rec
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+
+            for phase in plan.phases:
+                sid = _subject_id_from_phase_id(phase.phase_id, plan.plan_id)
+                cached = resources_by_subject.get(sid or "", [])
+                for act in phase.activities:
+                    if act.resource is None and act.resource_id:
+                        act.resource = by_id.get(act.resource_id)
+                    if act.resource is None and sid:
+                        act_type = act.activity_type.value
+                        if act_type == "WATCH":
+                            candidates = [
+                                r for r in cached
+                                if r.resource_type == "VIDEO"]
+                        elif act_type == "READ":
+                            docs = [
+                                r for r in cached
+                                if r.resource_type in ("NOTES", "DOCUMENT")]
+                            candidates = docs or [
+                                r for r in cached
+                                if r.resource_type != "VIDEO"]
+                        else:
+                            candidates = []
+                        if candidates:
+                            best = max(
+                                candidates,
+                                key=lambda r: (
+                                    _resource_match_score(r, phase.title),
+                                    r.resource_id,
+                                ),
+                            )
+                            act.resource = best
+                            # Persisted on the next phase save, so the link
+                            # sticks instead of being re-derived every read.
+                            act.resource_id = best.resource_id
+                    if not act.learn_steps:
+                        act.learn_steps = _learn_steps_for(
+                            act.activity_type.value, act.resource)
+
+                # Heal resourceless builds: a phase generated while the
+                # resource cache was empty may have no WATCH/READ slots at
+                # all (the deterministic builder only creates them when
+                # material exists). Now that verified material is cached,
+                # synthesize the slots generation would have produced.
+                # Deterministic ids — a later phase save persists them as
+                # ordinary activities.
+                if sid and cached and phase.status in ("AVAILABLE",
+                                                       "IN_PROGRESS"):
+                    present = {a.activity_type.value
+                               for a in phase.activities}
+                    unit_title = (phase.title.split(": ", 1)[1]
+                                  if ": " in phase.title else phase.title)
+                    synthesized: List[CollegeActivity] = []
+                    videos = [r for r in cached
+                              if r.resource_type == "VIDEO"]
+                    docs = [r for r in cached
+                            if r.resource_type in ("NOTES", "DOCUMENT")]
+                    if videos and "WATCH" not in present:
+                        best = max(
+                            videos,
+                            key=lambda r: (
+                                _resource_match_score(r, phase.title),
+                                r.resource_id))
+                        synthesized.append(CollegeActivity(
+                            activity_id=f"act_{phase.phase_id}_auto_watch",
+                            user_id=plan.user_id,
+                            plan_id=plan.plan_id,
+                            phase_id=phase.phase_id,
+                            activity_type=ActivityType.WATCH,
+                            title=f"Watch Lecture: {unit_title}",
+                            resource=best,
+                            resource_id=best.resource_id,
+                            order=1,
+                            instructions=(
+                                f"Engage with {best.title} "
+                                f"from {best.provider}."),
+                            learn_steps=_learn_steps_for("WATCH", best, []),
+                            estimated_minutes=best.estimated_minutes,
+                            status="AVAILABLE",
+                        ))
+                    if docs and "READ" not in present:
+                        best = max(
+                            docs,
+                            key=lambda r: (
+                                _resource_match_score(r, phase.title),
+                                r.resource_id))
+                        synthesized.append(CollegeActivity(
+                            activity_id=f"act_{phase.phase_id}_auto_read",
+                            user_id=plan.user_id,
+                            plan_id=plan.plan_id,
+                            phase_id=phase.phase_id,
+                            activity_type=ActivityType.READ,
+                            title=f"Read Verified Notes: {unit_title}",
+                            resource=best,
+                            resource_id=best.resource_id,
+                            order=2,
+                            instructions=(
+                                f"Review official notes "
+                                f"from {best.provider}."),
+                            learn_steps=_learn_steps_for("READ", best, []),
+                            estimated_minutes=best.estimated_minutes,
+                            status="AVAILABLE",
+                        ))
+                    if synthesized:
+                        phase.activities = (
+                            synthesized + list(phase.activities))
+        except Exception as exc:
+            log_event("college.plan.decorate_failed", user_id=plan.user_id,
+                      outcome="error", error_code=type(exc).__name__)
+        return plan
+
     async def get_current_plan(self, uid: str) -> Optional[CollegeLearningPlan]:
         raw = await self.store.get_college_learning_plan(uid)
         if raw:
-            return CollegeLearningPlan(**raw)
+            plan = (raw if isinstance(raw, CollegeLearningPlan)
+                    else CollegeLearningPlan(**raw))
+            return await self._decorate_plan(plan)
         return None
 
     async def complete_activity(
@@ -776,6 +1114,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
             now = datetime.now(timezone.utc).isoformat()
 
             found = False
+            touched_phase = None
             for phase in plan.phases:
                 for act in phase.activities:
                     if act.activity_id == activity_id:
@@ -784,6 +1123,7 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
                         act.completion_evidence = (
                             completion_evidence or {"type": "STUDY_CONFIRMATION"})
                         found = True
+                        touched_phase = phase
                         break
                 if found:
                     if all(a.status == "COMPLETED" for a in phase.activities):
@@ -796,8 +1136,18 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
             if not found:
                 raise ValueError("ACTIVITY_NOT_FOUND")
 
-            await self.store.save_college_learning_plan(
-                uid, plan.model_dump(mode="json"))
+            # Persist ONLY the touched phase. Re-saving the whole plan
+            # hierarchy (plan + subjects + every phase + every activity) on
+            # each "Mark Done" click was the dashboard lag: the phase-scoped
+            # save upserts one phase row and replaces just its activities.
+            # The plan row itself does not change on activity completion.
+            save_phase = getattr(self.store, "save_college_phase", None)
+            if save_phase is not None and touched_phase is not None:
+                await save_phase(
+                    uid, touched_phase.model_dump(mode="json"))
+            else:
+                await self.store.save_college_learning_plan(
+                    uid, plan.model_dump(mode="json"))
             return plan
 
     async def maybe_unlock_next_phase(

@@ -16,9 +16,10 @@ Grading honesty rules (TRD §16):
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import asyncio
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -439,6 +440,34 @@ reference answer. Never invent subject ids."""
                 break
         return questions
 
+    # Syllabus lines that are course administration, not knowledge —
+    # probing them ("Explain the core idea of 'Objective of the course'")
+    # produces the repeated, content-free questions learners complained
+    # about. A topic that merely announces the course is never probe
+    # material for the grounded fallback.
+    _META_TOPIC_RE = re.compile(
+        r"(objective|scope|outcome|introduction|overview|"
+        r"course\s+(content|structure|description)|about\s+the\s+course|"
+        r"text\s*books?|reference\s+books?|syllabus)",
+        re.IGNORECASE,
+    )
+
+    # Rotating probe framings for the grounded fallback: the same template
+    # repeated six times reads as one question asked six times.
+    _FALLBACK_PROBE_TEMPLATES = (
+        ("Explain the core idea of '{topic}' ({subject}) in your own "
+         "words, and give one example of where it is used.", "concept"),
+        ("Describe a real situation where '{topic}' ({subject}) is "
+         "applied. What problem does it solve there, and why does it "
+         "work?", "application"),
+        ("What is the most common misunderstanding students have about "
+         "'{topic}' ({subject})? State the wrong idea, then the correct "
+         "one.", "misconception"),
+        ("What foundational ideas must be solid before '{topic}' "
+         "({subject}) makes sense? Pick one and explain it briefly.",
+         "prerequisite"),
+    )
+
     @staticmethod
     def _fallback_diagnostic_questions(retrieval):
         """
@@ -470,30 +499,58 @@ reference answer. Never invent subject ids."""
             ))
 
         if len(questions) < 5:
+            mastered = {
+                str(m.get("topic") or "").strip().lower()
+                for m in (retrieval.known_masteries or [])
+                if str(m.get("outcome") or "").upper().startswith("MASTER")
+            }
+            used = {str(q.topic or "").strip().lower() for q in questions}
+            # Per-subject probe candidates: real knowledge topics only,
+            # deduped, never re-probing demonstrated mastery.
+            per_subject: List[List[Tuple[str, Any]]] = []
             for sub in retrieval.curriculum_subjects:
+                topics: List[Tuple[str, Any]] = []
+                seen_local = set()
                 for unit in sub.get("units", []):
-                    for topic in (unit.get("topics") or [])[:2]:
-                        if any(q.topic == topic for q in questions):
+                    for topic in (unit.get("topics") or []):
+                        label = str(topic).strip()
+                        key = label.lower()
+                        if (len(label) < 3 or key in seen_local
+                                or key in used or key in mastered
+                                or CollegeAssessmentService._META_TOPIC_RE.search(label)):
                             continue
-                        questions.append(CollegeAssessmentQuestion(
-                            question_id=(
-                                f"dq_curr_{sub['subject_id']}_"
-                                f"{unit.get('unit')}_{len(questions)}"),
-                            question_text=(
-                                f"Explain the core idea of '{topic}' "
-                                f"({sub.get('name', sub['subject_id'])}) "
-                                "and give one example of where it is used."),
-                            question_type="SHORT_ANSWER",
-                            topic=topic,
-                            marks=5,
-                            probe="concept",
-                            source="verified_curriculum",
-                        ))
-                        if len(questions) >= 6:
-                            break
+                        seen_local.add(key)
+                        topics.append((label, sub))
+                per_subject.append(topics)
+
+            templates = CollegeAssessmentService._FALLBACK_PROBE_TEMPLATES
+            probe_no = 0
+            # Round-robin across subjects so one subject's first unit can
+            # never dominate the diagnostic; rotate the probe framing.
+            while len(questions) < 6:
+                progressed = False
+                for topics in per_subject:
                     if len(questions) >= 6:
                         break
-                if len(questions) >= 6:
+                    if not topics:
+                        continue
+                    label, sub = topics.pop(0)
+                    text, probe = templates[probe_no % len(templates)]
+                    probe_no += 1
+                    questions.append(CollegeAssessmentQuestion(
+                        question_id=(
+                            f"dq_curr_{sub['subject_id']}_{len(questions)}"),
+                        question_text=text.format(
+                            topic=label,
+                            subject=sub.get("name", sub["subject_id"])),
+                        question_type="SHORT_ANSWER",
+                        topic=label,
+                        marks=5,
+                        probe=probe,
+                        source="verified_curriculum",
+                    ))
+                    progressed = True
+                if not progressed:
                     break
         return questions[:6]
 

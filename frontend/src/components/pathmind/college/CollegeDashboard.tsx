@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import apiClient from "@/lib/api/client";
@@ -39,6 +39,14 @@ function masteryBadge(status?: string): string {
     default:
       return "bg-gray-500 text-white";
   }
+}
+
+// phase_id format: phase_{plan_id}_{subject_id}_s{semester}_u{unit}
+function subjectIdFromPhaseId(phaseId: string, planId: string): string | null {
+  const m = /^phase_(.*)_s\d+_u\d+$/.exec(phaseId || "");
+  if (!m) return null;
+  const prefix = `${planId}_`;
+  return m[1].startsWith(prefix) ? m[1].slice(prefix.length) || null : null;
 }
 
 /* ---------- resource card with provenance ---------- */
@@ -230,6 +238,13 @@ export function CollegeDashboard() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [actionError, setActionError] = useState<string | null>(null);
   const [enrichingPhaseId, setEnrichingPhaseId] = useState<string | null>(null);
+  // Activity ids with a Mark-Done request in flight (optimistic UI lock).
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set());
+  // Phase currently being researched for verified resources on load.
+  const [resourceHuntPhaseId, setResourceHuntPhaseId] = useState<string | null>(null);
+  // Phases we already tried to research this session — one hunt per phase,
+  // never a loop (the research result is cached server-side for everyone).
+  const attemptedResourcePhases = useRef<Set<string>>(new Set());
   const [memories, setMemories] = useState<any>({ short_term: [], long_term: [], learning_signals: [] });
 
   // Mentor Chat State
@@ -423,6 +438,9 @@ export function CollegeDashboard() {
       });
       if (subjectId) params.set("subject_id", subjectId);
       if (subj?.name) params.set("subject_name", subj.name);
+      // University paper archives are filed by subject CODE (e.g. 7CS4-01);
+      // without it the search only ever tries the subject name.
+      if (subj?.code) params.set("subject_code", subj.code);
       const res = await apiClient.get<any>(`/api/college/pyq/search?${params.toString()}`);
       if (res.ok) {
         setPyqData(res.data);
@@ -455,19 +473,46 @@ export function CollegeDashboard() {
 
   const handleCompleteActivity = async (activityId: string) => {
     setActionError(null);
+    if (completingIds.has(activityId)) return;
+    // Optimistic flip: the old flow re-saved the whole plan server-side and
+    // then refetched everything, which made every click feel stuck. Flip
+    // locally at once; the server now persists just the touched phase and
+    // returns the authoritative plan.
+    setCompletingIds((prev) => new Set(prev).add(activityId));
+    setLearningPlan((prev: any) => {
+      if (!prev?.phases) return prev;
+      return {
+        ...prev,
+        phases: prev.phases.map((p: any) => ({
+          ...p,
+          activities: (p.activities || []).map((a: any) =>
+            a.activity_id === activityId
+              ? { ...a, status: "COMPLETED", completed_at: new Date().toISOString() }
+              : a
+          ),
+        })),
+      };
+    });
     try {
       const res = await apiClient.post<any>(`/api/college/activities/${activityId}/complete`, {
         evidence: { self_reported_focus: 5 },
       });
       if (res.ok) {
         setLearningPlan(res.data);
-        loadSchedule();
         setToast("Activity marked complete. Demonstrate mastery in the checkpoint to unlock the next phase.");
       } else {
         setActionError(res.error || "Could not mark the activity complete.");
+        loadCurrentPlan(); // reconcile with server truth after a failed save
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Could not mark the activity complete.");
+      loadCurrentPlan();
+    } finally {
+      setCompletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(activityId);
+        return next;
+      });
     }
   };
 
@@ -531,6 +576,47 @@ export function CollegeDashboard() {
       setEnrichingPhaseId(null);
     }
   };
+
+  // One-shot resource research on load: if the phase the learner is on has
+  // WATCH/READ activities with no verified resource attached, run the live
+  // research pipeline once for that (subject, unit). Results are cached
+  // server-side as VERIFIED rows shared by every learner, so this is a
+  // once-per-topic cost; the plan reload then links them via attach-on-read.
+  useEffect(() => {
+    if (!learningPlan?.phases || resourceHuntPhaseId) return;
+    const phase = learningPlan.phases.find((p: any) => {
+      if (p.status === "LOCKED" || p.status === "COMPLETED") return false;
+      return (p.activities || []).some(
+        (a: any) =>
+          (a.activity_type === "WATCH" || a.activity_type === "READ") && !a.resource
+      );
+    });
+    if (!phase) return;
+    if (attemptedResourcePhases.current.has(phase.phase_id)) return;
+    const subjectId = subjectIdFromPhaseId(phase.phase_id, learningPlan.plan_id);
+    if (!subjectId) return;
+    attemptedResourcePhases.current.add(phase.phase_id);
+    setResourceHuntPhaseId(phase.phase_id);
+    const subj = pyqSubjects.find((s: any) => s.subject_id === subjectId);
+    const topic = String(phase.title || "").replace(/^[^:]+:\s*/, "");
+    (async () => {
+      try {
+        await apiClient.post<any>("/api/college/resources/enrich", {
+          subject_id: subjectId,
+          topic,
+          subject_name: subj?.name,
+          time_budget_seconds: 30,
+        });
+      } catch {
+        /* Research failure stays silent here: activities keep their
+           how-to-learn steps and the Personalize button can retry. */
+      } finally {
+        setResourceHuntPhaseId(null);
+        loadCurrentPlan();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learningPlan, pyqSubjects]);
 
   const handleSubmitAssessment = async () => {
     if (!activeAssessment) return;
@@ -875,6 +961,12 @@ export function CollegeDashboard() {
                           <h3 className="font-bold text-lg text-[#252321]">{phase.title}</h3>
                         </div>
                         <p className="text-xs text-[#68635e] mt-0.5">{phase.objective}</p>
+                        {resourceHuntPhaseId === phase.phase_id && (
+                          <p className="text-[11px] text-[#4a654e] mt-1.5 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm animate-pulse">travel_explore</span>
+                            Finding verified videos &amp; notes for this phase…
+                          </p>
+                        )}
                         {isLocked && (
                           <p className="text-[11px] text-[#68635e] mt-1.5 flex items-center gap-1">
                             <span className="material-symbols-outlined text-sm">lock</span>
@@ -952,6 +1044,22 @@ export function CollegeDashboard() {
                                 {/* Verified resource with provenance */}
                                 <ResourceCard resource={act.resource} />
 
+                                {/* How to learn this — the method, not just the material */}
+                                {Array.isArray(act.learn_steps) && act.learn_steps.length > 0 && (
+                                  <div className="pt-1.5">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#68635e] mb-1">
+                                      How to learn this
+                                    </p>
+                                    <ol className="list-decimal list-inside space-y-0.5">
+                                      {act.learn_steps.map((s: string, i: number) => (
+                                        <li key={i} className="text-[11px] text-[#423e3b] leading-relaxed">
+                                          {s}
+                                        </li>
+                                      ))}
+                                    </ol>
+                                  </div>
+                                )}
+
                                 {/* PYQ Reference */}
                                 {act.pyq_question && (
                                   <div className="text-xs text-[#a65959] font-medium pt-1">
@@ -966,13 +1074,18 @@ export function CollegeDashboard() {
                                 {!isLocked && !isDone && (
                                   <button
                                     onClick={() => handleCompleteActivity(act.activity_id)}
-                                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
+                                    disabled={completingIds.has(act.activity_id)}
+                                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all cursor-pointer disabled:opacity-60 ${
                                       actDone
                                         ? "bg-green-600 text-white"
                                         : "bg-white border border-[#252321] hover:bg-[#252321] hover:text-white"
                                     }`}
                                   >
-                                    {actDone ? "✓ Completed" : "Mark Done"}
+                                    {completingIds.has(act.activity_id)
+                                      ? "Saving…"
+                                      : actDone
+                                        ? "✓ Completed"
+                                        : "Mark Done"}
                                   </button>
                                 )}
                               </div>
