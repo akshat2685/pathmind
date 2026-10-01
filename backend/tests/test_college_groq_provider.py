@@ -67,7 +67,7 @@ def no_groq_key(monkeypatch):
 
 def test_purpose_routing_uses_separate_groq_pools():
     assert model_id_for_purpose("mentor") == "openai/gpt-oss-120b"
-    assert model_id_for_purpose("generation") == "llama-3.3-70b-versatile"
+    assert model_id_for_purpose("generation") == "openai/gpt-oss-20b"
     assert model_id_for_purpose("direct") == "openai/gpt-oss-20b"
     assert model_id_for_purpose("light") == "llama-3.1-8b-instant"
     # Unknown purposes fall back to the direct pool, never crash.
@@ -191,6 +191,93 @@ def test_translate_request_shape():
     assert params["type"] == "object"
     assert params["properties"]["topic"]["type"] == "string"
     assert tools[0]["function"]["name"] == "create_assessment"
+
+
+def test_translate_request_json_schema_flavor():
+    """ADK 2.x emits ``parameters_json_schema`` (pydantic flavor), NOT
+    ``parameters``. A translator that reads only the classic field
+    ships every tool with NO argument schema — the model can see the
+    tools but can never call them with arguments. (This is the bug
+    that disabled the mentor's whole tool layer in production.)"""
+    fd = genai_types.FunctionDeclaration(
+        name="create_accountability_commitment",
+        description="Create a study commitment",
+        parameters_json_schema={
+            "type": "object",
+            "title": "create_accountability_commitmentParams",
+            "properties": {
+                "title": {"type": "string", "title": "Title"},
+                "topic": {"anyOf": [{"type": "string"},
+                                    {"type": "null"}],
+                          "default": None, "title": "Topic"},
+                "estimated_minutes": {"type": "integer", "default": 60,
+                                      "title": "Estimated Minutes"},
+            },
+            "required": ["title"],
+        })
+    config = genai_types.GenerateContentConfig(
+        tools=[genai_types.Tool(function_declarations=[fd])])
+    request = LlmRequest(model="openai/gpt-oss-120b", contents=[],
+                         config=config)
+    _, tools, _ = translate_request(request)
+    params = tools[0]["function"]["parameters"]
+    assert params["type"] == "object"
+    assert params["properties"]["title"] == {"type": "string"}
+    # Optional[X] collapses to X: no anyOf, no null branch, no titles.
+    assert params["properties"]["topic"] == {"type": "string"}
+    assert params["properties"]["estimated_minutes"] == {"type": "integer"}
+    assert params["required"] == ["title"]
+
+
+def test_translate_request_argless_tool_gets_empty_schema():
+    fd = genai_types.FunctionDeclaration(
+        name="get_learner_profile", description="Profile")
+    config = genai_types.GenerateContentConfig(
+        tools=[genai_types.Tool(function_declarations=[fd])])
+    request = LlmRequest(model="openai/gpt-oss-120b", contents=[],
+                         config=config)
+    _, tools, _ = translate_request(request)
+    assert tools[0]["function"]["parameters"] == {
+        "type": "object", "properties": {}}
+
+
+def test_real_toolkit_declarations_carry_schemas():
+    """Regression test for the live mentor failure: declarations from
+    the REAL ADK toolkit (the exact objects production builds) must
+    reach the provider WITH argument schemas — above all
+    create_accountability_commitment (the mentor's write path) and
+    transfer_to_agent (the root's only route to any sub-agent)."""
+    from google.adk.tools.transfer_to_agent_tool import (
+        TransferToAgentTool)
+
+    kit = CollegeToolKit(college_store)
+    agents = build_agents(kit)
+    declarations = {}
+    for agent in agents.values():
+        for tool in (agent.tools or []):
+            decl = tool._get_declaration()
+            declarations[decl.name] = decl
+    declarations["transfer_to_agent"] = TransferToAgentTool(
+        agent_names=["accountability"])._get_declaration()
+    assert "create_accountability_commitment" in declarations
+
+    fds = [declarations["create_accountability_commitment"],
+           declarations["transfer_to_agent"]]
+    config = genai_types.GenerateContentConfig(
+        tools=[genai_types.Tool(function_declarations=fds)])
+    request = LlmRequest(model="openai/gpt-oss-120b", contents=[],
+                         config=config)
+    _, tools, _ = translate_request(request)
+    by_name = {t["function"]["name"]: t["function"] for t in tools}
+    commitment = by_name["create_accountability_commitment"]
+    props = commitment["parameters"]["properties"]
+    assert props["title"]["type"] == "string"
+    assert props["due_at"]["type"] == "string"
+    assert "title" in commitment["parameters"]["required"]
+    assert "due_at" in commitment["parameters"]["required"]
+    transfer = by_name["transfer_to_agent"]
+    assert transfer["parameters"]["properties"][
+        "agent_name"]["type"] == "string"
 
 
 def test_translate_response_text_and_tool_calls():

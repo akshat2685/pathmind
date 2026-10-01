@@ -740,7 +740,7 @@ Return ONLY a valid JSON array of exactly 3 questions in this format:
 }}]
 Make the first two MCQs and the last one SHORT_ANSWER.
 """
-            response = generate_fast(model, prompt, 1536)
+            response = generate_fast(model, prompt, 3072)
             text = response.text.strip()
             if text.startswith("```json"):
                 text = text[7:]

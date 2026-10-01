@@ -1079,7 +1079,11 @@ for SOLVE_PYQ, a timed exam-condition attempt, honest self-scoring, and an
 error log (concept / formula / calculation / time).
 Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_PYQ).
 """
-            response = generate_fast(model, prompt, 1536)
+            # 4096, not the old 1536: gpt-oss is a reasoning model and
+            # its reasoning shares the completion budget — at 1536 the
+            # activities JSON was truncated mid-string live
+            # (JSONDecodeError "Unterminated string" at char ~1495).
+            response = generate_fast(model, prompt, 4096)
             text = response.text.strip()
             if text.startswith("```json"):
                 text = text[7:]
