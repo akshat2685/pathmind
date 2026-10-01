@@ -33,16 +33,51 @@ from backend.core.llm import groq_chat
 
 def _normalize_schema(node: Any) -> Any:
     """
-    Convert a genai FunctionDeclaration JSON dict into an OpenAI-style
-    JSON schema: genai emits proto enum type strings ("OBJECT",
-    "STRING"); Groq/OpenAI expect lowercase ("object", "string").
+    Convert a FunctionDeclaration schema dict into the JSON-schema
+    subset Groq/OpenAI function calling accepts. Two source flavors
+    reach here:
+
+    - genai's classic ``parameters``: proto enum type strings
+      ("OBJECT", "STRING") that must be lowercased.
+    - ADK 2.x's ``parameters_json_schema``: a pydantic-flavored JSON
+      schema where Optional[X] is ``anyOf: [X, {"type": "null"}]``
+      (OpenAI-style endpoints reject the null branch) and every node
+      carries a cosmetic ``title``.
+
+    So: lowercase type strings, collapse an anyOf/oneOf whose branches
+    are exactly [X, null] down to X, and strip ``title`` keys.
     Everything else (properties, required, enum, description) passes
     through recursively.
     """
     if isinstance(node, dict):
+        for combiner in ("anyOf", "oneOf"):
+            branches = node.get(combiner)
+            if isinstance(branches, list) and len(branches) == 2:
+                nulls = [b for b in branches
+                         if isinstance(b, dict)
+                         and str(b.get("type", "")).lower() == "null"]
+                others = [b for b in branches if b not in nulls]
+                if len(nulls) == 1 and len(others) == 1:
+                    merged = dict(others[0]) if isinstance(
+                        others[0], dict) else {}
+                    for key, value in node.items():
+                        if key in (combiner, "title", "default"):
+                            continue
+                        merged.setdefault(key, value)
+                    return _normalize_schema(merged)
         out: Dict[str, Any] = {}
         for key, value in node.items():
-            if key == "type" and isinstance(value, str):
+            if key in ("title", "default"):
+                # Annotations, not constraints — some strict
+                # function-calling validators reject them.
+                continue
+            if key == "properties" and isinstance(value, dict):
+                # Keys here are property NAMES, not schema keys — a
+                # parameter can literally be named "title" (the
+                # commitment tool's) and must survive.
+                out[key] = {name: _normalize_schema(schema)
+                            for name, schema in value.items()}
+            elif key == "type" and isinstance(value, str):
                 out[key] = value.lower()
             else:
                 out[key] = _normalize_schema(value)
@@ -143,8 +178,22 @@ def translate_request(llm_request: LlmRequest):
             function: Dict[str, Any] = {"name": raw.get("name", "")}
             if raw.get("description"):
                 function["description"] = raw["description"]
-            if raw.get("parameters"):
-                function["parameters"] = _normalize_schema(raw["parameters"])
+            # ADK 2.x emits the parameter schema as
+            # ``parameters_json_schema`` (pydantic flavor); the classic
+            # genai field is ``parameters``. Reading only the classic
+            # field silently shipped every tool to the provider with
+            # NO argument schema — the model could see the tools but
+            # could never call them with arguments (transfer_to_agent
+            # included), which is exactly how the mentor lost its tool
+            # layer live. Genuinely arg-less tools get an explicit
+            # empty object schema, which strict providers require.
+            schema = raw.get("parameters") or raw.get(
+                "parameters_json_schema")
+            if schema:
+                function["parameters"] = _normalize_schema(schema)
+            else:
+                function["parameters"] = {
+                    "type": "object", "properties": {}}
             tools.append({"type": "function", "function": function})
 
     max_tokens = getattr(config, "max_output_tokens", None)

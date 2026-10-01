@@ -21,7 +21,12 @@ class Settings(BaseSettings):
     # ADK mentor hierarchy (many tool-calling turns per conversation).
     GROQ_MODEL_MENTOR: str = Field(default="openai/gpt-oss-120b", validation_alias="GROQ_MODEL_MENTOR")
     # ADK one-shot authoring twins (diagnostic + plan generation).
-    GROQ_MODEL_GENERATION: str = Field(default="llama-3.3-70b-versatile", validation_alias="GROQ_MODEL_GENERATION")
+    # gpt-oss-20b, NOT llama-3.3-70b-versatile: live A/B on 2026-10-01
+    # showed the llama pool silently failing every ADK generation run
+    # (both twins fell back) while gpt-oss-20b authored end-to-end
+    # (provenance adk:assessment_agent / adk:plan_agent). Same model
+    # as the direct pool — one authoring pool, honestly shared.
+    GROQ_MODEL_GENERATION: str = Field(default="openai/gpt-oss-20b", validation_alias="GROQ_MODEL_GENERATION")
     # Direct one-shot legs (phase assessments, plan enrich, fallbacks).
     GROQ_MODEL_DIRECT: str = Field(default="openai/gpt-oss-20b", validation_alias="GROQ_MODEL_DIRECT")
     # Light work (short-answer grading).
