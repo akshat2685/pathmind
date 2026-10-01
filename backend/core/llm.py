@@ -108,6 +108,7 @@ def groq_chat(model_id: str,
               max_tokens: Optional[int] = None,
               temperature: float = 0.3,
               tools: Optional[List[Dict[str, Any]]] = None,
+              reasoning_effort: Optional[str] = None,
               timeout: float = 30.0) -> Dict[str, Any]:
     """
     One bounded Groq chat-completions call. Single attempt, `timeout`
@@ -131,6 +132,14 @@ def groq_chat(model_id: str,
         payload["max_tokens"] = int(max_tokens)
     if tools:
         payload["tools"] = tools
+    # gpt-oss models are reasoning models: their reasoning shares the
+    # completion budget, and at the default effort it starved large
+    # structured outputs (the phase-activities JSON was truncated
+    # mid-string live even under a 4096 cap). Structured one-shot
+    # callers pass "low" — enough reasoning to follow the schema, far
+    # less budget burned before the actual content.
+    if reasoning_effort and model_id.startswith("openai/gpt-oss"):
+        payload["reasoning_effort"] = reasoning_effort
     try:
         with httpx.Client(timeout=timeout) as client:
             resp = client.post(
@@ -228,6 +237,7 @@ class _GroqModelWrapper:
             [{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=0.3,
+            reasoning_effort="low",
         )
         text = ""
         try:
