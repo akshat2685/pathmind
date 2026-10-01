@@ -280,7 +280,7 @@ class CollegeLearningService:
             # Collect phase specs first (order preserved), then build
             # activities concurrently. Phase/activity assembly is
             # STATIC-FIRST: no LLM call happens while phases are being
-            # assembled, for any scope — a single Gemini call costs
+            # assembled, for any scope — a single LLM call costs
             # ~30s+ (and the AI endpoint is intermittently unreachable
             # from the serverless runtime), so per-phase LLM enrichment
             # put every plan one slow call away from the ~60s serverless
@@ -913,11 +913,16 @@ class CollegeLearningService:
         return canonical_goal_id
 
     @staticmethod
-    def _get_gemini_model():
-        # Centralized in backend.core.gemini (settings.GEMINI_MODEL) so a
-        # model retirement is an env change, not a code deploy.
+    def _get_gemini_model(purpose: str = "direct"):
+        # Centralized in backend.core.llm (settings.GROQ_MODEL_*) so a
+        # model retirement is an env change, not a code deploy. The
+        # name is legacy — the provider is Groq. TypeError fallback
+        # keeps no-arg test doubles working unchanged.
         from backend.core.gemini import get_gemini_model as _shared
-        return _shared()
+        try:
+            return _shared(purpose)
+        except TypeError:
+            return _shared()
 
     # ------------------------------------------------------------------
     # Activities

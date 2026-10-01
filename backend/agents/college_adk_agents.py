@@ -24,20 +24,30 @@ except ImportError:  # pragma: no cover - envs without a working google.adk
 from backend.agents.college_adk_tools import CollegeToolKit
 from backend.core.config import settings
 
-_MODEL = settings.GEMINI_MODEL
+
+def _agent_model(model_id: str):
+    """
+    Build the ADK model for a Groq model id. The college MVP's only
+    provider is Groq (AJ's call, 2026-10-01), reached through our own
+    BaseLlm adapter — see backend.agents.college_groq_llm for why we
+    don't take the LiteLLM dependency. Constructed per agent so no
+    instance is shared across the hierarchy.
+    """
+    from backend.agents.college_groq_llm import GroqLlm
+    return GroqLlm(model=model_id)
 
 
 def _fast_agent_config(max_output_tokens: int = 2048):
     """
     Bounded generation config shared by every college agent (see
-    backend.core.gemini.fast_generation_config): thinking off, output
-    capped. Default-config generations measured ~30s+ live on
-    2026-10-01, which starved chained flows inside the 60s serverless
-    window. Returns None when the config cannot be built — agents then
-    run with SDK defaults, exactly as before.
+    backend.core.llm.fast_generation_config): output capped so one
+    generation cannot starve chained flows inside the 60s serverless
+    window. (The thinking-off field is a Gemini-era knob; the Groq
+    adapter simply reads the cap.) Returns None when the config cannot
+    be built — agents then run with SDK defaults, exactly as before.
     """
     try:
-        from backend.core.gemini import fast_generation_config
+        from backend.core.llm import fast_generation_config
         return fast_generation_config(max_output_tokens)
     except Exception:
         return None
@@ -104,10 +114,15 @@ HONESTY RULES (non-negotiable):
 """
 
 
-def _gemini_available() -> bool:
+def _llm_available() -> bool:
+    """True when ADK is importable and a Groq key is configured."""
     return _ADK_IMPORT_OK and bool(
-        settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
-        or os.environ.get("GOOGLE_API_KEY"))
+        settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY"))
+
+
+# Legacy name (the provider was Gemini until 2026-10-01); the runtime
+# and older imports bind to it.
+_gemini_available = _llm_available
 
 
 def build_agents(toolkit: CollegeToolKit,
@@ -126,7 +141,7 @@ def build_agents(toolkit: CollegeToolKit,
     agent_config = _fast_agent_config()
     academic = LlmAgent(
         name="academic_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=(
             "You are the Academic sub-agent for a college engineering mentor. "
@@ -145,7 +160,7 @@ def build_agents(toolkit: CollegeToolKit,
 
     plan = LlmAgent(
         name="plan_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=PLAN_AGENT_INSTRUCTION,
         tools=toolkit.as_function_tools([
@@ -157,7 +172,7 @@ def build_agents(toolkit: CollegeToolKit,
 
     assessment = LlmAgent(
         name="assessment_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=ASSESSMENT_AGENT_INSTRUCTION,
         tools=toolkit.as_function_tools([
@@ -168,7 +183,7 @@ def build_agents(toolkit: CollegeToolKit,
 
     accountability = LlmAgent(
         name="accountability_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=(
             "You are the Accountability sub-agent. Create commitments with "
@@ -185,7 +200,7 @@ def build_agents(toolkit: CollegeToolKit,
 
     memory = LlmAgent(
         name="memory_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=(
             "You are the Memory sub-agent. Maintain the learner model: read "
@@ -204,7 +219,7 @@ def build_agents(toolkit: CollegeToolKit,
 
     pyq = LlmAgent(
         name="pyq_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=(
             "You are the PYQ sub-agent. Retrieve verified previous-year "
@@ -243,7 +258,7 @@ def build_agents(toolkit: CollegeToolKit,
 
     root = LlmAgent(
         name="college_root_agent",
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_MENTOR),
         generate_content_config=agent_config,
         instruction=root_instruction,
         sub_agents=subagents,
@@ -292,7 +307,7 @@ def build_generation_agent(agent_key: str) -> LlmAgent:
     caps = {"assessment": 4096, "plan": 3072}
     return LlmAgent(
         name=name,
-        model=_MODEL,
+        model=_agent_model(settings.GROQ_MODEL_GENERATION),
         instruction=instruction,
         generate_content_config=_fast_agent_config(
             caps.get(agent_key, 2048)),
@@ -301,5 +316,5 @@ def build_generation_agent(agent_key: str) -> LlmAgent:
 
 
 __all__ = ["build_agents", "build_generation_agent", "CollegeToolKit",
-           "_gemini_available", "PLAN_AGENT_INSTRUCTION",
+           "_gemini_available", "_llm_available", "PLAN_AGENT_INSTRUCTION",
            "ASSESSMENT_AGENT_INSTRUCTION"]

@@ -300,7 +300,7 @@ def test_diagnostic_direct_leg_used_when_budget_remains(monkeypatch):
     r = client.post("/api/college/assessments/diagnostic", json={},
                     headers=ALICE)
     assert r.status_code == 200, r.text
-    assert r.json()["authored_by"] == "gemini_direct"
+    assert r.json()["authored_by"] == "groq_direct"
     assert len(model.calls) == 1
 
 

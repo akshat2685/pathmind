@@ -58,14 +58,32 @@ class ShortAnswerGrade:
     reasoning: str          # 1-2 sentences: what earned / lost marks
 
 
-def _get_gemini_model():
+def _get_gemini_model(purpose: str = "direct"):
     """
-    Returns a configured Gemini model, or None when unavailable.
-    Delegates to the shared accessor so the model id stays centralized
-    (settings.GEMINI_MODEL). No LLM call ever happens inside college_rules.
+    Returns a configured model wrapper, or None when unavailable.
+    Delegates to the shared accessor (backend.core.llm) so model ids
+    stay centralized per task pool (settings.GROQ_MODEL_*). The
+    function name is legacy — the provider is Groq. The TypeError
+    fallback keeps no-arg test doubles (which patch the shared
+    accessor) working unchanged.
     """
     from backend.core.gemini import get_gemini_model as _shared
-    return _shared()
+    try:
+        return _shared(purpose)
+    except TypeError:
+        return _shared()
+
+
+def _get_light_model():
+    """
+    Grading-pool model (short answers: small outputs, huge free pool).
+    Tolerates no-arg test doubles patched over _get_gemini_model —
+    those predate purpose routing.
+    """
+    try:
+        return _get_gemini_model("light")
+    except TypeError:
+        return _get_gemini_model()
 
 
 #: One-shot ADK generation seam (college_adk_runtime.run_agent_generation).
@@ -196,10 +214,10 @@ class CollegeAssessmentService:
                 model, subject_id, topic_title, topic_tags
             )
             # Provenance (AJ's verifiability rule): checkpoint questions
-            # are Gemini-authored when the model produced them and
+            # are model-authored when the direct Groq call produced them and
             # static otherwise — stamp it like the diagnostic/plan do
             # (this was null in the DB before round 12).
-            authored_by = "gemini_direct"
+            authored_by = "groq_direct"
             if not questions:
                 questions = self._static_fallback_questions(topic_title, topic_tags)
                 authored_by = "static_fallback"
@@ -237,8 +255,8 @@ class CollegeAssessmentService:
           fill any topic the authored set left uncovered -> assessment.
 
         Honest fallback chain, each step labeled in `authored_by`:
-        ADK generation ("adk:assessment_agent") -> direct Gemini call
-        ("gemini_direct") when the ADK seam fails -> the round-6
+        ADK generation ("adk:assessment_agent") -> direct Groq call
+        ("groq_direct") when the ADK seam fails -> the round-6
         grounded assembly of real verified PYQs + curriculum probes
         ("rag_fallback") when no LLM authored anything. Short answers
         without a rubric grade as INSUFFICIENT_EVIDENCE (Unknown),
@@ -301,7 +319,7 @@ class CollegeAssessmentService:
                     questions.append(q)
                     covered.add(key)
                 authored_by = ("adk:assessment_agent" if llm_via == "adk"
-                               else "gemini_direct")
+                               else "groq_direct")
             else:
                 # No LLM authored anything usable: ship the grounded
                 # round-6 assembly, honestly labeled.
@@ -362,7 +380,7 @@ class CollegeAssessmentService:
         serverless window on the free tier).
 
         Returns (questions, via): via is "adk" when the text came back
-        from the ADK generation seam and "gemini_direct" when only the
+        from the ADK generation seam and "groq_direct" when only the
         legacy direct model call produced it — the caller turns that
         into the payload's authored_by, so the label never claims ADK
         when the seam did not actually return text. Output is strictly
@@ -453,7 +471,7 @@ reference answer. Never invent subject ids."""
             response = self._generate_content_or_unavailable(
                 model, prompt, "DIAGNOSTIC", max_output_tokens=4096)
             text = response.text.strip()
-            via = "gemini_direct"
+            via = "groq_direct"
         if text.startswith("```"):
             text = text.strip("`")
             if text.lower().startswith("json"):
@@ -471,7 +489,7 @@ reference answer. Never invent subject ids."""
 
     @staticmethod
     def _validate_generated_questions(gen_qs, retrieval):
-        """Strictly validate Gemini output; drop anything malformed."""
+        """Strictly validate model output; drop anything malformed."""
         allowed_sources = {"verified_curriculum", "verified_pyq",
                            "model_generated"}
         allowed_probes = {"prerequisite", "concept", "application",
@@ -1056,7 +1074,7 @@ Make the first two MCQs and the last one SHORT_ANSWER.
             # Not an exact match: a thoughtful free-text answer must never be
             # auto-scored as zero. Grade it against the reference answer with
             # the LLM; if that fails, flag for human review instead of a 0.
-            model = _get_gemini_model()
+            model = _get_light_model()
             if model is not None:
                 try:
                     grade = await grade_short_answer_with_llm(
@@ -1079,7 +1097,7 @@ Make the first two MCQs and the last one SHORT_ANSWER.
                     "instead of auto-scoring zero.")
 
         if question.rubric:
-            model = _get_gemini_model()
+            model = _get_light_model()
             if model is not None:
                 try:
                     grade = await grade_short_answer_with_llm(
