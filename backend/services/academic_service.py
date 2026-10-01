@@ -10,7 +10,8 @@ from backend.core.college_schemas import (
     SubjectRecord,
     EngineeringBranch,
     AcademicContext,
-    VerificationStatus
+    VerificationStatus,
+    coerce_model
 )
 from backend.providers.curriculum_registry import (
     search_universities,
@@ -100,5 +101,5 @@ class AcademicService:
     async def get_learner_academic_context(self, uid: str) -> Optional[AcademicContext]:
         raw = await self.store.get_college_academic_context(uid)
         if raw:
-            return AcademicContext(**raw)
+            return coerce_model(AcademicContext, raw)
         return None

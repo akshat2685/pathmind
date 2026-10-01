@@ -14,6 +14,7 @@ from backend.core.college_logging import log_event
 from backend.core.gemini import LLMServiceError, classify_llm_error
 from backend.core.college_schemas import (
     AcademicContext,
+    coerce_model,
 )
 from backend.services.academic_service import AcademicService
 from backend.services.college_learning_service import CollegeLearningService
@@ -201,7 +202,7 @@ class CollegeOrchestrator:
         """
         # 1. Fetch learner context & memories
         raw_ctx = await self.store.get_college_academic_context(uid)
-        ctx = AcademicContext(**raw_ctx) if raw_ctx else None
+        ctx = coerce_model(AcademicContext, raw_ctx) if raw_ctx else None
         
         long_mems = await self.memory_service.get_long_term_memories(uid)
         pref_texts = [m.content for m in long_mems if m.memory_type == "LEARNING_PREFERENCE"]

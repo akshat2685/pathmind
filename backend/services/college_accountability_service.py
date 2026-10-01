@@ -12,7 +12,9 @@ from backend.core.college_schemas import (
     CommitmentStatus,
     TodaySchedule,
     AcademicContext,
-    CollegeActivity
+    CollegeActivity,
+    coerce_model,
+    model_as_dict
 )
 from backend.core.college_rules import calculate_streak_days, exam_countdown_days
 from backend.core.college_logging import log_event, timed_stage
@@ -28,13 +30,15 @@ class CollegeAccountabilityService:
         if not raw_ctx:
             return None
         
-        ctx = AcademicContext(**raw_ctx)
+        ctx = coerce_model(AcademicContext, raw_ctx)
         exam_start = ctx.exam_window.get("start")
         if not exam_start:
-            # Check goal deadline as fallback
+            # Check goal deadline as fallback (goal may be a model or a
+            # dict depending on the store — see coerce_model note).
             raw_goal = await self.store.get_college_goal(uid)
-            if raw_goal and raw_goal.get("deadline"):
-                exam_start = raw_goal["deadline"]
+            goal_dict = model_as_dict(raw_goal) or {}
+            if goal_dict.get("deadline"):
+                exam_start = goal_dict["deadline"]
 
         if not exam_start:
             return None
@@ -88,17 +92,21 @@ class CollegeAccountabilityService:
         """Compiles today's actionable study plan, commitments, and exam urgency."""
         countdown = await self.calculate_exam_countdown(uid)
         raw_cmts = await self.store.get_college_commitments(uid)
-        commitments = [AccountabilityCommitment(**c) for c in raw_cmts]
+        commitments = [coerce_model(AccountabilityCommitment, c)
+                       for c in raw_cmts]
 
         # Fetch active learning plan activities
         raw_plan = await self.store.get_college_learning_plan(uid)
         active_activities: List[CollegeActivity] = []
         if raw_plan:
-            for phase in raw_plan.get("phases", []):
+            # Plan may arrive as a model (CollegeStore) or dict
+            # (FirestoreStore) — walk a dict view either way.
+            for phase in (model_as_dict(raw_plan) or {}).get("phases", []):
                 if phase.get("status") in ["AVAILABLE", "IN_PROGRESS"]:
                     for act in phase.get("activities", []):
                         if act.get("status") in ["AVAILABLE", "IN_PROGRESS"]:
-                            active_activities.append(CollegeActivity(**act))
+                            active_activities.append(
+                                coerce_model(CollegeActivity, act))
 
         today = datetime.now(timezone.utc).date()
         today_str = today.isoformat()
@@ -126,8 +134,9 @@ class CollegeAccountabilityService:
         raw_assessments = await self.store.get_all_college_assessments(uid)
         active_assessments = []
         for a in raw_assessments:
-            if a.get("status") == "AVAILABLE":
-                active_assessments.append(CollegeAssessment(**a))
+            if (model_as_dict(a) or {}).get("status") == "AVAILABLE":
+                active_assessments.append(
+                    coerce_model(CollegeAssessment, a))
 
         return TodaySchedule(
             date=today_str,
