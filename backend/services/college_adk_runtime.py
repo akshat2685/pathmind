@@ -13,7 +13,7 @@ Flow per turn:
   6. Persist the assistant message.
 
 Fallbacks (honest, never fake):
-  - No GEMINI_API_KEY → the legacy deterministic orchestrator answers.
+  - No GROQ_API_KEY → the legacy deterministic orchestrator answers.
   - Runner timeout / LLM error / unparsable reply → legacy orchestrator.
 """
 
@@ -55,14 +55,16 @@ def _get_session_service():
 
 def _ensure_llm_key() -> bool:
     """
-    ADK's Gemini model reads GOOGLE_API_KEY; the backend configures
-    GEMINI_API_KEY. Map env->env (never log or expose the value).
+    The ADK agents run on Groq via backend.agents.college_groq_llm,
+    which reads GROQ_API_KEY from settings/env. Mirror the configured
+    key into the process env (never log or expose the value) so every
+    consumer — settings-backed or env-backed — sees the same key.
     """
-    if os.environ.get("GOOGLE_API_KEY"):
+    if os.environ.get("GROQ_API_KEY"):
         return True
-    key = settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY")
+    key = settings.GROQ_API_KEY
     if key:
-        os.environ["GOOGLE_API_KEY"] = key
+        os.environ["GROQ_API_KEY"] = key
         return True
     return False
 
@@ -194,7 +196,7 @@ async def run_agent_generation(agent_key: str, prompt: str,
     caller passes a tighter `timeout` (seconds) to fit its own request
     budget. Returns the agent's final text.
 
-    Raises RuntimeError on ANY failure — ADK not importable, no Gemini
+    Raises RuntimeError on ANY failure — ADK not importable, no Groq
     key configured, runner error, timeout, or an empty reply — so the
     caller can fall back honestly (direct model call, then grounded
     static material) instead of pretending the agent authored anything.
@@ -205,11 +207,11 @@ async def run_agent_generation(agent_key: str, prompt: str,
 
     if not _gemini_available():
         raise RuntimeError(
-            "ADK generation unavailable: google-adk or the Gemini key "
+            "ADK generation unavailable: google-adk or the Groq key "
             "is not configured")
     if not _ensure_llm_key():
         raise RuntimeError(
-            "ADK generation unavailable: no Gemini API key configured")
+            "ADK generation unavailable: no Groq API key configured")
     try:
         from google.adk.runners import Runner
         from google.genai import types

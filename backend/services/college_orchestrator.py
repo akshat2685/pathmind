@@ -1,7 +1,7 @@
 """
 College Agent Orchestrator for PATHMIND College Engineering MVP.
 Conforms to TRD Section 4 & 23: RootLearnerAgent orchestrating Academic, Learning,
-Assessment, and Accountability capabilities with Gemini reasoning and deterministic fallbacks.
+Assessment, and Accountability capabilities with Groq reasoning and deterministic fallbacks.
 """
 
 from typing import Dict, Any, List, Optional
@@ -66,14 +66,18 @@ class CollegeOrchestrator:
         countdown,
     ) -> Optional[str]:
         """
-        Calls Gemini for the mentor reply with retries and backoff. Raises
+        Calls the configured LLM (Groq) for the mentor reply with retries and backoff. Raises
         the last exception when all attempts fail so the caller can answer
         honestly instead of fabricating a reply. Returns None only when no
         model is configured (caller then reports unavailability).
         """
         from backend.core.gemini import get_gemini_model as _shared_model
 
-        model = _shared_model()
+        try:
+            model = _shared_model("mentor")
+        except TypeError:
+            # No-arg test doubles patch the shared accessor.
+            model = _shared_model()
         if model is None:
             return None
 
@@ -292,7 +296,7 @@ class CollegeOrchestrator:
                 "sources": sources
             }
 
-        # 4. Generate intelligent guidance with Gemini if configured.
+        # 4. Generate intelligent guidance with the LLM if configured.
         # Retried with backoff: a transient rate-limit must not silently
         # degrade into a fabricated "roadmap" summary. If the LLM is truly
         # unreachable we say so honestly (state ERROR) instead of inventing

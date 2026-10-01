@@ -397,7 +397,7 @@ class CollegeAssessmentQuestion(BaseModel):
     # change). probe: prerequisite|concept|application|misconception|transfer.
     # source: verified_curriculum | verified_pyq | model_generated. Only
     # verified_* labels may ever be attached to retrieved PathMind records;
-    # Gemini-authored questions are always "model_generated".
+    # Model-authored questions are always "model_generated".
     probe: Optional[str] = None
     source: Optional[str] = None
 
@@ -413,8 +413,8 @@ class CollegeAssessment(BaseModel):
     questions: List[CollegeAssessmentQuestion] = Field(default_factory=list)
     status: str = "AVAILABLE"
     # Provenance of the question set: "adk:assessment_agent" when the
-    # ADK assessment agent authored >=1 question, "gemini_direct" when
-    # only the direct Gemini call did, "rag_fallback" when no LLM
+    # ADK assessment agent authored >=1 question, "groq_direct" when
+    # only the direct Groq call did, "rag_fallback" when no LLM
     # authored anything (pure retrieved-material diagnostic). The value
     # always names the path that actually produced the questions.
     authored_by: Optional[str] = None
