@@ -90,11 +90,39 @@ class CollegeOrchestrator:
         today_schedule = await self.accountability_service.get_today_schedule(uid)
         active_tasks = [a.title for a in today_schedule.active_activities]
 
+        # Prompt labels come from fields the college AcademicContext
+        # actually has. (Bug found live 2026-10-01: this f-string used
+        # ctx.university_name and ctx.branch.value — neither exists on
+        # the college context model — so EVERY mentor call with a saved
+        # context crashed here, before any LLM call, and the failure
+        # was misclassified as LLM_UNAVAILABLE. The branch lives on the
+        # learner profile as supported_path.) getattr + a guarded
+        # profile read keep a future field drift from ever again
+        # masquerading as an AI outage.
+        university_label = (getattr(ctx, "university_id", None)
+                            or "Engineering College")
+        branch_label = "General Engineering"
+        if ctx is not None:
+            try:
+                getter = getattr(self.store, "get_college_user_profile",
+                                 None)
+                profile = await getter(uid) if getter else None
+                supported = None
+                if isinstance(profile, dict):
+                    supported = profile.get("supported_path")
+                elif profile is not None:
+                    supported = getattr(profile, "supported_path", None)
+                if supported:
+                    branch_label = str(supported).replace(
+                        "_", " ").title()
+            except Exception:
+                pass
+
         prompt = f"""
         You are PATHMIND, an expert engineering-college academic mentor.
         Learner Context:
-        - University: {ctx.university_name if ctx else 'Engineering College'}
-        - Engineering Branch: {ctx.branch.value if ctx else 'General Engineering'}
+        - University: {university_label}
+        - Engineering Branch: {branch_label}
         - Semester: {ctx.semester if ctx else 'Undergraduate'}
         - Active Subjects: {', '.join(ctx.subjects) if ctx else 'Core Engineering'}
         - Exam countdown: {countdown} days remaining
