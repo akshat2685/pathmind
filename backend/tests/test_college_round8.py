@@ -247,11 +247,14 @@ def test_generate_fast_passes_config_and_falls_back():
 
 def test_generation_agents_carry_fast_config():
     from backend.agents.college_adk_agents import build_generation_agent
-    for key in ("assessment", "plan"):
+    # Round 9: per-key caps (assessment authors a full question set and
+    # gets 4096; plan personalization gets 3072) — the invariant pinned
+    # here is the fast config itself: thinking off, output capped.
+    for key, cap in (("assessment", 4096), ("plan", 3072)):
         agent = build_generation_agent(key)
         cfg = agent.generate_content_config
         assert cfg is not None, key
-        assert cfg.max_output_tokens == 2048
+        assert cfg.max_output_tokens == cap
         assert cfg.thinking_config.thinking_budget == 0
 
 

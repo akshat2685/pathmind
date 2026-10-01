@@ -751,9 +751,11 @@ class CollegeLearningService:
             uid, plan_id, ctx.university_id, semester, sub, unit,
             order, ctx.available_hours_per_week, model)
         if not used_llm:
+            detail = getattr(self, "_last_activity_gen_error", "") or ""
             raise ValueError(
                 "AI_UNAVAILABLE: the AI service did not return activities; "
-                "your current activities are unchanged. Try again in a bit.")
+                "your current activities are unchanged. Try again in a bit."
+                + (f" Last error: {detail}" if detail else ""))
 
         phase = CollegePlanPhase(**target)
         phase.activities = activities
@@ -1116,6 +1118,11 @@ Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_P
         except Exception as exc:
             log_event("college.plan.activity_generation_failed",
                       outcome="error", error_code=type(exc).__name__)
+            # Bounded detail for the enrich endpoint's honest 503: the
+            # exception TYPE alone cannot distinguish a retired model
+            # from a quota cap from unparseable output.
+            self._last_activity_gen_error = (
+                f"{type(exc).__name__}: {str(exc)[:160]}")
             return []
 
     def _static_activities(self, uid, plan_id, phase_id, status, sub, unit,
