@@ -297,14 +297,14 @@ export function CollegeOnboardingFlow() {
         if (res.error && res.error.includes("DIAGNOSTIC_UNAVAILABLE")) {
           setDiagState("unavailable");
         } else {
-          setError(res.error || "Could not start the diagnostic assessment. Please try again.");
+          setError(res.error || "Could not start the readiness check. Please try again.");
         }
       }
     } catch {
       // apiClient already converts network failures into { ok: false },
       // so this only fires on an unexpected throw — never leave the
       // learner on a dead screen ("runtime error") without a way on.
-      setError("Could not start the diagnostic assessment. Please try again.");
+      setError("Could not start the readiness check. Please try again.");
     } finally {
       setDiagLoading(false);
     }
@@ -427,7 +427,7 @@ export function CollegeOnboardingFlow() {
     }
   };
 
-  const stepLabels = ["Aspirations", "University", "Branch", "Diagnostic", "Scope"];
+  const stepLabels = ["Aspirations", "University", "Branch", "Exam Readiness", "Scope"];
 
   return (
     <div className="min-h-screen bg-[#f7f4e7] text-[#252321] flex flex-col justify-between relative overflow-x-hidden font-sans">
@@ -692,15 +692,16 @@ export function CollegeOnboardingFlow() {
                 <div className="border-b border-dashed border-[#252321]/20 pb-4">
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#8ba88e]/20 border border-[#8ba88e] text-xs font-medium mb-2">
                     <span className="material-symbols-outlined text-sm">diagnostic</span>
-                    Baseline Diagnostic
+                    Exam Readiness Check
                   </div>
                   <h3 className="text-2xl sm:text-3xl font-bold text-[#252321]">
-                    Measure where you stand today
+                    Will you pass? Check your readiness
                   </h3>
                   <p className="font-serif italic text-sm text-[#68635e] mt-1">
-                    A short diagnostic drawn from your aspiration and branch context. Your
-                    strengths, weaknesses and gaps become the baseline your plan adapts to —
-                    nothing here is invented; it comes from your answers alone.
+                    A few quick questions built from real past-year papers and your own
+                    syllabus — each one is labeled with where it came from. No timer, no
+                    grade. You get the topics that will cost you marks, and a plan that
+                    fixes exactly those.
                   </p>
                 </div>
 
@@ -708,14 +709,15 @@ export function CollegeOnboardingFlow() {
                   <div className="space-y-4">
                     <div className="p-5 rounded-md border-[1.5px] border-[#252321]/30 bg-white/50 text-sm text-[#423e3b] leading-relaxed space-y-2">
                       <p>
-                        <span className="font-bold">What happens:</span> a few mixed questions are
-                        generated from your profile. Answer honestly — this sets the baseline,
-                        not a grade.
+                        <span className="font-bold">What happens:</span> a few questions from
+                        your subjects&apos; past-year papers and syllabus. Answer what you
+                        can — wrong answers just show us where your marks will leak. This is
+                        not a test and nobody grades you.
                       </p>
                       <p>
                         <span className="font-bold">What if generation fails:</span> the
-                        diagnostic is generated live. If it is unavailable, you can continue
-                        without a baseline — we will never fabricate one.
+                        check is generated live. If it is unavailable, you can continue
+                        without it — we will never fabricate a result.
                       </p>
                     </div>
                     <div className="flex justify-end">
@@ -725,7 +727,7 @@ export function CollegeOnboardingFlow() {
                         onClick={beginDiagnostic}
                         className="px-6 py-3 bg-[#4a654e] hover:bg-[#3b523e] text-white font-semibold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_#252321] cursor-pointer disabled:opacity-60"
                       >
-                        {diagLoading ? "Preparing questions…" : "Begin Baseline Diagnostic →"}
+                        {diagLoading ? "Preparing questions…" : "Check my readiness →"}
                       </button>
                     </div>
                   </div>
@@ -738,11 +740,11 @@ export function CollegeOnboardingFlow() {
                         cloud_off
                       </span>
                       <h4 className="font-bold text-sm text-[#93000a] mt-2">
-                        Diagnostic unavailable right now
+                        Readiness check unavailable right now
                       </h4>
                       <p className="text-xs text-[#68635e] mt-1 max-w-md mx-auto">
-                        The diagnostic generator could not produce questions at this time
-                        (DIAGNOSTIC_UNAVAILABLE). No baseline will be fabricated — you can
+                        The readiness check could not be generated at this time
+                        (DIAGNOSTIC_UNAVAILABLE). Nothing will be fabricated — you can
                         continue onboarding and take a checkpoint later from your study plan.
                       </p>
                     </div>
@@ -753,7 +755,7 @@ export function CollegeOnboardingFlow() {
                         disabled={diagLoading}
                         className="px-6 py-3 bg-[#fdfae7] text-[#252321] font-semibold text-sm rounded-md border-2 border-[#252321] cursor-pointer disabled:opacity-60"
                       >
-                        {diagLoading ? "Preparing questions…" : "Retry diagnostic"}
+                        {diagLoading ? "Preparing questions…" : "Retry"}
                       </button>
                       <button
                         type="button"
@@ -773,13 +775,13 @@ export function CollegeOnboardingFlow() {
                   <div className="space-y-5">
                     <div className="border-b border-dashed border-[#252321]/20 pb-3">
                       <span className="text-xs px-2.5 py-1 rounded bg-[#4a654e]/10 border border-[#4a654e] text-[#4a654e] font-bold">
-                        Diagnostic Assessment
+                        Exam Readiness Check
                       </span>
                       <h4 className="text-xl font-bold text-[#252321] mt-2">
                         {diagAssessment.title}
                       </h4>
                       <p className="text-xs font-serif italic text-[#68635e]">
-                        Answer all items — your baseline is computed from these answers only.
+                        Answer what you can — there are no negative marks here.
                       </p>
                     </div>
 
@@ -877,7 +879,7 @@ export function CollegeOnboardingFlow() {
                         onClick={submitDiagnostic}
                         className="px-6 py-3 bg-[#4a654e] text-white font-bold text-sm rounded-md border-2 border-[#252321] shadow-[2px_3px_0px_#252321] cursor-pointer disabled:opacity-60"
                       >
-                        {diagLoading ? "Evaluating…" : "Submit for Evaluation"}
+                        {diagLoading ? "Checking…" : "See where my marks leak"}
                       </button>
                     </div>
                   </div>

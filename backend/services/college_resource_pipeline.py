@@ -130,17 +130,74 @@ def _candidate_quality(cand: Dict[str, Any]) -> float:
     courses found via Tavily: the search engine's SEO/AEO relevance
     score (0..1), scaled x100 so it sits in the same numeric range as
     engagement. Missing scores rank 0 — no signal, no boost.
+
+    On top of the kind-native signal sits a bounded STUDENT-INTENT lane
+    bonus (India student research, 2026-10-01): what students actually
+    search for before an exam is, in order, unit-wise one-shot videos,
+    solved PYQs, important-questions lists and notes PDFs — not generic
+    lectures. The bonus (~one order of magnitude of views) reorders
+    near-ties toward the format students came for; it never overrides a
+    decisively more-watched video or a decisively more relevant doc.
     """
-    qs = cand.get("quality_signals")
     if cand.get("kind") == "VIDEO":
-        return _engagement_score(qs)
-    if isinstance(qs, dict):
-        for key in ("search_score", "tavily_score"):
-            try:
-                return float(qs.get(key)) * 100.0
-            except (TypeError, ValueError):
-                continue
-    return 0.0
+        base = _engagement_score(cand.get("quality_signals"))
+    else:
+        base = 0.0
+        qs = cand.get("quality_signals")
+        if isinstance(qs, dict):
+            for key in ("search_score", "tavily_score"):
+                try:
+                    base = float(qs.get(key)) * 100.0
+                    break
+                except (TypeError, ValueError):
+                    continue
+    return base + _lane_bonus(cand)
+
+
+# ---------------------------------------------------------------------------
+# Student-intent lanes (deterministic, title/URL only — never model-judged).
+# Patterns mirror the verbatim query/title conventions Indian engineering
+# students use ("dbms unit 3 one shot", "dbms pyq rgpv", "important
+# questions", "notes pdf"). Priority order = the exam-prep ranking from
+# the research: PYQ material and important-questions outrank one-shots
+# for documents; for videos the one-shot is the night-before format.
+# ---------------------------------------------------------------------------
+
+_LANE_PATTERNS = (
+    ("PYQ", re.compile(
+        r"\bpyq\b|previous year|past papers?|question papers?|solved papers?",
+        re.I)),
+    ("IMPORTANT_QUESTIONS", re.compile(
+        r"important questions?|expected questions|important topics|"
+        r"most important", re.I)),
+    ("ONE_SHOT", re.compile(
+        r"one\s?shot|in one video|in a single video|complete .{0,40}in one",
+        re.I)),
+    ("NOTES", re.compile(r"\bnotes\b|handwritten", re.I)),
+)
+
+_LANE_BONUS = {
+    "VIDEO": {"ONE_SHOT": 12.0, "IMPORTANT_QUESTIONS": 10.0,
+              "PYQ": 8.0, "NOTES": 0.0},
+    "WEB": {"PYQ": 10.0, "IMPORTANT_QUESTIONS": 10.0,
+            "NOTES": 6.0, "ONE_SHOT": 4.0},
+}
+
+
+def classify_lane(title: str, url: str = "") -> Optional[str]:
+    """First matching student-intent lane for a candidate, or None."""
+    text = f"{title or ''} {url or ''}"
+    for lane, pattern in _LANE_PATTERNS:
+        if pattern.search(text):
+            return lane
+    return None
+
+
+def _lane_bonus(cand: Dict[str, Any]) -> float:
+    lane = classify_lane(cand.get("title", ""), cand.get("url", ""))
+    if not lane:
+        return 0.0
+    return _LANE_BONUS.get(cand.get("kind", ""), {}).get(lane, 0.0)
 
 
 def _candidate_rank_key(cand: Dict[str, Any]):
@@ -262,14 +319,19 @@ class CollegeResourcePipeline:
         deadline = time.monotonic() + max(5.0, float(time_budget_seconds))
         with timed_stage("college.resources.research", subject_id=subject_id,
                          topic=topic):
-            queries = self._build_queries(
-                subject_id=subject_id, subject_name=subject_name,
-                topic=topic, university_name=university_name)
+            sctx = self._resolve_subject_context(subject_id, topic)
+            query_sets = self._build_queries(
+                subject_id=subject_id,
+                subject_name=subject_name or sctx.get("name"),
+                topic=topic,
+                university_name=university_name or sctx.get("university"),
+                subject_code=sctx.get("code"), unit=sctx.get("unit"),
+                university_short=sctx.get("university_short"))
             candidates: List[Dict[str, Any]] = []
             seen_urls: set = set()
 
             # 1. Web search: DuckDuckGo primary, Tavily backup.
-            for q in queries[:3]:
+            for q in query_sets["web"][:3]:
                 if time.monotonic() > deadline:
                     break
                 for hit in await self._search_web(q, deadline):
@@ -277,16 +339,29 @@ class CollegeResourcePipeline:
                     if not url or url in seen_urls:
                         continue
                     seen_urls.add(url)
-                    candidates.append({
-                        "kind": "WEB", "url": url, "title": hit.get("title", ""),
+                    cand: Dict[str, Any] = {
+                        "kind": "WEB", "url": url,
+                        "title": hit.get("title", ""),
                         "snippet": hit.get("snippet", ""),
                         "provider": hit.get("provider", "web"),
                         "quality_signals": hit.get("quality_signals", {}),
-                    })
+                    }
+                    # A YouTube watch page surfaced by web search is a
+                    # VIDEO, not a document — mislabeling it DOCUMENT is
+                    # how course-portal pages crowded out real videos in
+                    # the cached resource list.
+                    host = urllib.parse.urlparse(url).netloc.lower()
+                    if "youtube.com" in host or "youtu.be" in host:
+                        vid = self._youtube_id_from_url(url)
+                        if vid:
+                            cand["kind"] = "VIDEO"
+                            cand["video_id"] = vid
+                            cand["provider"] = "youtube.com"
+                    candidates.append(cand)
 
             # 2. YouTube research (metadata + statistics + chapters).
             if time.monotonic() <= deadline:
-                for q in queries[:2]:
+                for q in query_sets["youtube"][:2]:
                     if time.monotonic() > deadline:
                         break
                     for video in await self._search_youtube(q, deadline):
@@ -396,6 +471,12 @@ class CollegeResourcePipeline:
         # raw views/likes/comments stay auditable on the record).
         quality_signals["engagement_score"] = round(
             _engagement_score(quality_signals), 3)
+        # Student-intent lane (one-shot / PYQ / important-questions /
+        # notes), persisted so the plan UI and later ranking passes can
+        # show and use the format the student actually came for.
+        lane = classify_lane(cand.get("title", ""), cand.get("url", ""))
+        if lane:
+            quality_signals["lane"] = lane
         if cand["kind"] != "VIDEO":
             # Persist the Tavily SEO/AEO relevance score under the
             # stable "search_score" key so plan-time attachment ranks
@@ -485,18 +566,114 @@ class CollegeResourcePipeline:
     # Query building
     # ------------------------------------------------------------------
 
+    def _resolve_subject_context(self, subject_id: str,
+                                 topic: str) -> Dict[str, Any]:
+        """Resolve subject code/name, the unit a topic belongs to, and the
+        university's short name from the verified curriculum tables, so
+        research queries can use the identifiers students actually search
+        with ("7CS4-01", "Unit 3", "RTU"). Any failure degrades to an
+        empty/partial dict — research never breaks because resolution did.
+        """
+        ctx: Dict[str, Any] = {}
+        try:
+            adapter = getattr(self.store, "adapter", None)
+            client = getattr(adapter, "client", None)
+            if client is None:
+                return ctx
+            sres = (client.table("subjects").select("code,name")
+                    .eq("subject_id", subject_id).limit(1).execute())
+            if sres.data:
+                code = (sres.data[0].get("code") or "").strip()
+                name = (sres.data[0].get("name") or "").strip()
+                if code:
+                    ctx["code"] = code
+                if name:
+                    ctx["name"] = name
+            needle = (topic or "").strip().lower()
+            if needle:
+                ures = (client.table("curriculum_units")
+                        .select("unit,title,topics")
+                        .eq("subject_id", subject_id).execute())
+                for row in ures.data or []:
+                    topics = [str(t).lower()
+                              for t in (row.get("topics") or []) if t]
+                    title = (row.get("title") or "").lower()
+                    if any(needle in t or t in needle for t in topics) \
+                            or needle in title:
+                        ctx["unit"] = row.get("unit")
+                        break
+            csres = (client.table("curriculum_subjects")
+                     .select("curriculum_id")
+                     .eq("subject_id", subject_id).limit(1).execute())
+            if csres.data:
+                cur = (client.table("curricula").select("university_id")
+                       .eq("curriculum_id", csres.data[0]["curriculum_id"])
+                       .limit(1).execute())
+                if cur.data:
+                    uni = (client.table("universities").select("name")
+                           .eq("university_id",
+                               cur.data[0]["university_id"])
+                           .limit(1).execute())
+                    if uni.data:
+                        full = (uni.data[0].get("name") or "").strip()
+                        if full:
+                            ctx["university"] = full
+                            words = [w for w in
+                                     re.findall(r"[A-Za-z]+", full)
+                                     if w[0].isupper()]
+                            if len(words) >= 2:
+                                ctx["university_short"] = "".join(
+                                    w[0] for w in words).upper()
+        except Exception:
+            return ctx
+        return ctx
+
+    @staticmethod
+    def _youtube_id_from_url(url: str) -> Optional[str]:
+        try:
+            parsed = urllib.parse.urlparse(url)
+            if "youtu.be" in parsed.netloc.lower():
+                return parsed.path.strip("/").split("/")[0] or None
+            vids = urllib.parse.parse_qs(parsed.query).get("v")
+            return vids[0] if vids else None
+        except Exception:
+            return None
+
     def _build_queries(self, *, subject_id: str, subject_name: Optional[str],
-                       topic: str, university_name: Optional[str]) -> List[str]:
-        subject_label = subject_name or subject_id
-        base = f"{subject_label} {topic}".strip()
-        queries = [
-            f"{base} nptel lecture",
-            f"{base} site:youtube.com lecture tutorial",
-            f"{base} notes pdf",
+                       topic: str, university_name: Optional[str],
+                       subject_code: Optional[str] = None,
+                       unit: Optional[Any] = None,
+                       university_short: Optional[str] = None
+                       ) -> Dict[str, List[str]]:
+        """Query spec from the India student-learning research (2026-10-01).
+
+        Students do not search like academics. Their verbatim patterns:
+        "<subject> unit <n> one shot", "<subject> important questions",
+        "<subject> pyq <university>", "<subject code> question paper",
+        "<subject> notes pdf". YouTube lanes lead with the one-shot; web
+        lanes lead with PYQs and important questions, notes third.
+        Institutional lectures (NPTEL etc.) stay reachable through
+        ranking and tiering — they no longer own the query set.
+        """
+        S = (subject_name or subject_id or "").strip()
+        T = (topic or "").strip()
+        base = f"{S} {T}".strip()
+        unit_bit = f" unit {unit}" if unit else ""
+        youtube = [
+            f"{base} one shot{unit_bit}".strip(),
+            f"{base} in one video",
+            f"{base} lecture",
         ]
-        if university_name:
-            queries.insert(0, f"{university_name} {base} syllabus")
-        return queries
+        uni_bit = (university_short or university_name or "").strip()
+        web: List[str] = []
+        if subject_code:
+            web.append(f"{subject_code} {S} previous year question paper "
+                       f"{uni_bit}".strip())
+        web.append(f"{base} important questions")
+        if not subject_code:
+            web.append(f"{base} pyq solved {uni_bit}".strip())
+        web.append(f"{base} notes pdf")
+        return {"web": web[:3], "youtube": youtube}
 
     # ------------------------------------------------------------------
     # Search providers
@@ -605,7 +782,7 @@ class CollegeResourcePipeline:
                     f"{YOUTUBE_API_URL}/search",
                     params={"key": self._youtube_key, "q": query,
                             "part": "snippet", "type": "video",
-                            "maxResults": 6, "relevanceLanguage": "en",
+                            "maxResults": 6, "regionCode": "IN",
                             "safeSearch": "strict"})
                 if resp.status_code != 200:
                     return []

@@ -345,7 +345,7 @@ class CollegeAssessmentService:
                 phase_id=None,
                 subject_id=subject_ids[0] if subject_ids else None,
                 assessment_kind=AssessmentKind.DIAGNOSTIC,
-                title=f"Diagnostic Assessment: {branch.replace('_', ' ').title()}",
+                title=f"Exam Readiness: {branch.replace('_', ' ').title()}",
                 questions=questions,
                 status="AVAILABLE",
                 authored_by=authored_by,
@@ -417,6 +417,24 @@ probes that reveal prerequisite knowledge, conceptual understanding,
 application ability, common misconceptions, and transfer — do not force
 every category. Avoid duplicates, trivia, and anything far outside the
 learner's semester. At least 4 MCQ and at least 1 SHORT_ANSWER.
+
+EXAM PATTERN (spec from research on how Indian engineering students
+actually prepare, 2026-10-01 — follow it, it decides whether students
+attempt this at all):
+- PREFER REAL EXAM MATERIAL: when VERIFIED PAST-YEAR QUESTIONS are
+  listed above, adapt at least half of the selected questions from them
+  (source "verified_pyq"). Students trust and attempt PYQ-based checks;
+  textbook-style questions read as a test and get abandoned.
+- ORDER EASIEST FIRST in the returned array: question 1 must be a
+  confidence builder a student who attended classes but has not revised
+  can answer. Difficulty ramps after that — never open with the hardest
+  probe, and never frame anything as pass/fail.
+- COVER LIKE THE PAPER: spread probes across units/subjects the way the
+  real paper does — one probe per unit area before doubling up on any
+  single topic.
+- MARKS MIRROR THE PAPER: keep the listed PYQ marks when adapting; for
+  authored questions use 2 for recall and 5-7 for application, matching
+  the real paper's mix.
 
 SOURCE HONESTY (strict): set "source" to "verified_pyq" ONLY when the
 question is adapted from a listed verified PYQ; "verified_curriculum"
