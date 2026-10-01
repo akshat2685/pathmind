@@ -65,12 +65,12 @@ class _AdkRecorder:
         self.calls = []
         self._responder = responder
 
-    async def __call__(self, agent_key, prompt):
-        self.calls.append((agent_key, prompt))
+    async def __call__(self, agent_key, prompt, **kwargs):
+        self.calls.append((agent_key, prompt, kwargs))
         return self._responder(agent_key, prompt)
 
 
-async def _adk_down(agent_key, prompt):
+async def _adk_down(agent_key, prompt, **kwargs):
     raise RuntimeError("ADK unavailable in tests")
 
 

@@ -33,6 +33,7 @@ from backend.core.college_schemas import (
 )
 from backend.core.college_rules import evaluate_unlock_rule
 from backend.core.college_logging import log_event, timed_stage
+from backend.core.gemini import generate_fast
 from backend.providers.curriculum_registry import (
     get_curriculum,
     get_resources_for_subject,
@@ -518,7 +519,11 @@ class CollegeLearningService:
                 "\"focus_topics\": [\"...\"], \"technique\": \"...\"}]}\n\n"
                 f"BRIEF:\n{json.dumps(payload)}"
             )
-            raw = await _agent_generation()("plan", prompt)
+            # Tighter seam bound than the runtime default: this call
+            # starts only inside the 25s generation budget and the
+            # request still owes a persist afterwards — 25s here keeps
+            # the worst case inside the serverless window.
+            raw = await _agent_generation()("plan", prompt, timeout=25.0)
             applied = self._apply_plan_personalization(plan, raw)
             if applied:
                 plan.authored_by = "adk:plan_agent"
@@ -1064,7 +1069,7 @@ for SOLVE_PYQ, a timed exam-condition attempt, honest self-scoring, and an
 error log (concept / formula / calculation / time).
 Ensure you order them logically (e.g. WATCH then READ then PRACTICE then SOLVE_PYQ).
 """
-            response = model.generate_content(prompt)
+            response = generate_fast(model, prompt, 1536)
             text = response.text.strip()
             if text.startswith("```json"):
                 text = text[7:]
