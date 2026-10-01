@@ -551,12 +551,16 @@ class CollegeResourcePipeline:
                 "verification_status": "VERIFIED",
                 "last_verified_at": now,
                 "learner_preference_metadata": {"researched": True},
-                "quality_signals": quality_signals,
             }
+            # resource_records has NO quality_signals column — sending
+            # it makes PostgREST reject the insert (PGRST204), which
+            # silently zeroed every live research run. The signals live
+            # on learning_resources (the read model) and source_records.
             client.table("resource_records").insert(row).execute()
             # learning_resources is the read-model get_verified_resources serves.
             client.table("learning_resources").upsert({
                 **row, "subject_id": subject_id,
+                "quality_signals": quality_signals,
             }, on_conflict="resource_id").execute()
         except Exception as e:
             logger.error("Resource persist failed: %s", str(e))
@@ -564,7 +568,7 @@ class CollegeResourcePipeline:
 
         log_event("college.resources.verified", subject_id=subject_id,
                   resource_id=resource_id, tier=tier, outcome="ok")
-        return row
+        return {**row, "quality_signals": quality_signals}
 
     def _url_known(self, subject_id: str, url: str) -> bool:
         try:
