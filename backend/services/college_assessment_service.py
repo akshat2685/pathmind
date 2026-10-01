@@ -195,8 +195,14 @@ class CollegeAssessmentService:
             questions = self._generate_questions_with_llm(
                 model, subject_id, topic_title, topic_tags
             )
+            # Provenance (AJ's verifiability rule): checkpoint questions
+            # are Gemini-authored when the model produced them and
+            # static otherwise — stamp it like the diagnostic/plan do
+            # (this was null in the DB before round 12).
+            authored_by = "gemini_direct"
             if not questions:
                 questions = self._static_fallback_questions(topic_title, topic_tags)
+                authored_by = "static_fallback"
 
             assessment = CollegeAssessment(
                 assessment_id=assessment_id,
@@ -208,6 +214,7 @@ class CollegeAssessmentService:
                 title=f"Checkpoint Assessment: {topic_title}",
                 questions=questions,
                 status="AVAILABLE",
+                authored_by=authored_by,
             )
             await self.store.save_college_assessment(
                 uid, assessment.model_dump(mode="json"))
