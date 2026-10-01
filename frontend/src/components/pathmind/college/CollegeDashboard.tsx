@@ -78,6 +78,63 @@ function subjectIdFromPhaseId(phaseId: string, planId: string): string | null {
   return m[1].startsWith(prefix) ? m[1].slice(prefix.length) || null : null;
 }
 
+/* ---------- exam-lens path helpers (Direction B) ---------- */
+
+// Resource lanes persisted by the research pipeline on each resource's
+// quality_signals (PR #47 spec, PR #49 persistence). Chips render only
+// for lanes actually present in the learner's plan data — never faked.
+const LANE_STYLE: Record<string, { label: string; cls: string }> = {
+  ONE_SHOT: {
+    label: "▶ One-shot",
+    cls: "bg-[#4a654e] text-[#fdfae7] border-[#3b523e]",
+  },
+  PYQ: { label: "PYQ", cls: "bg-[#a65959] text-[#fdfae7] border-[#7c3f3f]" },
+  IMPORTANT_QUESTIONS: {
+    label: "Important questions",
+    cls: "bg-[#ede8d5] text-[#252321] border-[#252321]",
+  },
+  NOTES: {
+    label: "Notes",
+    cls: "bg-[#ede8d5] text-[#252321] border-[#252321]",
+  },
+};
+
+function phaseStats(phase: any) {
+  const acts = phase?.activities || [];
+  const done = acts.filter((a: any) => a.status === "COMPLETED").length;
+  const pct = acts.length ? Math.round((done / acts.length) * 100) : 0;
+  const laneSet = new Set<string>();
+  let hindi = false;
+  let pyqMarks = 0;
+  for (const a of acts) {
+    const lane = a?.resource?.quality_signals?.lane;
+    if (typeof lane === "string" && lane) laneSet.add(lane);
+    if (
+      a?.resource?.resource_type === "VIDEO" &&
+      /hindi/i.test(a?.resource?.title || "")
+    )
+      hindi = true;
+    if (typeof a?.pyq_question?.marks === "number") pyqMarks += a.pyq_question.marks;
+    if (a?.activity_type === "SOLVE_PYQ") laneSet.add("PYQ");
+  }
+  const lanes = [...laneSet];
+  return {
+    total: acts.length,
+    done,
+    pct,
+    lanes,
+    hindi,
+    pyqMarks,
+    highYield: laneSet.has("IMPORTANT_QUESTIONS") || pyqMarks >= 10,
+  };
+}
+
+function unitNumberOf(phase: any): number {
+  const m = /_u(\d+)$/.exec(phase?.phase_id || "");
+  if (m) return parseInt(m[1], 10);
+  return typeof phase?.order === "number" ? phase.order : 0;
+}
+
 /* ---------- resource card with provenance ---------- */
 
 function ResourceCard({ resource }: { resource: any }) {
@@ -888,6 +945,69 @@ export function CollegeDashboard() {
       (p: any) => p.order === activePhase.order + 1 && p.status !== "LOCKED"
     );
 
+  /* ----- exam-lens derived data (Direction B path view) ----- */
+  const planPhases = [...(learningPlan?.phases || [])].sort(
+    (a: any, b: any) => (a.order ?? 0) - (b.order ?? 0)
+  );
+  const currentPhase = planPhases.find(
+    (p: any) => p.status === "AVAILABLE" || p.status === "IN_PROGRESS"
+  );
+  const totalActsAll = planPhases.reduce(
+    (n: number, p: any) => n + (p.activities?.length || 0),
+    0
+  );
+  const doneActsAll = planPhases.reduce(
+    (n: number, p: any) =>
+      n + (p.activities || []).filter((a: any) => a.status === "COMPLETED").length,
+    0
+  );
+  const overallPct = totalActsAll
+    ? Math.round((doneActsAll / totalActsAll) * 100)
+    : 0;
+  const phasesLeft = planPhases.filter((p: any) => p.status !== "COMPLETED").length;
+  const subjectNameOf = (sid: string | null): string => {
+    if (!sid) return "General";
+    const s = (pyqSubjects || []).find((x: any) => x.subject_id === sid);
+    return s ? `${s.code} · ${s.name}` : sid;
+  };
+  const subjectGroups: { sid: string | null; phases: any[] }[] = [];
+  for (const p of planPhases) {
+    const sid = learningPlan
+      ? subjectIdFromPhaseId(p.phase_id, learningPlan.plan_id)
+      : null;
+    let g = subjectGroups.find((x) => x.sid === sid);
+    if (!g) {
+      g = { sid, phases: [] };
+      subjectGroups.push(g);
+    }
+    g.phases.push(p);
+  }
+  const groupStats = (g: { phases: any[] }) => {
+    let total = 0,
+      done = 0,
+      pyqMarks = 0;
+    for (const p of g.phases) {
+      const s = phaseStats(p);
+      total += s.total;
+      done += s.done;
+      pyqMarks += s.pyqMarks;
+    }
+    return { total, done, pyqMarks, pct: total ? Math.round((done / total) * 100) : 0 };
+  };
+  const focusPhase = currentPhase;
+  const focusAct = focusPhase
+    ? (focusPhase.activities || []).find((a: any) => a.status !== "COMPLETED")
+    : null;
+  const heaviestPhase = planPhases.reduce((best: any, p: any) => {
+    const m = phaseStats(p).pyqMarks;
+    return m > (best ? phaseStats(best).pyqMarks : -1) ? p : best;
+  }, null);
+  const heaviestMarks = heaviestPhase ? phaseStats(heaviestPhase).pyqMarks : 0;
+  const weakestGroup =
+    subjectGroups
+      .filter((g) => groupStats(g).pct < 100)
+      .sort((a, b) => groupStats(a).pct - groupStats(b).pct)[0] || null;
+
   return (
     <div className="min-h-screen bg-[#f7f4e7] text-[#252321] flex flex-col justify-between font-sans">
       {/* Background Notebook Grid */}
@@ -1041,20 +1161,63 @@ export function CollegeDashboard() {
           ))}
         </div>
 
-        {/* TAB 1: ORDERED STUDY PLAN */}
+                {/* TAB 1: ORDERED STUDY PLAN — exam-lens path (Direction B).
+            This view is what the learner sees AFTER "Generate Path":
+            units as exam cards (marks weight, resource lanes, checkpoint
+            gates), a verdict + today's-focus rail on desktop. The
+            pre-generation empty state below is intentionally unchanged. */}
         {activeTab === "plan" && (
           <section className="space-y-6">
-            <div className="relative h-32 rounded-lg overflow-hidden border-[1.75px] border-[#252321] shadow-[3px_4px_0px_#252321] mb-6 bg-[#ede8d5]">
-              <img src="/the_unfolding_map_analog_final.png" alt="Study Plan" className="absolute inset-0 w-full h-full object-cover mix-blend-multiply opacity-90" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#252321]/60 to-transparent"></div>
-              <div className="absolute bottom-4 left-6">
-                <h3 className="text-2xl font-bold text-[#fdfae7] tracking-wide">The Unfolding Map</h3>
-                <p className="text-xs font-serif italic text-[#fdfae7]/80">
-                  Your structured path forward. Phases unlock on demonstrated mastery — never
-                  by clicking ahead.
+            {/* Exam board */}
+            <div className="relative overflow-hidden rounded-lg bg-[#252321] text-[#fdfae7] border-[1.75px] border-[#252321] shadow-[3px_4px_0px_rgba(37,35,33,0.9)] p-6">
+              <div
+                className="absolute inset-0 opacity-[0.13] pointer-events-none"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(-45deg, transparent 0 10px, #fdfae7 10px 11px)",
+                }}
+              />
+              <div className="relative">
+                <div className="text-2xl sm:text-[32px] leading-tight font-bold">
+                  {examDays !== null && examDays !== undefined ? (
+                    <>
+                      <span className="text-[#ffb3ab]">{examDays} days</span> to the end-term
+                    </>
+                  ) : (
+                    "Your path, exam-first"
+                  )}
+                </div>
+                <p className="font-serif italic text-[13.5px] text-[#fdfae7]/75 mt-1.5">
+                  {universityDisplay}
+                  {academicContext?.semester ? ` · Semester ${academicContext.semester}` : ""}
+                  {` · ${planPhases.length} units across ${subjectGroups.length || 1} subject${subjectGroups.length === 1 ? "" : "s"}`}
+                  {learningPlan?.scope
+                    ? ` · paced for ${(learningPlan.scope || "").replace(/_/g, " ").toLowerCase()}`
+                    : ""}
                 </p>
+                <div className="flex flex-wrap gap-2 mt-3.5">
+                  {currentPhase ? (
+                    <span className="text-[10.5px] font-sans font-bold tracking-[0.12em] uppercase border-[1.5px] border-[#a65959] bg-[#a65959] text-[#fdfae7] rounded-full px-3 py-[5px]">
+                      Unit {unitNumberOf(currentPhase)} in progress
+                    </span>
+                  ) : planPhases.length > 0 ? (
+                    <span className="text-[10.5px] font-sans font-bold tracking-[0.12em] uppercase border-[1.5px] border-[#fdfae7] text-[#fdfae7] rounded-full px-3 py-[5px]">
+                      All units cleared
+                    </span>
+                  ) : null}
+                  <span className="text-[10.5px] font-sans font-bold tracking-[0.12em] uppercase border-[1.5px] border-[#fdfae7] text-[#fdfae7] rounded-full px-3 py-[5px]">
+                    {overallPct}% of path done
+                  </span>
+                  {currentPhase?.unlock_rule?.required_assessment_score !== undefined &&
+                  currentPhase?.unlock_rule?.required_assessment_score !== null ? (
+                    <span className="text-[10.5px] font-sans font-bold tracking-[0.12em] uppercase border-[1.5px] border-[#fdfae7] text-[#fdfae7] rounded-full px-3 py-[5px]">
+                      Checkpoint pass mark {currentPhase.unlock_rule.required_assessment_score}%
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </div>
+
             {!learningPlan || !learningPlan.phases || learningPlan.phases.length === 0 ? (
               <div className="p-12 text-center border border-dashed border-[#252321]/30 rounded-lg bg-white/40">
                 <p className="text-sm font-serif italic text-[#68635e]">
@@ -1069,75 +1232,195 @@ export function CollegeDashboard() {
                 </button>
               </div>
             ) : (
-              learningPlan.phases.map((phase: any) => {
-                const isLocked = phase.status === "LOCKED";
-                const isDone = phase.status === "COMPLETED";
-                const req = phase.unlock_rule?.required_assessment_score;
-                return (
-                  <div
-                    key={phase.phase_id}
-                    className={`p-6 rounded-lg bg-[#fdfae7] transition-all relative ${
-                      isLocked
-                        ? "opacity-60 border border-dashed border-[#252321]/40"
-                        : "border-[1.75px] border-[#252321] shadow-[3px_4px_0px_#252321]"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-dashed border-[#252321]/20 pb-3 mb-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-0.5 rounded bg-[#4a654e] text-white font-bold">
-                            Phase {phase.order}
-                          </span>
-                          <h3 className="font-bold text-lg text-[#252321]">{phase.title}</h3>
-                        </div>
-                        <p className="text-xs text-[#68635e] mt-0.5">{phase.objective}</p>
-                        {resourceHuntPhaseId === phase.phase_id && (
-                          <p className="text-[11px] text-[#4a654e] mt-1.5 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm animate-pulse">travel_explore</span>
-                            Finding verified videos &amp; notes for this phase…
-                          </p>
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
+                {/* Main column: subjects → unit cards → checkpoint gates */}
+                <div className="space-y-8 min-w-0">
+                  {subjectGroups.map((g) => {
+                    const gs = groupStats(g);
+                    return (
+                      <div key={g.sid || "general"} className="space-y-4">
+                        {subjectGroups.length > 1 && (
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <h4 className="font-bold text-lg text-[#252321]">
+                              {subjectNameOf(g.sid)}
+                            </h4>
+                            <span className="text-[11px] font-sans font-bold tracking-[0.14em] uppercase text-[#68635e]">
+                              {g.phases.length} units · {gs.pct}% done
+                            </span>
+                          </div>
                         )}
-                        {isLocked && (
-                          <p className="text-[11px] text-[#68635e] mt-1.5 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">lock</span>
-                            Locked — complete the previous phase's checkpoint
-                            {req !== undefined && req !== null
-                              ? ` with at least ${req}%`
-                              : " and demonstrate mastery"}
-                            . Unlocking is decided server-side from your assessment results.
-                          </p>
-                        )}
-                      </div>
+                        {g.phases.map((phase: any) => {
+                          const isLocked = phase.status === "LOCKED";
+                          const isDone = phase.status === "COMPLETED";
+                          const isCurrent =
+                            currentPhase && phase.phase_id === currentPhase.phase_id;
+                          const req = phase.unlock_rule?.required_assessment_score;
+                          const stats = phaseStats(phase);
+                          const barA = isDone ? "#4a654e" : "#a65959";
+                          const barB = isDone ? "#5d7a60" : "#b76e6e";
+                          return (
+                            <div key={phase.phase_id} className="space-y-3">
+                              <div
+                                id={`phase-${phase.phase_id}`}
+                                className={`p-5 sm:p-6 rounded-lg bg-[#fdfae7] transition-all relative scroll-mt-6 ${
+                                  isLocked
+                                    ? "opacity-75 border-[1.5px] border-dashed border-[#252321]/40"
+                                    : isCurrent
+                                      ? "border-[1.75px] border-[#a65959] shadow-[3px_4px_0px_#a65959]"
+                                      : "border-[1.75px] border-[#252321] shadow-[3px_4px_0px_#252321]"
+                                }`}
+                              >
+                                <div className="flex gap-4">
+                                  {/* Unit seal */}
+                                  <div
+                                    className={`w-[54px] h-[54px] sm:w-[60px] sm:h-[60px] shrink-0 rounded-full border-2 flex items-center justify-center font-sans font-extrabold text-[20px] ${
+                                      isDone
+                                        ? "bg-[#4a654e] text-[#fdfae7] border-[#3b523e]"
+                                        : isCurrent
+                                          ? "bg-[#a65959] text-[#fdfae7] border-[#7c3f3f]"
+                                          : isLocked
+                                            ? "bg-[#ede8d5] text-[#68635e] border-dashed border-[#252321]/40"
+                                            : "bg-[#fdfae7] text-[#252321] border-[#252321]"
+                                    }`}
+                                    style={{
+                                      boxShadow: isDone
+                                        ? "inset 0 0 0 3px #4a654e, inset 0 0 0 5px #fdfae7"
+                                        : isCurrent
+                                          ? "inset 0 0 0 3px #a65959, inset 0 0 0 5px #fdfae7"
+                                          : "inset 0 0 0 3px #fdfae7, inset 0 0 0 5px rgba(37,35,33,0.55)",
+                                    }}
+                                  >
+                                    {isDone ? (
+                                      "✓"
+                                    ) : isLocked ? (
+                                      <span className="material-symbols-outlined text-[22px]">
+                                        lock
+                                      </span>
+                                    ) : (
+                                      unitNumberOf(phase)
+                                    )}
+                                  </div>
 
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded font-bold ${statusBadge(phase.status)}`}
-                        >
-                          {phase.status}
-                        </span>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-start justify-between gap-2">
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-2.5 flex-wrap">
+                                          <h3 className="font-bold text-lg text-[#252321]">
+                                            {phase.title}
+                                          </h3>
+                                          {stats.highYield && (
+                                            <span className="inline-block font-sans font-extrabold text-[10px] tracking-[0.16em] uppercase text-[#a65959] border-[2.5px] border-double border-[#a65959] rounded-md px-2 py-[3px] -rotate-[5deg] bg-[#a65959]/5">
+                                              High-yield
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs text-[#68635e] mt-0.5 font-serif italic">
+                                          {phase.objective}
+                                        </p>
+                                        {resourceHuntPhaseId === phase.phase_id && (
+                                          <p className="text-[11px] text-[#4a654e] mt-1.5 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-sm animate-pulse">
+                                              travel_explore
+                                            </span>
+                                            Finding verified videos &amp; notes for this phase…
+                                          </p>
+                                        )}
+                                        {isLocked && (
+                                          <p className="text-[11px] text-[#68635e] mt-1.5 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-sm">
+                                              lock
+                                            </span>
+                                            Locked — complete the previous phase&apos;s checkpoint
+                                            {req !== undefined && req !== null
+                                              ? ` with at least ${req}%`
+                                              : " and demonstrate mastery"}
+                                            . Unlocking is decided server-side from your assessment
+                                            results.
+                                          </p>
+                                        )}
+                                      </div>
 
-                        {!phase.ai_enriched && (
-                          <button
-                            onClick={() => handleEnrichPhase(phase)}
-                            disabled={enrichingPhaseId === phase.phase_id}
-                            className="px-3 py-1.5 bg-[#7c5cbf] text-white text-xs font-bold rounded hover:bg-[#6a4da8] cursor-pointer disabled:opacity-60"
-                            title="Upgrade this phase's activities to an AI-personalized sequence"
-                          >
-                            {enrichingPhaseId === phase.phase_id ? "Personalizing…" : "✨ Personalize with AI"}
-                          </button>
-                        )}
-                        {!isLocked && !isDone && (
-                          <button
-                            onClick={() => handleGenerateAssessment(phase)}
-                            className="px-3 py-1.5 bg-[#4a654e] text-white text-xs font-bold rounded hover:bg-[#3b523e] cursor-pointer"
-                          >
-                            Take Checkpoint
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        <span
+                                          className={`text-xs px-2.5 py-1 rounded font-bold ${statusBadge(phase.status)}`}
+                                        >
+                                          {phase.status}
+                                        </span>
+                                        {!phase.ai_enriched && (
+                                          <button
+                                            onClick={() => handleEnrichPhase(phase)}
+                                            disabled={enrichingPhaseId === phase.phase_id}
+                                            className="px-3 py-1.5 bg-[#252321] text-[#fdfae7] text-xs font-bold rounded hover:opacity-85 cursor-pointer disabled:opacity-60"
+                                            title="Upgrade this phase's activities to an AI-personalized sequence"
+                                          >
+                                            {enrichingPhaseId === phase.phase_id
+                                              ? "Personalizing…"
+                                              : "✨ Personalize with AI"}
+                                          </button>
+                                        )}
+                                        {!isLocked && !isDone && (
+                                          <button
+                                            onClick={() => handleGenerateAssessment(phase)}
+                                            className="px-3 py-1.5 bg-[#4a654e] text-white text-xs font-bold rounded hover:bg-[#3b523e] cursor-pointer"
+                                          >
+                                            Take Checkpoint
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
 
-                    {/* Phase Activities */}
+                                    {/* Progress — hatched bar, real completion */}
+                                    <div className="mt-4 h-[11px] rounded-full border-[1.5px] border-[#252321] bg-[#ede8d5] overflow-hidden">
+                                      <div
+                                        className="h-full rounded-full"
+                                        style={{
+                                          width: `${stats.pct}%`,
+                                          backgroundImage: `repeating-linear-gradient(-55deg, ${barA} 0 6px, ${barB} 6px 12px)`,
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex flex-wrap justify-between gap-2 mt-1.5">
+                                      <span className="text-[11px] font-sans font-bold tracking-[0.08em] uppercase text-[#68635e]">
+                                        {stats.pyqMarks > 0
+                                          ? `${stats.pyqMarks} PYQ marks linked`
+                                          : `${stats.total} activities`}
+                                      </span>
+                                      <span
+                                        className={`text-[11px] font-sans font-bold tracking-[0.08em] uppercase ${isCurrent ? "text-[#a65959]" : "text-[#68635e]"}`}
+                                      >
+                                        {stats.pct}% done · {stats.done}/{stats.total}
+                                      </span>
+                                    </div>
+
+                                    {/* Resource lanes — from persisted quality_signals */}
+                                    {stats.lanes.length > 0 && (
+                                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                                        {stats.lanes.map((lane: string) => {
+                                          const cfg = LANE_STYLE[lane] || {
+                                            label: lane.replace(/_/g, " "),
+                                            cls: "bg-[#ede8d5] text-[#252321] border-[#252321]",
+                                          };
+                                          let label = cfg.label;
+                                          if (lane === "ONE_SHOT" && stats.hindi)
+                                            label += " · Hindi";
+                                          if (lane === "PYQ" && stats.pyqMarks > 0)
+                                            label += ` · ${stats.pyqMarks} marks`;
+                                          return (
+                                            <span
+                                              key={lane}
+                                              className={`inline-block font-sans text-[9.5px] font-extrabold tracking-[0.14em] uppercase px-2 py-[3px] rounded border-[1.5px] ${cfg.cls}`}
+                                            >
+                                              {label}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="mt-5">
+{/* Phase Activities */}
                     <div className="space-y-3">
                       {(phase.activities || []).length === 0 ? (
                         <p className="text-xs font-serif italic text-[#68635e] p-3">
@@ -1151,7 +1434,7 @@ export function CollegeDashboard() {
                               key={act.activity_id}
                               className={`p-4 rounded-md border flex flex-wrap items-start justify-between gap-3 ${
                                 actDone
-                                  ? "bg-green-50/50 border-green-300"
+                                  ? "bg-[#4a654e]/5 border-[#4a654e]/40"
                                   : "bg-white/70 border-[#252321]/30 hover:border-[#252321]"
                               }`}
                             >
@@ -1215,7 +1498,7 @@ export function CollegeDashboard() {
                                     disabled={completingIds.has(act.activity_id)}
                                     className={`px-3 py-1.5 rounded text-xs font-bold transition-all cursor-pointer disabled:opacity-60 ${
                                       actDone
-                                        ? "bg-green-600 text-white"
+                                        ? "bg-[#4a654e] text-white"
                                         : "bg-white border border-[#252321] hover:bg-[#252321] hover:text-white"
                                     }`}
                                   >
@@ -1232,14 +1515,170 @@ export function CollegeDashboard() {
                         })
                       )}
                     </div>
+                                </div>
+                              </div>
+
+                              {/* Checkpoint gate */}
+                              <div className="flex items-center gap-3 px-4 py-3 rounded-lg border-[1.5px] border-dashed border-[#252321]/50 bg-[#ede8d5]/50">
+                                <span className="material-symbols-outlined text-[19px] text-[#252321]">
+                                  flag
+                                </span>
+                                <p className="text-[13px] font-serif italic text-[#423e3b]">
+                                  {isDone ? (
+                                    <>
+                                      <b className="not-italic font-sans text-[13px]">
+                                        Checkpoint cleared:
+                                      </b>{" "}
+                                      {phase.title} is signed off — the next unit is open.
+                                    </>
+                                  ) : isLocked ? (
+                                    <>
+                                      <b className="not-italic font-sans text-[13px]">
+                                        Checkpoint gate:
+                                      </b>{" "}
+                                      opens once the previous unit&apos;s checkpoint is passed.
+                                    </>
+                                  ) : (
+                                    <>
+                                      <b className="not-italic font-sans text-[13px]">
+                                        Checkpoint:
+                                      </b>{" "}
+                                      pass {phase.title}&apos;s exam-readiness
+                                      {req !== undefined && req !== null ? (
+                                        <>
+                                          {" "}
+                                          with at least{" "}
+                                          <b className="not-italic font-sans">{req}%</b>
+                                        </>
+                                      ) : (
+                                        ""
+                                      )}{" "}
+                                      to unlock the next unit.
+                                    </>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Right rail: verdict · today's focus · breakdown */}
+                <aside className="space-y-5">
+                  <div className="relative p-[18px] rounded-lg bg-[#fffdf4] border-[1.5px] border-[#252321] shadow-[3px_4px_0px_#252321]">
+                    <span className="absolute right-3.5 -top-3 -rotate-[4deg] font-note-handwritten text-[17px] text-[#a65959] bg-[#fffdf4] px-1">
+                      PathMind&apos;s read of your paper →
+                    </span>
+                    <div className="space-y-2.5 text-[14.5px] leading-relaxed text-[#252321] pt-1">
+                      <p>
+                        <b>
+                          {doneActsAll} of {totalActsAll} activities
+                        </b>{" "}
+                        done. <b>{phasesLeft} unit{phasesLeft === 1 ? "" : "s"}</b> still to
+                        clear
+                        {examDays !== null && examDays !== undefined ? (
+                          <>
+                            {" "}
+                            with <b>{examDays} days</b> to the paper
+                          </>
+                        ) : (
+                          ""
+                        )}
+                        .
+                      </p>
+                      {heaviestPhase && heaviestMarks > 0 && heaviestPhase.status !== "COMPLETED" && (
+                        <p>
+                          <b>{heaviestPhase.title}</b> carries{" "}
+                          <b className="text-[#3b523e]">{heaviestMarks} PYQ marks</b> in your
+                          plan — the heaviest unit here. Clear it early.
+                        </p>
+                      )}
+                      {weakestGroup && subjectGroups.length > 1 && (
+                        <p>
+                          <b>{subjectNameOf(weakestGroup.sid)}</b> is your least-covered subject
+                          so far ({groupStats(weakestGroup).pct}% done) — don&apos;t let it slide.
+                        </p>
+                      )}
+                    </div>
                   </div>
-                );
-              })
+
+                  {focusPhase && focusAct && (
+                    <div className="p-[18px] rounded-lg bg-[#fffdf4] border-[1.5px] border-[#252321] shadow-[3px_4px_0px_#252321]">
+                      <span className="text-[10px] font-sans font-bold tracking-[0.2em] uppercase text-[#68635e]">
+                        Today&apos;s focus
+                        {focusAct.estimated_minutes
+                          ? ` · ~${focusAct.estimated_minutes} min`
+                          : ""}
+                      </span>
+                      <h4 className="font-bold text-[17px] leading-snug mt-2">{focusAct.title}</h4>
+                      <p className="text-xs font-serif italic text-[#68635e] mt-0.5">
+                        {focusPhase.title}
+                      </p>
+                      <div className="h-3 rounded-full border-[1.5px] border-[#252321] bg-[#ede8d5] overflow-hidden my-3.5">
+                        <div
+                          className="h-full bg-[#4a654e]"
+                          style={{ width: `${phaseStats(focusPhase).pct}%` }}
+                        />
+                      </div>
+                      <button
+                        onClick={() =>
+                          document
+                            .getElementById(`phase-${focusPhase.phase_id}`)
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        }
+                        className="w-full px-4 py-2.5 bg-[#4a654e] text-[#fdfae7] text-sm font-sans font-bold rounded-[10px] border-[1.5px] border-[#3b523e] shadow-[3px_3px_0px_#3b523e] cursor-pointer hover:opacity-90"
+                      >
+                        Continue this unit →
+                      </button>
+                      <span className="block font-note-handwritten text-[16.5px] text-[#3b523e] mt-3">
+                        one unit a day keeps the backlog away
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="p-[18px] rounded-lg bg-[#fdfae7] border-[1.5px] border-[#252321] shadow-[3px_4px_0px_#252321]">
+                    <span className="text-[10px] font-sans font-bold tracking-[0.2em] uppercase text-[#68635e]">
+                      Plan breakdown
+                    </span>
+                    <h5 className="font-bold text-[15px] mt-1 mb-3">
+                      Where your effort (and PYQ marks) sit
+                    </h5>
+                    <div className="space-y-3.5">
+                      {subjectGroups.map((g) => {
+                        const gs = groupStats(g);
+                        return (
+                          <div key={g.sid || "general"}>
+                            <div className="flex justify-between gap-2 text-[12.5px] mb-1">
+                              <b className="truncate">{subjectNameOf(g.sid)}</b>
+                              <span className="text-[10.5px] font-sans font-bold tracking-[0.08em] uppercase text-[#68635e] shrink-0">
+                                {gs.pct}%{gs.pyqMarks > 0 ? ` · ${gs.pyqMarks} PYQ marks` : ""}
+                              </span>
+                            </div>
+                            <div className="h-[11px] rounded-full border-[1.5px] border-[#252321] bg-[#ede8d5] overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${gs.pct}%`,
+                                  backgroundImage:
+                                    "repeating-linear-gradient(-55deg, #4a654e 0 6px, #5d7a60 6px 12px)",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </aside>
+              </div>
             )}
           </section>
         )}
 
-        {/* TAB 2: PYQ VAULT */}
+{/* TAB 2: PYQ VAULT */}
         {activeTab === "pyq" && (
           <section className="bg-[#fdfae7] p-6 rounded-lg border-[1.75px] border-[#252321] shadow-[3px_4px_0px_#252321] space-y-6">
             <div className="relative h-28 -mx-6 -mt-6 mb-6 rounded-t-lg overflow-hidden border-b-[1.75px] border-[#252321] bg-[#ede8d5]">
