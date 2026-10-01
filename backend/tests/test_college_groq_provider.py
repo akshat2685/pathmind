@@ -118,6 +118,29 @@ def test_wrapper_round_trip_and_payload(monkeypatch):
     assert captured["max_tokens"] == 123
     assert captured["messages"] == [
         {"role": "user", "content": "Say hello"}]
+    # reasoning_effort is a gpt-oss-only knob; llama must not get it.
+    assert "reasoning_effort" not in captured
+
+
+def test_wrapper_gpt_oss_gets_low_reasoning_effort(monkeypatch):
+    """gpt-oss reasoning shares the completion budget; at default
+    effort it truncated large structured JSON outputs live. Direct
+    legs pin reasoning_effort=low."""
+    captured = {}
+
+    def handler(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "[]"},
+                         "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 1, "completion_tokens": 1,
+                      "total_tokens": 2}})
+
+    _mock_groq(monkeypatch, handler)
+    model = gemini_mod.get_gemini_model("direct")
+    model.generate_content("Make a JSON array")
+    assert captured["model"] == "openai/gpt-oss-20b"
+    assert captured["reasoning_effort"] == "low"
 
 
 @pytest.mark.parametrize("status,expected", [
@@ -325,6 +348,7 @@ def test_groq_llm_round_trip(monkeypatch):
     assert seen["model"] == "openai/gpt-oss-120b"
     assert seen["kwargs"]["max_tokens"] == 777
     assert seen["kwargs"]["tools"], "tools must reach the provider call"
+    assert seen["kwargs"]["reasoning_effort"] == "low"
 
 
 # ---------------------------------------------------------------------------

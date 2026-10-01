@@ -265,7 +265,7 @@ class GroqLlm(BaseLlm):
         payload = await asyncio.to_thread(
             groq_chat, self.model, messages,
             max_tokens=max_tokens, temperature=self.temperature,
-            tools=tools or None)
+            tools=tools or None, reasoning_effort="low")
         yield translate_response(payload)
 
 

@@ -1059,7 +1059,7 @@ Available hours/week: {available_hours_per_week}
 Available Resources: {json.dumps(res_summary)}
 Available PYQs (Past Questions): {json.dumps(pyq_summary)}
 
-Return ONLY a valid JSON array of activities in the best learning order. Each activity should be:
+Return ONLY a valid JSON array of at most 6 activities in the best learning order. Each activity should be:
 {{
     "type": "WATCH|READ|PRACTICE|SOLVE_PYQ",
     "resource_id": "id from above if applicable",
