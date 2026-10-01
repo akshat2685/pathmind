@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 import re
 import time
@@ -86,6 +87,81 @@ def tier_for_domain(domain: str) -> str:
     if "youtube.com" in d or "youtu.be" in d:
         return "D"  # promoted to B only if an official channel is confirmed
     return "D"
+
+
+def _tier_rank(tier: str) -> int:
+    return {"A": 4, "B": 3, "C": 2, "D": 1}.get(tier, 1)
+
+
+def _engagement_score(quality_signals: Any) -> float:
+    """Deterministic engagement signal from real platform statistics.
+
+    Log-scaled views (reach), like/view ratio (approval), log-scaled
+    comments (discussion depth). Returns 0.0 when no statistics exist —
+    documents and hand-seeded rows carry none, so their relative order
+    is exactly what it was before engagement ranking existed. The
+    numbers ranked here are real YouTube Data API statistics captured
+    at research time, never estimates or model guesses.
+    """
+    if not isinstance(quality_signals, dict):
+        return 0.0
+
+    def _num(key: str) -> float:
+        try:
+            return float(quality_signals.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    views = _num("view_count")
+    if views <= 0:
+        return 0.0
+    likes = _num("like_count")
+    comments = _num("comment_count")
+    return (math.log10(views + 1) * 10.0
+            + min(likes / views, 0.25) * 40.0
+            + math.log10(comments + 1) * 2.0)
+
+
+def _candidate_quality(cand: Dict[str, Any]) -> float:
+    """Kind-native quality signal, ranked FIRST (AJ's qualification rule).
+
+    Videos: real engagement (views/likes/comments) — the most-watched,
+    best-liked lecture on the topic wins. Documents and free online
+    courses found via Tavily: the search engine's SEO/AEO relevance
+    score (0..1), scaled x100 so it sits in the same numeric range as
+    engagement. Missing scores rank 0 — no signal, no boost.
+    """
+    qs = cand.get("quality_signals")
+    if cand.get("kind") == "VIDEO":
+        return _engagement_score(qs)
+    if isinstance(qs, dict):
+        for key in ("search_score", "tavily_score"):
+            try:
+                return float(qs.get(key)) * 100.0
+            except (TypeError, ValueError):
+                continue
+    return 0.0
+
+
+def _candidate_rank_key(cand: Dict[str, Any]):
+    """Best-first ordering for research candidates (round 7).
+
+    Quality FIRST: engagement for videos, Tavily SEO/AEO relevance for
+    documents and free courses (see _candidate_quality). Institutional
+    tier only breaks ties — trust is still enforced absolutely by the
+    mandatory reachability verification below, so an obscure page no
+    longer outranks the resource learners actually watch and like.
+    """
+    url = cand.get("url") or ""
+    domain = (urllib.parse.urlparse(url).netloc or "").lower()
+    domain = domain.replace("www.", "")
+    tier = tier_for_domain(domain)
+    if cand.get("kind") == "VIDEO" and tier == "D":
+        channel = (cand.get("quality_signals", {})
+                   .get("channel_title") or "").lower()
+        if any(h in channel for h in _OFFICIAL_YT_HANDLES):
+            tier = "B"
+    return (_candidate_quality(cand), _tier_rank(tier))
 
 
 def _chapter_ts_to_seconds(ts: str) -> int:
@@ -220,6 +296,12 @@ class CollegeResourcePipeline:
                         seen_urls.add(url)
                         candidates.append({"kind": "VIDEO", **video})
 
+            # Rank best-first before verifying: verification is the
+            # deadline-bounded step, so it must spend itself on the
+            # strongest candidates (institutional tier, then real
+            # engagement) rather than whatever order search returned.
+            candidates.sort(key=_candidate_rank_key, reverse=True)
+
             # 3. Verify reachability + persist the survivors.
             added: List[Dict[str, Any]] = []
             async with httpx.AsyncClient(
@@ -309,6 +391,25 @@ class CollegeResourcePipeline:
             "domain": domain, "tier": tier,
             "reachability_checked_at": now, "reachable": True,
         })
+        # Persist the engagement score alongside the raw statistics so
+        # plan-time attachment can rank without recomputing (and so the
+        # raw views/likes/comments stay auditable on the record).
+        quality_signals["engagement_score"] = round(
+            _engagement_score(quality_signals), 3)
+        if cand["kind"] != "VIDEO":
+            # Persist the Tavily SEO/AEO relevance score under the
+            # stable "search_score" key so plan-time attachment ranks
+            # documents by the same signal that ordered research.
+            # YouTube rows rank by engagement_score instead and are
+            # left untouched.
+            raw_score = quality_signals.get(
+                "search_score", quality_signals.get("tavily_score"))
+            if raw_score is not None:
+                try:
+                    quality_signals["search_score"] = round(
+                        float(raw_score), 4)
+                except (TypeError, ValueError):
+                    pass
 
         if cand["kind"] == "VIDEO":
             timestamps = await self._video_timestamps(cand, http)
@@ -353,6 +454,7 @@ class CollegeResourcePipeline:
                 "verification_status": "VERIFIED",
                 "last_verified_at": now,
                 "learner_preference_metadata": {"researched": True},
+                "quality_signals": quality_signals,
             }
             client.table("resource_records").insert(row).execute()
             # learning_resources is the read-model get_verified_resources serves.
@@ -487,6 +589,7 @@ class CollegeResourcePipeline:
                     .lower().replace("www.", ""),
                 "quality_signals": {
                     "search_engine": "tavily",
+                    "search_score": r.get("score"),
                     "tavily_score": r.get("score"),
                 },
             })
@@ -577,22 +680,37 @@ class CollegeResourcePipeline:
         description = video.get("description") or ""
         chapters = parse_video_chapters(description)
         if chapters:
-            return [{"start_seconds": c["start_seconds"],
-                     "label": c["label"],
-                     "source": "video_description"} for c in chapters[:12]]
+            stamps = []
+            for idx, chapter in enumerate(chapters[:12]):
+                start = chapter["start_seconds"]
+                end = (chapters[idx + 1]["start_seconds"]
+                       if idx + 1 < len(chapters) else start)
+                stamps.append({"start_seconds": start,
+                               "end_seconds": end,
+                               "label": chapter["label"],
+                               "purpose": chapter["label"],
+                               "source": "video_description"})
+            return stamps
 
         # Optional: transcript check that the topic is actually discussed.
         if await self._transcript_confirms_topic(video):
             minutes = video.get("estimated_minutes") or 20
             thirds = [0, minutes * 60 // 3, minutes * 120 // 3]
             return [{"start_seconds": s,
+                     "end_seconds": (thirds[i + 1]
+                                     if i + 1 < len(thirds) else s),
                      "label": "estimated segment (no chapter markers)",
-                     "source": "estimated"} for s in thirds]
+                     "purpose": "estimated segment (no chapter markers)",
+                     "source": "estimated"}
+                    for i, s in enumerate(thirds)]
 
         # Duration only: still "estimated", never masquerading as chapters.
         minutes = video.get("estimated_minutes")
         if minutes:
-            return [{"start_seconds": 0, "label": "full video",
+            return [{"start_seconds": 0,
+                     "end_seconds": minutes * 60,
+                     "label": "full video",
+                     "purpose": "full video",
                      "source": "estimated"}]
         return []
 

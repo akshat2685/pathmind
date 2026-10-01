@@ -65,6 +65,26 @@ def _get_gemini_model():
     return _shared()
 
 
+#: One-shot ADK generation seam (college_adk_runtime.run_agent_generation).
+#: Bound LAZILY into this module's namespace on first use: a top-level
+#: import of the runtime would cycle (college_adk_tools imports this
+#: service, and the runtime imports the tools). Tests patch this module
+#: attribute to stub the seam AND record that the ADK path was really
+#: invoked — a green suite that never exercised the seam does not count
+#: as proof the agent authored anything.
+run_agent_generation = None
+
+
+def _agent_generation():
+    """Resolve the ADK one-shot generation callable (lazy, patchable)."""
+    global run_agent_generation
+    if run_agent_generation is None:
+        from backend.services.college_adk_runtime import (
+            run_agent_generation as _impl)
+        run_agent_generation = _impl
+    return run_agent_generation
+
+
 async def grade_short_answer_with_llm(
     *,
     question_text: str,
@@ -194,22 +214,26 @@ class CollegeAssessmentService:
 
     async def generate_diagnostic_assessment(self, uid: str) -> CollegeAssessment:
         """
-        Dynamic/hybrid diagnostic (replaces the old LLM-only author):
+        Diagnostic authored by the ADK assessment agent on hybrid-RAG
+        evidence (round 7; AJ's corrected spec — Gemini AUTHORS,
+        retrieval GROUNDS):
 
-          learner context -> verified-source retrieval (curriculum / PYQs /
-          resources / prior mastery) -> Gemini drafts candidate probes and
-          selects the 5-6 highest-information ones -> assessment.
+          learner context -> verified-source retrieval (curriculum /
+          PYQs / resources / prior mastery) -> the assessment agent's
+          one-shot generation drafts ~10 probes and selects 5-6 against
+          that evidence (strictly validated; verified_* claims are
+          downgraded when retrieval lacks the material) -> verified PYQs
+          fill any topic the authored set left uncovered -> assessment.
 
-        Gemini is the reasoning layer, never the source of verified facts:
-        questions grounded in retrieved records carry verified_* source
-        labels; anything Gemini invents is labeled model_generated. When
-        Gemini is unavailable or returns unusable output, the diagnostic
-        falls back to real retrieved material (verified PYQs, then
-        curriculum topic probes) whose answers grade as
-        INSUFFICIENT_EVIDENCE until a grader can judge them — the flow
-        never dead-ends and never fabricates a baseline. Only a learner
-        with no profile raises; only a learner with neither grounded
-        material nor a model gets an honest DIAGNOSTIC_UNAVAILABLE.
+        Honest fallback chain, each step labeled in `authored_by`:
+        ADK generation ("adk:assessment_agent") -> direct Gemini call
+        ("gemini_direct") when the ADK seam fails -> the round-6
+        grounded assembly of real verified PYQs + curriculum probes
+        ("rag_fallback") when no LLM authored anything. Short answers
+        without a rubric grade as INSUFFICIENT_EVIDENCE (Unknown),
+        never a fake score. Only a learner with no profile raises;
+        only a learner whose final set still has <3 questions gets an
+        honest DIAGNOSTIC_UNAVAILABLE — questions are never invented.
         """
         with timed_stage("college.assessment.diagnostic_generated", user_id=uid):
             raw_profile = await self.store.get_college_user_profile(uid)
@@ -228,31 +252,56 @@ class CollegeAssessmentService:
             branch = retrieval.branch or profile.get(
                 "supported_path") or "GENERAL_OTHER"
 
-            questions: List[CollegeAssessmentQuestion] = []
-            authored_by = "retrieval_fallback"
+            # Round 7 (AJ's corrected spec): the ADK assessment agent
+            # is the primary AUTHOR, writing against the hybrid-RAG
+            # evidence above; real verified PYQs then fill topics the
+            # authored set left uncovered (never displacing authored
+            # questions). The round-6 grounded assembly (PYQs + probes)
+            # is now the FALLBACK for when no LLM authored anything.
+            authored: List[CollegeAssessmentQuestion] = []
+            llm_via: Optional[str] = None
             model = _get_gemini_model()
-            if model is not None:
-                try:
-                    questions = self._generate_diagnostic_with_llm(
-                        model, profile, retrieval)
-                    if len(questions) >= 4:
-                        authored_by = "gemini+retrieval"
-                    else:
-                        log_event(
-                            "college.assessment.diagnostic_llm_insufficient",
-                            user_id=uid, question_count=len(questions),
-                            outcome="degraded")
-                        questions = []
-                except ValueError as exc:
-                    # Provider/parse failure: fall back to grounded material
-                    # instead of the old hard DIAGNOSTIC_UNAVAILABLE.
-                    log_event(
-                        "college.assessment.diagnostic_llm_fallback",
-                        user_id=uid, outcome="degraded",
-                        error_code=str(exc)[:120])
+            try:
+                authored, llm_via = await self._generate_diagnostic_with_llm(
+                    model, profile, retrieval)
+            except ValueError as exc:
+                # ADK + direct model both failed or produced unusable
+                # output: the grounded fallback ships instead of the
+                # old hard failure.
+                log_event(
+                    "college.assessment.diagnostic_llm_fallback",
+                    user_id=uid, outcome="degraded",
+                    error_code=str(exc)[:120])
+                authored, llm_via = [], None
 
-            if not questions:
+            if len(authored) >= 3:
+                # The LLM-authored set is the diagnostic (>=3 valid
+                # questions): keep it intact and fill uncovered topics
+                # with real verified PYQs up to 6.
+                questions = list(authored)
+                covered = {str(q.topic or "").strip().lower()
+                           for q in questions}
+                for q in self._rag_pyq_questions(retrieval):
+                    if len(questions) >= 6:
+                        break
+                    key = str(q.topic or "").strip().lower()
+                    if not key or key in covered:
+                        continue
+                    questions.append(q)
+                    covered.add(key)
+                authored_by = ("adk:assessment_agent" if llm_via == "adk"
+                               else "gemini_direct")
+            else:
+                # No LLM authored anything usable: ship the grounded
+                # round-6 assembly, honestly labeled.
+                if authored:
+                    log_event(
+                        "college.assessment.diagnostic_llm_insufficient",
+                        user_id=uid, question_count=len(authored),
+                        outcome="degraded")
                 questions = self._fallback_diagnostic_questions(retrieval)
+                authored_by = "rag_fallback"
+            questions = questions[:6]
 
             if len(questions) < 3:
                 raise ValueError(
@@ -270,7 +319,19 @@ class CollegeAssessmentService:
                 title=f"Diagnostic Assessment: {branch.replace('_', ' ').title()}",
                 questions=questions,
                 status="AVAILABLE",
+                authored_by=authored_by,
             )
+            # Provenance is a payload field (above) AND a log line named
+            # after the agent that ran: mode says "adk" ONLY when the
+            # ADK generation call actually returned text that authored
+            # >=1 question — never for the direct-call or RAG paths.
+            log_event(
+                "college.diagnostic.authored", user_id=uid,
+                assessment_id=assessment.assessment_id,
+                mode=("adk" if authored_by == "adk:assessment_agent"
+                      else authored_by),
+                authored_by=authored_by,
+                question_count=len(questions), outcome="ok")
             await self.store.save_college_assessment(
                 uid, assessment.model_dump(mode="json"))
             log_event("college.assessment.diagnostic_saved", user_id=uid,
@@ -282,13 +343,20 @@ class CollegeAssessmentService:
                       subject_count=len(subject_ids), outcome="ok")
             return assessment
 
-    def _generate_diagnostic_with_llm(self, model, profile, retrieval):
+    async def _generate_diagnostic_with_llm(self, model, profile, retrieval):
         """
-        Gemini authors ~10 candidate probes against the retrieved context
-        and selects the 5-6 highest-information ones (single call: a second
-        selection round-trip risks the serverless window on the free tier).
-        Output is strictly validated; unusable output raises ValueError so
-        the caller falls back to grounded material.
+        The ADK assessment agent authors ~10 candidate probes against
+        the retrieved context and selects the 5-6 highest-information
+        ones (single call: a second selection round-trip risks the
+        serverless window on the free tier).
+
+        Returns (questions, via): via is "adk" when the text came back
+        from the ADK generation seam and "gemini_direct" when only the
+        legacy direct model call produced it — the caller turns that
+        into the payload's authored_by, so the label never claims ADK
+        when the seam did not actually return text. Output is strictly
+        validated; unusable output raises ValueError so the caller
+        falls back to grounded material.
         """
         subject_ids = retrieval.subject_ids or retrieval.context_subject_ids
         subjects_line = ", ".join(subject_ids) if subject_ids else (
@@ -336,9 +404,31 @@ Return ONLY a JSON array of the selected 5-6 questions. Each item:
 MCQs must include "options" and "answer" (letter or exact option text).
 SHORT_ANSWER must include "rubric" and may include "answer" as a short
 reference answer. Never invent subject ids."""
-        response = self._generate_content_or_unavailable(
-            model, prompt, "DIAGNOSTIC")
-        text = response.text.strip()
+        # ADK-first: the assessment agent's one-shot generation is the
+        # primary author. Only when the seam FAILS (ADK missing, no key,
+        # runner error, timeout, empty reply) do we spend a direct model
+        # call on the same prompt — and the returned `via` keeps the
+        # provenance honest about which path produced the text.
+        text = None
+        via = None
+        try:
+            adk_text = await _agent_generation()("assessment", prompt)
+            if adk_text and adk_text.strip():
+                text, via = adk_text.strip(), "adk"
+        except Exception as exc:
+            log_event(
+                "college.assessment.diagnostic_adk_failed",
+                outcome="degraded", error_code=type(exc).__name__)
+            text = None
+        if text is None:
+            if model is None:
+                raise ValueError(
+                    "DIAGNOSTIC_UNAVAILABLE: assessment agent and direct "
+                    "model both unavailable")
+            response = self._generate_content_or_unavailable(
+                model, prompt, "DIAGNOSTIC")
+            text = response.text.strip()
+            via = "gemini_direct"
         if text.startswith("```"):
             text = text.strip("`")
             if text.lower().startswith("json"):
@@ -352,7 +442,7 @@ reference answer. Never invent subject ids."""
         if not isinstance(gen_qs, list):
             raise ValueError(
                 "DIAGNOSTIC_UNAVAILABLE: authored questions were not a list")
-        return self._validate_generated_questions(gen_qs, retrieval)
+        return self._validate_generated_questions(gen_qs, retrieval), via
 
     @staticmethod
     def _validate_generated_questions(gen_qs, retrieval):
@@ -477,13 +567,8 @@ reference answer. Never invent subject ids."""
     )
 
     @staticmethod
-    def _fallback_diagnostic_questions(retrieval):
-        """
-        Grounded fallback when Gemini cannot author: real verified PYQs
-        first (actual university exam questions), then curriculum topic
-        probes. No invented answers or rubrics — short answers without a
-        rubric grade as INSUFFICIENT_EVIDENCE (Unknown), never a fake score.
-        """
+    def _rag_pyq_questions(retrieval):
+        """Real verified PYQs as diagnostic questions (never invented)."""
         questions: List[CollegeAssessmentQuestion] = []
         for q in retrieval.pyq_questions[:4]:
             topic = (q.get("topics") or [None])[0]
@@ -505,62 +590,82 @@ reference answer. Never invent subject ids."""
                 probe="application",
                 source="verified_pyq",
             ))
+        return questions
 
-        if len(questions) < 5:
-            mastered = {
-                str(m.get("topic") or "").strip().lower()
-                for m in (retrieval.known_masteries or [])
-                if str(m.get("outcome") or "").upper().startswith("MASTER")
-            }
-            used = {str(q.topic or "").strip().lower() for q in questions}
-            # Per-subject probe candidates: real knowledge topics only,
-            # deduped, never re-probing demonstrated mastery.
-            per_subject: List[List[Tuple[str, Any]]] = []
-            for sub in retrieval.curriculum_subjects:
-                topics: List[Tuple[str, Any]] = []
-                seen_local = set()
-                for unit in sub.get("units", []):
-                    for topic in (unit.get("topics") or []):
-                        label = str(topic).strip()
-                        key = label.lower()
-                        if (len(label) < 3 or key in seen_local
-                                or key in used or key in mastered
-                                or CollegeAssessmentService._META_TOPIC_RE.search(label)):
-                            continue
-                        seen_local.add(key)
-                        topics.append((label, sub))
-                per_subject.append(topics)
+    @staticmethod
+    def _rag_curriculum_probes(retrieval, existing, target_total: int = 6):
+        """
+        Curriculum topic probes filling the slots `existing` leaves open.
 
-            templates = CollegeAssessmentService._FALLBACK_PROBE_TEMPLATES
-            probe_no = 0
-            # Round-robin across subjects so one subject's first unit can
-            # never dominate the diagnostic; rotate the probe framing.
-            while len(questions) < 6:
-                progressed = False
-                for topics in per_subject:
-                    if len(questions) >= 6:
-                        break
-                    if not topics:
+        Round-robin across subjects so one subject's first unit can never
+        dominate the diagnostic; rotates the probe framing; skips
+        course-admin meta topics, topics already covered by `existing`,
+        and topics with demonstrated mastery. No invented answers or
+        rubrics — these grade as INSUFFICIENT_EVIDENCE (Unknown) until a
+        grader can judge them, never a fake score.
+        """
+        questions: List[CollegeAssessmentQuestion] = []
+        mastered = {
+            str(m.get("topic") or "").strip().lower()
+            for m in (retrieval.known_masteries or [])
+            if str(m.get("outcome") or "").upper().startswith("MASTER")
+        }
+        used = {str(q.topic or "").strip().lower() for q in existing}
+        # Per-subject probe candidates: real knowledge topics only,
+        # deduped, never re-probing demonstrated mastery.
+        per_subject: List[List[Tuple[str, Any]]] = []
+        for sub in retrieval.curriculum_subjects:
+            topics: List[Tuple[str, Any]] = []
+            seen_local = set()
+            for unit in sub.get("units", []):
+                for topic in (unit.get("topics") or []):
+                    label = str(topic).strip()
+                    key = label.lower()
+                    if (len(label) < 3 or key in seen_local
+                            or key in used or key in mastered
+                            or CollegeAssessmentService._META_TOPIC_RE.search(label)):
                         continue
-                    label, sub = topics.pop(0)
-                    text, probe = templates[probe_no % len(templates)]
-                    probe_no += 1
-                    questions.append(CollegeAssessmentQuestion(
-                        question_id=(
-                            f"dq_curr_{sub['subject_id']}_{len(questions)}"),
-                        question_text=text.format(
-                            topic=label,
-                            subject=sub.get("name", sub["subject_id"])),
-                        question_type="SHORT_ANSWER",
-                        topic=label,
-                        marks=5,
-                        probe=probe,
-                        source="verified_curriculum",
-                    ))
-                    progressed = True
-                if not progressed:
+                    seen_local.add(key)
+                    topics.append((label, sub))
+            per_subject.append(topics)
+
+        templates = CollegeAssessmentService._FALLBACK_PROBE_TEMPLATES
+        probe_no = 0
+        while len(existing) + len(questions) < target_total:
+            progressed = False
+            for topics in per_subject:
+                if len(existing) + len(questions) >= target_total:
                     break
-        return questions[:6]
+                if not topics:
+                    continue
+                label, sub = topics.pop(0)
+                text, probe = templates[probe_no % len(templates)]
+                probe_no += 1
+                questions.append(CollegeAssessmentQuestion(
+                    question_id=(
+                        f"dq_curr_{sub['subject_id']}_"
+                        f"{len(existing) + len(questions)}"),
+                    question_text=text.format(
+                        topic=label,
+                        subject=sub.get("name", sub["subject_id"])),
+                    question_type="SHORT_ANSWER",
+                    topic=label,
+                    marks=5,
+                    probe=probe,
+                    source="verified_curriculum",
+                ))
+                progressed = True
+            if not progressed:
+                break
+        return questions
+
+    @staticmethod
+    def _fallback_diagnostic_questions(retrieval):
+        """The pure-RAG diagnostic: verified PYQs, then curriculum probes."""
+        anchored = CollegeAssessmentService._rag_pyq_questions(retrieval)
+        probes = CollegeAssessmentService._rag_curriculum_probes(
+            retrieval, anchored)
+        return (anchored + probes)[:6]
 
     def _generate_questions_with_llm(
         self, model, subject_id: str, topic_title: str, topic_tags: List[str]

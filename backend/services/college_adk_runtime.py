@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from typing import Any, Dict, List, Optional
 
 from backend.agents.college_adk_agents import _gemini_available, build_agents
@@ -37,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 APP_NAME = "pathmind_college"
 RUNNER_TIMEOUT_SECONDS = 50.0
+GENERATION_TIMEOUT_SECONDS = 40.0
 _HISTORY_LIMIT = 10
 
 _session_service = None
@@ -160,6 +162,71 @@ def _parse_structured_reply(raw: str) -> Dict[str, Any]:
         "sources": [s for s in (payload.get("sources") or [])
                     if isinstance(s, str) and s.startswith("http")],
     }
+
+
+async def run_agent_generation(agent_key: str, prompt: str) -> str:
+    """
+    One-shot ADK generation for deterministic services.
+
+    Builds the tool-less generation twin of the named sub-agent
+    ("assessment" / "plan" — same name, instruction, and model as the
+    tool-wired sub-agent) and runs it through the real ADK Runner for a
+    single turn, bounded to GENERATION_TIMEOUT_SECONDS. Returns the
+    agent's final text.
+
+    Raises RuntimeError on ANY failure — ADK not importable, no Gemini
+    key configured, runner error, timeout, or an empty reply — so the
+    caller can fall back honestly (direct model call, then grounded
+    static material) instead of pretending the agent authored anything.
+    Provenance is the caller's job: only text actually returned from
+    here may be labeled adk:*.
+    """
+    from backend.agents.college_adk_agents import build_generation_agent
+
+    if not _gemini_available():
+        raise RuntimeError(
+            "ADK generation unavailable: google-adk or the Gemini key "
+            "is not configured")
+    if not _ensure_llm_key():
+        raise RuntimeError(
+            "ADK generation unavailable: no Gemini API key configured")
+    try:
+        from google.adk.runners import Runner
+        from google.genai import types
+
+        agent = build_generation_agent(agent_key)
+        session_service = _get_session_service()
+        user_id = "college_generation"
+        session_id = f"gen_{agent_key}_{uuid.uuid4().hex[:12]}"
+        await session_service.create_session(
+            app_name=APP_NAME, user_id=user_id, session_id=session_id,
+            state={"agent_key": agent_key})
+        runner = Runner(agent=agent, app_name=APP_NAME,
+                        session_service=session_service)
+
+        async def _collect() -> List[Any]:
+            events: List[Any] = []
+            async for event in runner.run_async(
+                    user_id=user_id, session_id=session_id,
+                    new_message=types.Content(
+                        role="user",
+                        parts=[types.Part(text=prompt)])):
+                events.append(event)
+            return events
+
+        events = await asyncio.wait_for(
+            _collect(), timeout=GENERATION_TIMEOUT_SECONDS)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(
+            f"ADK generation failed ({type(exc).__name__})") from exc
+    text = _extract_final_text(events)
+    if not text:
+        raise RuntimeError("ADK generation produced no final text")
+    log_event("college.adk.generation_ok", agent_key=agent_key,
+              outcome="ok")
+    return text
 
 
 async def _run_with_runner(uid: str, message: str, session_id: str,

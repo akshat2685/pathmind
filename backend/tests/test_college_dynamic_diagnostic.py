@@ -1,9 +1,12 @@
 """
 Dynamic/hybrid diagnostic + plan-generation hardening tests.
 
-Covers the reworked onboarding diagnostic (retrieval-grounded, Gemini as
-reasoning layer, honest fallback) and the plan-generation failure contract.
-All Gemini access is stubbed via backend.core.gemini.get_gemini_model —
+Covers the onboarding diagnostic (round 7: the ADK assessment agent
+AUTHORS on hybrid-RAG evidence; the grounded RAG assembly is the honest
+fallback) and the plan-generation failure contract.
+The ADK seam is stubbed by patching run_agent_generation in the service
+module namespace (recording fakes prove the seam was really invoked);
+Gemini access is stubbed via backend.core.gemini.get_gemini_model —
 no real API key is ever consumed here.
 """
 import json
@@ -15,11 +18,38 @@ from backend.main import app
 from college_testkit import install_fake_adapter
 import backend.core.gemini as gemini_mod
 import backend.api.college_routes as routes_mod
+import backend.services.college_assessment_service as assessment_mod
 import backend.services.college_diagnostic_retrieval as retrieval_mod
+import backend.services.college_learning_service as learning_mod
 
 client = TestClient(app, raise_server_exceptions=False)
 ALICE = {"Authorization": "Bearer " + "alice" + "-token"}
 BOB = {"Authorization": "Bearer " + "bob" + "-token"}
+
+
+class _AdkRecorder:
+    """Recording stand-in for the ADK one-shot generation seam.
+
+    Records (agent_key, prompt) calls so tests can assert the seam was
+    actually invoked with the right agent — proof the ADK path ran,
+    not just that the suite is green.
+    """
+
+    def __init__(self, responder):
+        self.calls = []
+        self._responder = responder
+
+    async def __call__(self, agent_key, prompt):
+        self.calls.append((agent_key, prompt))
+        return self._responder(agent_key, prompt)
+
+
+def _adk_returning(text):
+    return _AdkRecorder(lambda agent_key, prompt: text)
+
+
+async def _adk_down(agent_key, prompt):
+    raise RuntimeError("ADK unavailable in tests")
 
 
 class Resp:
@@ -119,27 +149,42 @@ def _setup_bob_me():
     assert r.status_code == 200, r.text
 
 
-def test_gemini_diagnostic_grounded_and_evidence_shaped(monkeypatch):
-    """Happy path: retrieval + Gemini -> labeled questions -> evidence."""
+def test_agent_authored_diagnostic_grounded_and_evidence_shaped(monkeypatch):
+    """Round 7: the ADK assessment agent AUTHORS the diagnostic on
+    hybrid-RAG evidence; verified PYQs fill only topics the authored
+    set left uncovered -> evidence."""
     _setup_alice()
+    recorder = _adk_returning(json.dumps(CS_DIAGNOSTIC))
+    monkeypatch.setattr(assessment_mod, "run_agent_generation", recorder)
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: ValidModel())
 
     r = client.post("/api/college/assessments/diagnostic", json={}, headers=ALICE)
     assert r.status_code == 200, r.text
     asmt = r.json()
+    # The seam was really invoked, with the assessment agent, and the
+    # payload carries the honest provenance of that path.
+    assert recorder.calls and recorder.calls[0][0] == "assessment"
+    assert asmt["authored_by"] == "adk:assessment_agent"
     questions = asmt["questions"]
     assert 5 <= len(questions) <= 6
     # Provenance labels survive the round trip; nothing unlabeled.
     assert all(q.get("source") for q in questions)
     assert {q["source"] for q in questions} <= {
         "verified_curriculum", "verified_pyq", "model_generated"}
+    # The agent authored the set: model-labeled questions are present,
+    # topics unique. Both seeded PYQ topics (Linked Lists, Arrays) are
+    # already covered by the authored set, so the PYQ fill adds none.
+    assert any(q["source"] == "model_generated" for q in questions)
+    topics = [q["topic"] for q in questions]
+    assert len(topics) == len({t.lower() for t in topics})
 
-    # Answer: dq1 correct (O(1)), dq2/dq3 wrong, shorts strong.
+    # Answer: Scheduling MCQ correct, Paging MCQ wrong, shorts strong.
     answers = {}
     for q in questions:
         if q["question_type"] == "MCQ":
             answers[q["question_id"]] = (
-                q["options"][0] if q["question_id"] == "dq1" else q["options"][2])
+                q["options"][1] if q["topic"] == "Scheduling"
+                else q["options"][2])
         else:
             answers[q["question_id"]] = (
                 "Contiguous memory allows index arithmetic; linked lists "
@@ -157,8 +202,12 @@ def test_gemini_diagnostic_grounded_and_evidence_shaped(monkeypatch):
         assert tr["status_label"] in {"Strong", "Partial", "Weak", "Unknown"}
         assert tr["likely_issue"]
     by_topic = {tr["topic"]: tr for tr in result["topic_results"]}
-    assert by_topic["Linked Lists"]["status_label"] == "Strong"
-    assert by_topic["Scheduling"]["status_label"] in {"Weak", "Partial"}
+    assert by_topic["Scheduling"]["status_label"] == "Strong"
+    assert by_topic["Paging"]["status_label"] == "Weak"
+    # Linked Lists is now a deterministic agent-authored MCQ answered
+    # wrong -> real Weak evidence (in round 6 it was the rubric-less
+    # PYQ, which graded honestly as Unknown).
+    assert by_topic["Linked Lists"]["status_label"] == "Weak"
 
     r3 = client.get("/api/college/baseline", headers=ALICE)
     assert r3.status_code == 200
@@ -166,11 +215,14 @@ def test_gemini_diagnostic_grounded_and_evidence_shaped(monkeypatch):
 
 
 def test_fallback_diagnostic_is_grounded_and_differs_by_learner(monkeypatch):
-    """No Gemini at all: real PYQ/curriculum probes, different per learner."""
+    """No LLM at all (ADK seam down, no direct model): the grounded
+    round-6 assembly ships, honestly labeled rag_fallback."""
+    monkeypatch.setattr(assessment_mod, "run_agent_generation", _adk_down)
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: None)
 
     r = client.post("/api/college/assessments/diagnostic", json={}, headers=ALICE)
     assert r.status_code == 200, r.text
+    assert r.json()["authored_by"] == "rag_fallback"
     alice_qs = r.json()["questions"]
     assert len(alice_qs) >= 3
     # Fallback may only use retrieved, verified material — never invented.
@@ -195,6 +247,7 @@ def test_fallback_diagnostic_is_grounded_and_differs_by_learner(monkeypatch):
 
 def test_fallback_answers_grade_as_unknown_not_fabricated(monkeypatch):
     """Fallback short answers have no rubric: honest Unknown, no fake score."""
+    monkeypatch.setattr(assessment_mod, "run_agent_generation", _adk_down)
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: None)
     r = client.post("/api/college/assessments/diagnostic", json={}, headers=ALICE)
     assert r.status_code == 200, r.text
@@ -212,26 +265,36 @@ def test_fallback_answers_grade_as_unknown_not_fabricated(monkeypatch):
 
 @pytest.mark.parametrize("model", [MalformedModel(), RaisingModel()])
 def test_gemini_failure_never_500_falls_back(monkeypatch, model):
-    """Malformed/raising Gemini -> grounded fallback 200, never a 500."""
+    """ADK seam down AND direct model malformed/raising -> grounded
+    fallback 200, honestly labeled, never a 500."""
+    monkeypatch.setattr(assessment_mod, "run_agent_generation", _adk_down)
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: model)
     r = client.post("/api/college/assessments/diagnostic", json={}, headers=ALICE)
     assert r.status_code == 200, r.text
+    assert r.json()["authored_by"] == "rag_fallback"
     assert all(q["source"] in {"verified_pyq", "verified_curriculum"}
                for q in r.json()["questions"])
 
 
 def test_verified_label_downgraded_without_retrieved_pyqs(monkeypatch):
-    """Gemini may not claim PYQ provenance the retrieval did not supply."""
+    """The agent may not claim PYQ provenance the retrieval did not
+    supply: labels are downgraded even on the ADK path."""
+    overclaimed = OverclaimingModel().generate_content("ignored").text
+    monkeypatch.setattr(assessment_mod, "run_agent_generation",
+                        _adk_returning(overclaimed))
     monkeypatch.setattr(gemini_mod, "get_gemini_model",
                         lambda: OverclaimingModel())
     r = client.post("/api/college/assessments/diagnostic", json={}, headers=BOB)
     assert r.status_code == 200, r.text
+    assert r.json()["authored_by"] == "adk:assessment_agent"
     # Bob (ME) has no verified PYQs seeded: the claim must be downgraded.
     assert all(q["source"] != "verified_pyq" for q in r.json()["questions"])
 
 
 def test_diagnostic_unavailable_only_when_nothing_exists(monkeypatch):
-    """No model AND no grounded material -> honest 503, still not a 500."""
+    """No author (seam down, no model) AND no grounded material ->
+    honest 503, still not a 500."""
+    monkeypatch.setattr(assessment_mod, "run_agent_generation", _adk_down)
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: None)
 
     async def empty_retrieval(store, uid):
@@ -246,34 +309,62 @@ def test_diagnostic_unavailable_only_when_nothing_exists(monkeypatch):
     assert "DIAGNOSTIC_UNAVAILABLE" in r.json()["detail"]
 
 
-def test_plan_reflects_diagnostic_evidence(monkeypatch):
-    """Weak diagnostic topic -> guided phase in the SAME existing planner."""
+def test_plan_reflects_diagnostic_evidence(fake_backend, monkeypatch):
+    """Diagnostic topic mastery -> planner guidance bands (same planner)."""
     monkeypatch.setattr(gemini_mod, "get_gemini_model", lambda: ValidModel())
+    # Plan personalization seam pinned DOWN: this test pins the static
+    # guidance bands; the ADK-authored variant is covered in
+    # test_college_round7.py.
+    monkeypatch.setattr(learning_mod, "run_agent_generation", _adk_down)
+    # A unit Alice has fully mastered on earlier evidence (e.g. a prior
+    # checkpoint): the planner must plan revision, not a re-teach.
+    alice_uid = "11111111-1111-4111-8111-111111111111"
+    for topic in ("Trees", "Graphs"):
+        fake_backend.client.table("learner_topic_mastery").insert({
+            "user_id": alice_uid, "subject_id": "CS-301", "topic": topic,
+            "mastery_score": 0.9, "outcome": "MASTERED",
+            "evidence_ref": "seeded_prior_checkpoint",
+        }).execute()
     r = client.post("/api/college/plans/generate",
                     json={"scope": "SEMESTER"}, headers=ALICE)
     assert r.status_code == 200, r.text
     plan = r.json()
     assert plan["phases"]
+    # Seam down -> the static plan ships with honest provenance.
+    assert plan["authored_by"] == "static_fallback"
     for phase in plan["phases"]:
         guidance = phase["unlock_rule"].get("diagnostic_guidance")
         assert guidance is not None
         assert guidance["band"] in {"weak", "partial", "mastered", "unknown"}
-    ll_phase = next(
-        p for p in plan["phases"]
-        if "Linked Lists" in (p["unlock_rule"].get("required_topics") or []))
-    ll_guidance = ll_phase["unlock_rule"]["diagnostic_guidance"]
-    assert ll_guidance["topics"]
-    # Alice aced the Linked Lists MCQ in the first test -> mastered band,
-    # light-revision objective (not a full re-teach).
-    assert ll_guidance["band"] == "mastered"
-    assert ll_phase["objective"].startswith(
+
+    def phase_covering(topic):
+        return next(
+            p for p in plan["phases"]
+            if topic in (p["unlock_rule"].get("required_topics") or []))
+
+    # Fully mastered unit -> mastered band, light-revision objective.
+    trees_phase = phase_covering("Trees")
+    trees_guidance = trees_phase["unlock_rule"]["diagnostic_guidance"]
+    assert trees_guidance["topics"]
+    assert trees_guidance["band"] == "mastered"
+    assert trees_phase["objective"].startswith(
         "Quick revision — you already know this well")
-    # She missed the Scheduling MCQ -> weak band, guided objective.
-    sched_phase = next(
-        p for p in plan["phases"]
-        if "Scheduling" in (p["unlock_rule"].get("required_topics") or []))
-    assert sched_phase["unlock_rule"]["diagnostic_guidance"]["band"] == "weak"
-    assert sched_phase["objective"].startswith(
+    # Per-topic evidence flows through verbatim: Scheduling was aced in
+    # the diagnostic; its phase-mate is still Unknown, so the phase is
+    # targeted ("partial"), not a full re-teach.
+    sched_phase = phase_covering("Scheduling")
+    sched_guidance = sched_phase["unlock_rule"]["diagnostic_guidance"]
+    assert {"topic": "Scheduling", "outcome": "MASTERED"} in (
+        sched_guidance["topics"])
+    assert sched_guidance["band"] == "partial"
+    # Paging was missed -> weak band drives its phase, guided objective,
+    # even though Virtual Memory in the same unit was mastered.
+    paging_phase = phase_covering("Paging")
+    paging_guidance = paging_phase["unlock_rule"]["diagnostic_guidance"]
+    assert {"topic": "Paging", "outcome": "REINFORCEMENT_REQUIRED"} in (
+        paging_guidance["topics"])
+    assert paging_guidance["band"] == "weak"
+    assert paging_phase["objective"].startswith(
         "Start here — learn the basics step by step")
 
 
@@ -364,6 +455,9 @@ def test_plan_generation_is_static_first_for_large_plans(fake_backend,
     counting_model.generate_content = _counting_generate
     monkeypatch.setattr(gemini_mod, "get_gemini_model",
                         lambda: counting_model)
+    # The ADK plan-agent seam is also pinned down: static-first means
+    # the plan ships with authored_by="static_fallback", not silence.
+    monkeypatch.setattr(learning_mod, "run_agent_generation", _adk_down)
     r = client.post("/api/college/plans/generate",
                     json={"scope": "SEMESTER"}, headers=BOB)
     assert r.status_code == 200, r.text

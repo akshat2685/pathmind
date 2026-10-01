@@ -17,6 +17,7 @@ from backend.core.college_schemas import (
     PYQQuestionRecord
 )
 from backend.services.supabase_adapter import get_supabase_adapter
+from backend.core.college_logging import log_event
 
 async def get_all_universities() -> List[UniversityRecord]:
     adapter = get_supabase_adapter()
@@ -138,6 +139,14 @@ async def get_resources_for_subject(subject_id: str) -> List[ResourceRecord]:
     for row in (res.data or []):
         try:
             records.append(ResourceRecord(**row))
-        except Exception:
-            continue
+        except Exception as exc:
+            # Never drop a cached resource silently: a skip here means a
+            # learner sees "no material linked" for material that exists.
+            log_event(
+                "college.resources.parse_skip",
+                outcome="degraded",
+                error_code=type(exc).__name__,
+                resource_id=str(row.get("resource_id") or ""),
+                subject_id=subject_id,
+            )
     return records
