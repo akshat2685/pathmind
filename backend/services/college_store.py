@@ -37,6 +37,45 @@ def _persistence_error(action: str, exc: Exception) -> RuntimeError:
         f"({exc.__class__.__name__}: {message})"
     )
 
+
+# Verified live columns (information_schema, 2026-10-01) for the tables
+# whose rows are built by wholesale model dumps. PostgREST rejects an
+# upsert carrying ANY key that is not a real column — round 7's
+# model-only `authored_by` field 503'd every diagnostic/plan save until
+# the columns were added. Filtering dumps through these sets makes that
+# failure class impossible: a future model-only field is dropped from
+# the row instead of killing the save. (`id` is DB-generated and never
+# written.)
+_PLAN_ROW_COLUMNS = {
+    "plan_id", "user_id", "goal_id", "plan_type", "version", "status",
+    "scope", "created_at", "authored_by",
+}
+_PHASE_ROW_COLUMNS = {
+    "phase_id", "user_id", "plan_id", "order", "title", "objective",
+    "status", "unlock_rule", "assessment_id", "created_at", "ai_enriched",
+}
+_ACTIVITY_ROW_COLUMNS = {
+    "activity_id", "user_id", "plan_id", "phase_id", "activity_type",
+    "title", "resource_id", "pyq_question_id", "order", "instructions",
+    "estimated_minutes", "status", "started_at", "completed_at",
+    "completion_evidence",
+}
+_ASSESSMENT_ROW_COLUMNS = {
+    "assessment_id", "user_id", "plan_id", "phase_id", "subject_id",
+    "title", "questions", "status", "created_at", "assessment_kind",
+    "authored_by",
+}
+_RESULT_ROW_COLUMNS = {
+    "result_id", "user_id", "assessment_id", "score", "normalized_score",
+    "mastery_status", "topic_results", "feedback",
+    "evaluation_confidence", "created_at",
+}
+
+
+def _only(row: dict, columns) -> dict:
+    """Whitelist-filter a row dict to verified DB columns."""
+    return {k: v for k, v in row.items() if k in columns}
+
 class CollegeStore:
     """
     Authoritative persistence layer for the College MVP.
@@ -296,6 +335,7 @@ class CollegeStore:
         try:
             plan_dict = plan_data.model_dump(exclude={"phases", "subjects"})
             plan_dict["user_id"] = uid
+            plan_dict = _only(plan_dict, _PLAN_ROW_COLUMNS)
             
             # 1. Insert Plan
             self.client.table("learning_plans").upsert(plan_dict, on_conflict="plan_id").execute()
@@ -320,7 +360,9 @@ class CollegeStore:
                 
             # 3. Insert Phases
             if plan_data.phases:
-                phases = [p.model_dump(exclude={"activities"}) for p in plan_data.phases]
+                phases = [_only(p.model_dump(exclude={"activities"}),
+                                 _PHASE_ROW_COLUMNS)
+                          for p in plan_data.phases]
                 for p in phases: p["user_id"] = uid
                 # We upsert to allow partial updates, or delete/insert. 
                 # For safety, let's upsert
@@ -331,7 +373,11 @@ class CollegeStore:
                 for p in plan_data.phases:
                     if p.activities:
                         for act in p.activities:
-                            act_dict = act.model_dump(exclude={"resource", "pyq_question", "learn_steps"})
+                            act_dict = _only(
+                                act.model_dump(exclude={
+                                    "resource", "pyq_question",
+                                    "learn_steps"}),
+                                _ACTIVITY_ROW_COLUMNS)
                             act_dict["user_id"] = uid
                             all_acts.append(act_dict)
                             
@@ -374,6 +420,7 @@ class CollegeStore:
         try:
             phase_dict = phase.model_dump(exclude={"activities"})
             phase_dict["user_id"] = uid
+            phase_dict = _only(phase_dict, _PHASE_ROW_COLUMNS)
             self.client.table("learning_plan_phases").upsert(
                 phase_dict, on_conflict="phase_id").execute()
             try:
@@ -384,7 +431,10 @@ class CollegeStore:
                                phase.phase_id, exc)
             acts = []
             for act in phase.activities:
-                act_dict = act.model_dump(exclude={"resource", "pyq_question", "learn_steps"})
+                act_dict = _only(
+                    act.model_dump(exclude={
+                        "resource", "pyq_question", "learn_steps"}),
+                    _ACTIVITY_ROW_COLUMNS)
                 act_dict["user_id"] = uid
                 acts.append(act_dict)
             if acts:
@@ -410,6 +460,7 @@ class CollegeStore:
     async def save_college_assessment(self, uid: str, assessment_data: dict) -> None:
         try:
             assessment_data["user_id"] = uid
+            assessment_data = _only(assessment_data, _ASSESSMENT_ROW_COLUMNS)
             self.client.table("assessments").upsert(assessment_data, on_conflict="assessment_id").execute()
         except Exception as e:
             logger.error("Failed to save_college_assessment: %s", str(e))
@@ -438,6 +489,7 @@ class CollegeStore:
     async def save_college_assessment_result(self, uid: str, result_data: dict) -> None:
         try:
             result_data["user_id"] = uid
+            result_data = _only(result_data, _RESULT_ROW_COLUMNS)
             self.client.table("assessment_results").upsert(result_data, on_conflict="result_id").execute()
         except Exception as e:
             logger.error("Failed to save_college_assessment_result: %s", str(e))

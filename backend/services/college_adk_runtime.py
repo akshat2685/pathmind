@@ -164,15 +164,17 @@ def _parse_structured_reply(raw: str) -> Dict[str, Any]:
     }
 
 
-async def run_agent_generation(agent_key: str, prompt: str) -> str:
+async def run_agent_generation(agent_key: str, prompt: str,
+                               timeout=None) -> str:
     """
     One-shot ADK generation for deterministic services.
 
     Builds the tool-less generation twin of the named sub-agent
     ("assessment" / "plan" — same name, instruction, and model as the
     tool-wired sub-agent) and runs it through the real ADK Runner for a
-    single turn, bounded to GENERATION_TIMEOUT_SECONDS. Returns the
-    agent's final text.
+    single turn, bounded to GENERATION_TIMEOUT_SECONDS unless the
+    caller passes a tighter `timeout` (seconds) to fit its own request
+    budget. Returns the agent's final text.
 
     Raises RuntimeError on ANY failure — ADK not importable, no Gemini
     key configured, runner error, timeout, or an empty reply — so the
@@ -215,7 +217,7 @@ async def run_agent_generation(agent_key: str, prompt: str) -> str:
             return events
 
         events = await asyncio.wait_for(
-            _collect(), timeout=GENERATION_TIMEOUT_SECONDS)
+            _collect(), timeout=timeout or GENERATION_TIMEOUT_SECONDS)
     except RuntimeError:
         raise
     except Exception as exc:

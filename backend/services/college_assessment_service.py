@@ -20,6 +20,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import asyncio
 import json
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -44,6 +45,7 @@ from backend.core.college_rules import (
     topic_outcome_from_ratio,
 )
 from backend.core.college_logging import log_event, timed_stage
+from backend.core.gemini import generate_fast
 from backend.services.store import FirestoreStore
 
 
@@ -113,7 +115,7 @@ Maximum marks: {marks}
 
 Return ONLY a JSON object, no other text:
 {{"score": <number from 0 to {marks}>, "confidence": "high|medium|low", "reasoning": "<1-2 sentences: which rubric points were met or missed>"}}"""
-    response = await asyncio.to_thread(model.generate_content, prompt)
+    response = await asyncio.to_thread(generate_fast, model, prompt, 512)
     text = response.text.strip()
     if text.startswith("```"):
         text = text.strip("`")
@@ -149,7 +151,7 @@ class CollegeAssessmentService:
         ValueError the route maps to 503 — never a bare 500.
         """
         try:
-            return model.generate_content(prompt)
+            return generate_fast(model, prompt)
         except Exception as exc:
             # Log both the exception type AND message (truncated) so
             # operators can distinguish 404 (retired model) from 429
@@ -411,6 +413,7 @@ reference answer. Never invent subject ids."""
         # provenance honest about which path produced the text.
         text = None
         via = None
+        chain_started = time.monotonic()
         try:
             adk_text = await _agent_generation()("assessment", prompt)
             if adk_text and adk_text.strip():
@@ -425,6 +428,19 @@ reference answer. Never invent subject ids."""
                 raise ValueError(
                     "DIAGNOSTIC_UNAVAILABLE: assessment agent and direct "
                     "model both unavailable")
+            # Budget gate: the direct leg is bounded only by the client
+            # timeout (~30s). If the ADK attempt already burned most of
+            # the serverless window, skip straight to the grounded
+            # fallback instead of dying mid-call against the platform
+            # cap (which would cost the learner the whole diagnostic).
+            if time.monotonic() - chain_started > 20.0:
+                log_event(
+                    "college.assessment.diagnostic_direct_skipped",
+                    outcome="degraded", error_code="CHAIN_BUDGET")
+                raise ValueError(
+                    "DIAGNOSTIC_UNAVAILABLE: assessment agent timed "
+                    "out and no request budget remains for a direct "
+                    "attempt")
             response = self._generate_content_or_unavailable(
                 model, prompt, "DIAGNOSTIC")
             text = response.text.strip()
@@ -697,7 +713,7 @@ Return ONLY a valid JSON array of exactly 3 questions in this format:
 }}]
 Make the first two MCQs and the last one SHORT_ANSWER.
 """
-            response = model.generate_content(prompt)
+            response = generate_fast(model, prompt, 1536)
             text = response.text.strip()
             if text.startswith("```json"):
                 text = text[7:]

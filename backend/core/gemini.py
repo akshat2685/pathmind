@@ -50,6 +50,50 @@ class LLMServiceError(Exception):
         self.cause = cause
 
 
+def fast_generation_config(max_output_tokens: int = 2048):
+    """
+    Generation config for ONE-SHOT authoring calls (diagnostics, plan
+    activities, phase assessments, grading): thinking disabled and the
+    output capped.
+
+    Why: live probing on 2026-10-01 showed default-config generations
+    taking ~30s+ each (thinking-heavy), which starved every chained
+    flow inside the 60s serverless window — the ADK seam burned its
+    whole budget, direct calls died against the per-attempt timeout,
+    and the two-call phase enrich hit FUNCTION_INVOCATION_TIMEOUT.
+    These prompts are bounded authoring tasks with strict output
+    schemas; they do not need open-ended reasoning traces.
+
+    Returns None when the SDK types cannot be built — callers then call
+    without a config, exactly as before (never break a call over this).
+    """
+    try:
+        from google.genai import types as genai_types
+        return genai_types.GenerateContentConfig(
+            max_output_tokens=max_output_tokens,
+            thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+        )
+    except Exception:
+        return None
+
+
+def generate_fast(model, prompt: str, max_output_tokens: int = 2048):
+    """
+    One-shot generation through the shared model wrapper with the fast
+    config applied (thinking off, output capped). Falls back to a plain
+    call when the model object does not accept a config (legacy SDK
+    objects, test doubles) — the config is an optimization, never a
+    reason to fail a call that would otherwise work.
+    """
+    config = fast_generation_config(max_output_tokens)
+    if config is None:
+        return model.generate_content(prompt)
+    try:
+        return model.generate_content(prompt, config=config)
+    except TypeError:
+        return model.generate_content(prompt)
+
+
 class _GenaiResponseWrapper:
     """
     Wraps the new google.genai GenerateContentResponse to provide a safe
@@ -93,11 +137,21 @@ class _GenaiModelWrapper:
         self._client = client
         self._model_id = model_id
 
-    def generate_content(self, prompt: str):
-        raw = self._client.models.generate_content(
-            model=self._model_id,
-            contents=prompt,
-        )
+    def generate_content(self, prompt: str, config=None):
+        # `config` is an optional google.genai GenerateContentConfig
+        # (see fast_generation_config). Callers that omit it get the
+        # exact pre-existing behavior.
+        if config is not None:
+            raw = self._client.models.generate_content(
+                model=self._model_id,
+                contents=prompt,
+                config=config,
+            )
+        else:
+            raw = self._client.models.generate_content(
+                model=self._model_id,
+                contents=prompt,
+            )
         return _GenaiResponseWrapper(raw)
 
 
@@ -110,24 +164,24 @@ def get_gemini_model() -> Optional[object]:
     # Prefer the new google.genai SDK (supports gemini-3.5-flash and later)
     try:
         from google import genai as new_genai
-        # Explicit request policy — previously the client ran with SDK
-        # defaults: a single attempt per generate_content and no explicit
-        # timeout, so one transient Google 5xx (e.g. 503 "model
-        # overloaded") or one slow read failed the whole call. Now: a
-        # bounded 15s per-attempt timeout, plus one SDK-level retry on
-        # retryable statuses with a short backoff. Callers keep their own
-        # retry loops; worst case stays inside the serverless window.
+        # Explicit request policy. History: SDK defaults (one attempt,
+        # no timeout) let a single transient 5xx fail whole calls; then
+        # 15s x 2 attempts starved slow-but-healthy generations — live
+        # probing on 2026-10-01 measured successful generations at
+        # ~30s while every chained flow (ADK seam + direct leg, phase
+        # enrich) died against the 15s attempts. Current policy: ONE
+        # attempt with a 30s timeout. Retries live with the callers
+        # (the orchestrator loops with class-aware fail-fast; the
+        # diagnostic chain falls back ADK -> direct -> grounded RAG),
+        # which keeps every multi-call flow's worst case inside the
+        # 60s serverless window instead of multiplying SDK retries.
         http_options = None
         try:
             from google.genai import types as genai_types
             http_options = genai_types.HttpOptions(
-                timeout=15_000,
+                timeout=30_000,
                 retry_options=genai_types.HttpRetryOptions(
-                    attempts=2,
-                    initial_delay=1.0,
-                    max_delay=4.0,
-                    exp_base=2.0,
-                    jitter=1.0,
+                    attempts=1,
                     http_status_codes=[429, 500, 502, 503, 504],
                 ),
             )

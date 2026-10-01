@@ -20,6 +20,42 @@ class FakeResponse:
         self.data = data
 
 
+# PostgREST rejects a write carrying a key that is not a real column.
+# The fake historically accepted anything, which let a model-only field
+# (round 7's `authored_by`, before its migration) pass every local test
+# while production saves 503'd. These tables are now strict: writes with
+# unknown keys raise, exactly like PostgREST. Column sets verified
+# against information_schema on 2026-10-01 (id included: PostgREST
+# accepts an explicit id even though the store never writes one).
+STRICT_COLUMNS = {
+    "assessments": {
+        "id", "assessment_id", "user_id", "plan_id", "phase_id",
+        "subject_id", "title", "questions", "status", "created_at",
+        "assessment_kind", "authored_by",
+    },
+    "assessment_results": {
+        "id", "result_id", "user_id", "assessment_id", "score",
+        "normalized_score", "mastery_status", "topic_results",
+        "feedback", "evaluation_confidence", "created_at",
+    },
+    "learning_plans": {
+        "id", "plan_id", "user_id", "goal_id", "plan_type", "version",
+        "status", "created_at", "scope", "authored_by",
+    },
+    "learning_plan_phases": {
+        "id", "phase_id", "user_id", "plan_id", "order", "title",
+        "objective", "status", "unlock_rule", "assessment_id",
+        "created_at", "ai_enriched",
+    },
+    "learning_activities": {
+        "id", "activity_id", "user_id", "plan_id", "phase_id",
+        "activity_type", "title", "resource_id", "pyq_question_id",
+        "order", "instructions", "estimated_minutes", "status",
+        "started_at", "completed_at", "completion_evidence",
+    },
+}
+
+
 def _like_to_regex(pattern: str) -> str:
     # Convert a SQL LIKE pattern (% wildcards) to a full-match regex.
     out = []
@@ -92,6 +128,19 @@ class FakeQuery:
         return self
 
     # ---- execution ----
+    def _check_strict_columns(self, items):
+        allowed = STRICT_COLUMNS.get(getattr(self._table, "name", None))
+        if allowed is None:
+            return
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            unknown = sorted(set(item) - allowed)
+            if unknown:
+                raise ValueError(
+                    f"PostgREST: column(s) {unknown} do not exist on "
+                    f"table {self._table.name!r} (fake strict mode)")
+
     def _matches(self, row):
         for kind, col, val in self._filters:
             rv = row.get(col)
@@ -120,6 +169,7 @@ class FakeQuery:
             return FakeResponse(data)
         if self._op == "insert":
             items = self._payload if isinstance(self._payload, list) else [self._payload]
+            self._check_strict_columns(items)
             inserted = []
             for item in items:
                 row = copy.deepcopy(item)
@@ -128,6 +178,7 @@ class FakeQuery:
             return FakeResponse(inserted)
         if self._op == "upsert":
             items = self._payload if isinstance(self._payload, list) else [self._payload]
+            self._check_strict_columns(items)
             out = []
             conflict = getattr(self, "_on_conflict", None)
             conflict_keys = []
@@ -149,6 +200,7 @@ class FakeQuery:
                     out.append(copy.deepcopy(row))
             return FakeResponse(out)
         if self._op == "update":
+            self._check_strict_columns([self._payload])
             updated = []
             for row in rows:
                 if self._matches(row):
@@ -163,7 +215,8 @@ class FakeQuery:
 
 
 class FakeTable:
-    def __init__(self):
+    def __init__(self, name=None):
+        self.name = name
         self._rows = []
 
     def select(self, cols="*"):
@@ -233,7 +286,7 @@ class FakeSupabaseClient:
 
     def table(self, name):
         if name not in self._tables:
-            self._tables[name] = FakeTable()
+            self._tables[name] = FakeTable(name)
         return self._tables[name]
 
     def reset(self):

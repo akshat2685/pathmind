@@ -26,6 +26,22 @@ from backend.core.config import settings
 
 _MODEL = settings.GEMINI_MODEL
 
+
+def _fast_agent_config():
+    """
+    Bounded generation config shared by every college agent (see
+    backend.core.gemini.fast_generation_config): thinking off, output
+    capped. Default-config generations measured ~30s+ live on
+    2026-10-01, which starved chained flows inside the 60s serverless
+    window. Returns None when the config cannot be built — agents then
+    run with SDK defaults, exactly as before.
+    """
+    try:
+        from backend.core.gemini import fast_generation_config
+        return fast_generation_config(2048)
+    except Exception:
+        return None
+
 # Instruction strings shared by the tool-wired sub-agents (build_agents)
 # and their tool-less one-shot generation twins (build_generation_agent),
 # so a one-shot generation runs under the SAME name/instruction/model as
@@ -107,9 +123,11 @@ def build_agents(toolkit: CollegeToolKit,
     """
     if not _ADK_IMPORT_OK or LlmAgent is None:
         raise RuntimeError("google-adk is not importable in this environment")
+    agent_config = _fast_agent_config()
     academic = LlmAgent(
         name="academic_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=(
             "You are the Academic sub-agent for a college engineering mentor. "
             "Maintain the learner's academic context: profile, subjects, "
@@ -128,6 +146,7 @@ def build_agents(toolkit: CollegeToolKit,
     plan = LlmAgent(
         name="plan_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=PLAN_AGENT_INSTRUCTION,
         tools=toolkit.as_function_tools([
             "get_academic_context", "get_current_subjects",
@@ -139,6 +158,7 @@ def build_agents(toolkit: CollegeToolKit,
     assessment = LlmAgent(
         name="assessment_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=ASSESSMENT_AGENT_INSTRUCTION,
         tools=toolkit.as_function_tools([
             "get_topic_mastery_state", "create_assessment",
@@ -149,6 +169,7 @@ def build_agents(toolkit: CollegeToolKit,
     accountability = LlmAgent(
         name="accountability_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=(
             "You are the Accountability sub-agent. Create commitments with "
             "create_accountability_commitment and report today's state with "
@@ -165,6 +186,7 @@ def build_agents(toolkit: CollegeToolKit,
     memory = LlmAgent(
         name="memory_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=(
             "You are the Memory sub-agent. Maintain the learner model: read "
             "short/long-term memory before other agents act, update the "
@@ -183,6 +205,7 @@ def build_agents(toolkit: CollegeToolKit,
     pyq = LlmAgent(
         name="pyq_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=(
             "You are the PYQ sub-agent. Retrieve verified previous-year "
             "questions with get_verified_pyqs only. If the result is "
@@ -221,6 +244,7 @@ def build_agents(toolkit: CollegeToolKit,
     root = LlmAgent(
         name="college_root_agent",
         model=_MODEL,
+        generate_content_config=agent_config,
         instruction=root_instruction,
         sub_agents=subagents,
         tools=toolkit.as_function_tools([
@@ -265,6 +289,7 @@ def build_generation_agent(agent_key: str) -> LlmAgent:
         name=name,
         model=_MODEL,
         instruction=instruction,
+        generate_content_config=_fast_agent_config(),
         tools=[],
     )
 
