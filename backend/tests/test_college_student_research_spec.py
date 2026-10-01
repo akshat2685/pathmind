@@ -281,3 +281,77 @@ def test_adk_assessment_instruction_carries_spec():
     assert "past-year" in ASSESSMENT_AGENT_INSTRUCTION
     assert "easiest first" in ASSESSMENT_AGENT_INSTRUCTION
     assert "exam-readiness" in ASSESSMENT_AGENT_INSTRUCTION
+
+
+# ---------------------------------------------------------------------------
+# Research flow: legs merge, web-surfaced YouTube is a VIDEO
+# (regression: sequential legs let one slow provider starve the whole
+# budget and research returned zero resources)
+# ---------------------------------------------------------------------------
+
+class _DummyHttp:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+async def test_research_topic_merges_concurrent_legs(monkeypatch):
+    # The sandbox's proxy env breaks real httpx client construction;
+    # verification is stubbed anyway, so stub the client too.
+    monkeypatch.setattr("httpx.AsyncClient", lambda *a, **k: _DummyHttp())
+    pipe = CollegeResourcePipeline(store=object())
+
+    async def fake_web(query, deadline):
+        return [{"url": "https://www.youtube.com/watch?v=abc123XYZ",
+                 "title": "IoT Unit 3 One Shot", "snippet": "",
+                 "provider": "youtube.com",
+                 "quality_signals": {"search_engine": "duckduckgo"}}]
+
+    async def fake_yt(query, deadline):
+        return [{"url": "https://www.youtube.com/watch?v=def456UVW",
+                 "title": "IoT sensors lecture", "provider": "youtube.com",
+                 "quality_signals": {"view_count": 1000}}]
+
+    seen = {}
+
+    async def fake_verify(http, cand, subject_id, topic):
+        seen[cand["url"]] = cand["kind"]
+        return {"resource_id": "res_x", "url": cand["url"]}
+
+    pipe._search_web = fake_web
+    pipe._search_youtube = fake_yt
+    pipe._verify_and_persist = fake_verify
+    out = await pipe.research_topic(
+        "sub_x", "Sensors", subject_name="Internet of Things",
+        time_budget_seconds=10)
+    assert out["status"] == "VERIFIED"
+    assert out["resources_added"] == 2  # deduped across the 3+2 queries
+    assert seen["https://www.youtube.com/watch?v=abc123XYZ"] == "VIDEO"
+    assert seen["https://www.youtube.com/watch?v=def456UVW"] == "VIDEO"
+
+
+async def test_research_topic_survives_a_dead_leg(monkeypatch):
+    monkeypatch.setattr("httpx.AsyncClient", lambda *a, **k: _DummyHttp())
+    pipe = CollegeResourcePipeline(store=object())
+
+    async def dead_web(query, deadline):
+        raise RuntimeError("provider down")
+
+    async def fake_yt(query, deadline):
+        return [{"url": "https://www.youtube.com/watch?v=def456UVW",
+                 "title": "IoT sensors lecture", "provider": "youtube.com",
+                 "quality_signals": {"view_count": 1000}}]
+
+    async def fake_verify(http, cand, subject_id, topic):
+        return {"resource_id": "res_x", "url": cand["url"]}
+
+    pipe._search_web = dead_web
+    pipe._search_youtube = fake_yt
+    pipe._verify_and_persist = fake_verify
+    out = await pipe.research_topic(
+        "sub_x", "Sensors", subject_name="Internet of Things",
+        time_budget_seconds=10)
+    assert out["status"] == "VERIFIED"
+    assert out["resources_added"] == 1
