@@ -144,14 +144,15 @@ class CollegeAssessmentService:
         self.store = store or FirestoreStore()
 
     @staticmethod
-    def _generate_content_or_unavailable(model, prompt: str, feature: str):
+    def _generate_content_or_unavailable(model, prompt: str, feature: str,
+                                         max_output_tokens: int = 2048):
         """
         Calls model.generate_content, converting ANY provider failure
         (retired model id, bad key, quota, network) into an honest
         ValueError the route maps to 503 — never a bare 500.
         """
         try:
-            return generate_fast(model, prompt)
+            return generate_fast(model, prompt, max_output_tokens)
         except Exception as exc:
             # Log both the exception type AND message (truncated) so
             # operators can distinguish 404 (retired model) from 429
@@ -442,7 +443,7 @@ reference answer. Never invent subject ids."""
                     "out and no request budget remains for a direct "
                     "attempt")
             response = self._generate_content_or_unavailable(
-                model, prompt, "DIAGNOSTIC")
+                model, prompt, "DIAGNOSTIC", max_output_tokens=4096)
             text = response.text.strip()
             via = "gemini_direct"
         if text.startswith("```"):

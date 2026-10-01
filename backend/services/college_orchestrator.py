@@ -24,6 +24,29 @@ from backend.services.store import FirestoreStore
 
 logger = logging.getLogger(__name__)
 
+def _error_detail(exc: BaseException, limit: int = 240) -> str:
+    """
+    Bounded "Type: message <- Type: message" walk of an exception chain.
+
+    Error responses carry this so an "LLM unavailable" is verifiable —
+    the operator (and the learner's support path) can see whether the
+    cause was a quota 429, a retired model 404, or a local defect —
+    instead of every failure collapsing into one opaque code. Messages
+    are truncated; provider errors never contain the API key.
+    """
+    parts: List[str] = []
+    seen = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen and len(parts) < 3:
+        seen.add(id(cur))
+        cause = getattr(cur, "cause", None)
+        msg = str(cur)[:160] if str(cur) else ""
+        parts.append(f"{type(cur).__name__}: {msg}".rstrip(": "))
+        cur = cause if isinstance(cause, BaseException) \
+            else cur.__cause__ or cur.__context__
+    return " <- ".join(parts)[:limit]
+
+
 class CollegeOrchestrator:
     def __init__(self, store: Optional[FirestoreStore] = None):
         self.store = store or FirestoreStore()
@@ -248,6 +271,7 @@ class CollegeOrchestrator:
         ai_response_text = None
         mentor_error = False
         mentor_error_code: Optional[str] = None
+        mentor_error_detail: Optional[str] = None
         if settings.GEMINI_API_KEY:
             try:
                 ai_response_text = await self._generate_mentor_reply(
@@ -255,6 +279,7 @@ class CollegeOrchestrator:
             except Exception as e:
                 mentor_error_code = getattr(e, "error_code", None) \
                     or classify_llm_error(e)
+                mentor_error_detail = _error_detail(e)
                 logger.error("Mentor LLM failed after retries: %s",
                              str(e), exc_info=True)
                 log_event("college.mentor.llm_failed", user_id=uid,
@@ -262,6 +287,7 @@ class CollegeOrchestrator:
                 mentor_error = True
         else:
             mentor_error_code = "LLM_NOT_CONFIGURED"
+            mentor_error_detail = "GEMINI_API_KEY is not configured"
 
         if mentor_error or not (ai_response_text or "").strip():
             if mentor_error_code == "LLM_QUOTA":
@@ -286,6 +312,7 @@ class CollegeOrchestrator:
                             "Nothing was fabricated in place of the answer."),
                 "state": "ERROR",
                 "error_code": mentor_error_code or "LLM_UNAVAILABLE",
+                "error_detail": mentor_error_detail or "",
                 "ui_blocks": [
                     {
                         "type": "NEXT_ACTION",

@@ -27,7 +27,7 @@ from backend.core.config import settings
 _MODEL = settings.GEMINI_MODEL
 
 
-def _fast_agent_config():
+def _fast_agent_config(max_output_tokens: int = 2048):
     """
     Bounded generation config shared by every college agent (see
     backend.core.gemini.fast_generation_config): thinking off, output
@@ -38,7 +38,7 @@ def _fast_agent_config():
     """
     try:
         from backend.core.gemini import fast_generation_config
-        return fast_generation_config(2048)
+        return fast_generation_config(max_output_tokens)
     except Exception:
         return None
 
@@ -285,11 +285,17 @@ def build_generation_agent(agent_key: str) -> LlmAgent:
         name, instruction = _GENERATION_AGENT_SPECS[agent_key]
     except KeyError:
         raise ValueError(f"unknown generation agent: {agent_key!r}")
+    # Per-agent output caps: the assessment author returns a full
+    # 5-6 question JSON set (a 2048 cap risks truncating the tail
+    # question mid-object, which fails the whole parse); the plan
+    # personalizer returns one small object per phase.
+    caps = {"assessment": 4096, "plan": 3072}
     return LlmAgent(
         name=name,
         model=_MODEL,
         instruction=instruction,
-        generate_content_config=_fast_agent_config(),
+        generate_content_config=_fast_agent_config(
+            caps.get(agent_key, 2048)),
         tools=[],
     )
 

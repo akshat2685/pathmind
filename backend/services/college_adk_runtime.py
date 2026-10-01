@@ -119,6 +119,24 @@ def _extract_final_text(events: List[Any]) -> Optional[str]:
     return text
 
 
+def _event_error_detail(events: List[Any]) -> str:
+    """
+    Bounded "code: message" from the first event carrying an ADK error.
+
+    ADK delivers model failures as EVENTS (error_code / error_message),
+    not exceptions — a run can "succeed" mechanically while every event
+    is an error and no final text exists. Surfacing that detail in the
+    raised error (and therefore in logs and honest error responses) is
+    the difference between diagnosable and invisible failures.
+    """
+    for event in events or []:
+        code = getattr(event, "error_code", None)
+        msg = getattr(event, "error_message", None)
+        if code or msg:
+            return f"{code or 'ADK_ERROR'}: {str(msg or '')[:200]}".strip()
+    return ""
+
+
 def _parse_structured_reply(raw: str) -> Dict[str, Any]:
     """Parse the root agent's JSON contract into the TRD §23 shape."""
     text = (raw or "").strip()
@@ -222,10 +240,17 @@ async def run_agent_generation(agent_key: str, prompt: str,
         raise
     except Exception as exc:
         raise RuntimeError(
-            f"ADK generation failed ({type(exc).__name__})") from exc
+            f"ADK generation failed ({type(exc).__name__}: "
+            f"{str(exc)[:200]})") from exc
     text = _extract_final_text(events)
     if not text:
-        raise RuntimeError("ADK generation produced no final text")
+        detail = _event_error_detail(events)
+        log_event("college.adk.generation_no_text",
+                  agent_key=agent_key, outcome="error",
+                  error_code=detail[:120] or "NO_FINAL_TEXT")
+        raise RuntimeError(
+            "ADK generation produced no final text"
+            + (f" [{detail}]" if detail else ""))
     log_event("college.adk.generation_ok", agent_key=agent_key,
               outcome="ok")
     return text
@@ -272,7 +297,10 @@ async def _run_with_runner(uid: str, message: str, session_id: str,
                                     timeout=RUNNER_TIMEOUT_SECONDS)
     final_text = _extract_final_text(events)
     if not final_text:
-        raise RuntimeError("ADK produced no final response")
+        detail = _event_error_detail(events)
+        raise RuntimeError(
+            "ADK produced no final response"
+            + (f" [{detail}]" if detail else ""))
     return _parse_structured_reply(final_text)
 
 
@@ -326,6 +354,7 @@ async def run_agent_interact(uid: str, user_message: str,
         # 4. ADK run, or honest fallback when no LLM is configured.
         used_adk = False
         shape: Optional[Dict[str, Any]] = None
+        adk_error_detail = ""
         if _gemini_available() and _ensure_llm_key():
             try:
                 shape = await _run_with_runner(
@@ -339,6 +368,10 @@ async def run_agent_interact(uid: str, user_message: str,
                 log_event("college.adk.interact_fallback", user_id=uid,
                           outcome="error",
                           error_code=type(e).__name__)
+                # Keep the bounded reason: if the legacy fallback also
+                # fails, the response carries BOTH failures' details
+                # instead of one opaque "unavailable".
+                adk_error_detail = f"{type(e).__name__}: {str(e)[:200]}"
         if shape is None:
             try:
                 shape = await _legacy_fallback(uid, user_message,
@@ -363,6 +396,8 @@ async def run_agent_interact(uid: str, user_message: str,
                 "ui_blocks": [],
                 "sources": [],
             }
+        if adk_error_detail and shape.get("state") == "ERROR":
+            shape.setdefault("adk_error_detail", adk_error_detail)
 
         # 5. Persist assistant turn.
         try:
