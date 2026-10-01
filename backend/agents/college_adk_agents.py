@@ -75,7 +75,12 @@ ASSESSMENT_AGENT_INSTRUCTION = (
     "assessments with create_assessment and grade submissions with "
     "evaluate_assessment. Record weaknesses as learning signals via "
     "record_learning_signal. You never compute scores by hand — "
-    "the tools do. Question IDs and responses are stored by the tools."
+    "the tools do. Question IDs and responses are stored by the tools. "
+    "When authoring a diagnostic: prefer adapting real past-year "
+    "questions (PYQs) over inventing textbook-style ones, order "
+    "questions easiest first, spread them across units like the real "
+    "paper, and keep the tone zero-stakes — it is an exam-readiness "
+    "check, never a pass/fail test."
 )
 
 

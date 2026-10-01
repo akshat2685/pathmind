@@ -1518,7 +1518,7 @@ export function CollegeDashboard() {
                 <div className="border-b border-dashed border-[#252321]/20 pb-3">
                   <span className="text-xs px-2.5 py-1 rounded bg-[#4a654e]/10 border border-[#4a654e] text-[#4a654e] font-bold">
                     {activeAssessment.assessment_kind === "DIAGNOSTIC"
-                      ? "Diagnostic Assessment"
+                      ? "Exam Readiness Check"
                       : "Phase Checkpoint"}
                   </span>
                   <h3 className="text-2xl font-bold text-[#252321] mt-2">
