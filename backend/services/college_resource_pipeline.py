@@ -24,6 +24,7 @@ signals are deterministic (status codes, domain tiers, view/like counts).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import math
@@ -330,11 +331,28 @@ class CollegeResourcePipeline:
             candidates: List[Dict[str, Any]] = []
             seen_urls: set = set()
 
-            # 1. Web search: DuckDuckGo primary, Tavily backup.
-            for q in query_sets["web"][:3]:
-                if time.monotonic() > deadline:
-                    break
-                for hit in await self._search_web(q, deadline):
+            # 1+2. Web search (DuckDuckGo primary, Tavily backup) and
+            # YouTube research run CONCURRENTLY. They used to run
+            # sequentially under one shared deadline: a single slow
+            # provider leg (DDG's HTML endpoint can hang to its full
+            # timeout from datacenter IPs) starved every later leg and
+            # the whole verification step, so research returned zero
+            # resources despite healthy providers. Wall time is now the
+            # slowest leg, not the sum.
+            web_queries = query_sets["web"][:3]
+            yt_queries = query_sets["youtube"][:2]
+            web_results, yt_results = await asyncio.gather(
+                asyncio.gather(
+                    *[self._search_web(q, deadline) for q in web_queries],
+                    return_exceptions=True),
+                asyncio.gather(
+                    *[self._search_youtube(q, deadline) for q in yt_queries],
+                    return_exceptions=True))
+
+            for hits in web_results:
+                if isinstance(hits, Exception):
+                    continue
+                for hit in hits:
                     url = hit.get("url", "")
                     if not url or url in seen_urls:
                         continue
@@ -359,17 +377,15 @@ class CollegeResourcePipeline:
                             cand["provider"] = "youtube.com"
                     candidates.append(cand)
 
-            # 2. YouTube research (metadata + statistics + chapters).
-            if time.monotonic() <= deadline:
-                for q in query_sets["youtube"][:2]:
-                    if time.monotonic() > deadline:
-                        break
-                    for video in await self._search_youtube(q, deadline):
-                        url = video.get("url", "")
-                        if not url or url in seen_urls:
-                            continue
-                        seen_urls.add(url)
-                        candidates.append({"kind": "VIDEO", **video})
+            for videos in yt_results:
+                if isinstance(videos, Exception):
+                    continue
+                for video in videos:
+                    url = video.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    candidates.append({"kind": "VIDEO", **video})
 
             # Rank best-first before verifying: verification is the
             # deadline-bounded step, so it must spend itself on the
@@ -692,7 +708,7 @@ class CollegeResourcePipeline:
         """DuckDuckGo HTML endpoint: no API key, real organic results."""
         try:
             async with httpx.AsyncClient(
-                    timeout=15.0,
+                    timeout=8.0,
                     headers={"User-Agent": "Mozilla/5.0"}) as http:
                 resp = await http.post(
                     DDG_HTML_URL, data={"q": query, "kl": "in-en"})
@@ -741,7 +757,7 @@ class CollegeResourcePipeline:
         if not self._tavily_key:
             return []
         try:
-            async with httpx.AsyncClient(timeout=20.0) as http:
+            async with httpx.AsyncClient(timeout=12.0) as http:
                 resp = await http.post(TAVILY_API_URL, json={
                     "api_key": self._tavily_key,
                     "query": query, "max_results": 6,
@@ -777,7 +793,7 @@ class CollegeResourcePipeline:
         if not self._youtube_key or time.monotonic() > deadline:
             return []
         try:
-            async with httpx.AsyncClient(timeout=15.0) as http:
+            async with httpx.AsyncClient(timeout=10.0) as http:
                 resp = await http.get(
                     f"{YOUTUBE_API_URL}/search",
                     params={"key": self._youtube_key, "q": query,
