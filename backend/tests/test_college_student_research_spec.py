@@ -355,3 +355,89 @@ async def test_research_topic_survives_a_dead_leg(monkeypatch):
         time_budget_seconds=10)
     assert out["status"] == "VERIFIED"
     assert out["resources_added"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Persist payloads (regression: live research returned 0 for every topic
+# because the resource_records insert carried a quality_signals key the
+# table does not have — PostgREST PGRST204 rejected every insert, the
+# exception was swallowed, and learning_resources was never reached.
+# Proven live 2026-10-01: 37 source_records verified, 0 persisted.)
+# ---------------------------------------------------------------------------
+
+class _RecordingTable:
+    def __init__(self, client, name):
+        self._client = client
+        self._name = name
+
+    def select(self, *a, **k):
+        return self
+
+    def eq(self, *a, **k):
+        return self
+
+    def insert(self, payload):
+        self._client.writes.append((self._name, "insert", payload))
+        return self
+
+    def upsert(self, payload, **k):
+        self._client.writes.append((self._name, "upsert", payload))
+        return self
+
+    def execute(self):
+        return _Resp([])
+
+
+class _RecordingClient:
+    def __init__(self):
+        self.writes = []
+
+    def table(self, name):
+        return _RecordingTable(self, name)
+
+
+class _FakeHeadResponse:
+    status_code = 200
+
+    def __init__(self, url):
+        self.url = url
+
+
+class _FakeHttp:
+    async def head(self, url):
+        return _FakeHeadResponse(url)
+
+    async def get(self, url):
+        return _FakeHeadResponse(url)
+
+
+async def test_verify_and_persist_payload_matches_real_schema():
+    client = _RecordingClient()
+    store = type("S", (), {
+        "adapter": type("A", (), {"client": client})()})()
+    pipe = CollegeResourcePipeline(store=store)
+    cand = {
+        "kind": "WEB",
+        "url": "https://example.com/iot-unit-3-important-questions",
+        "title": "IoT Unit 3 Important Questions",
+        "provider": "example.com",
+        "quality_signals": {"search_engine": "tavily", "search_score": 0.9},
+    }
+    record = await pipe._verify_and_persist(
+        _FakeHttp(), cand, "rtu_cse_7cs4_01", "IoT Hardware and Software")
+    assert record is not None
+
+    by_table = {}
+    for table, op, payload in client.writes:
+        by_table.setdefault(table, []).append((op, payload))
+
+    rr = by_table["resource_records"][0][1]
+    assert "quality_signals" not in rr  # column does not exist there
+    lr = by_table["learning_resources"][0][1]
+    assert lr["subject_id"] == "rtu_cse_7cs4_01"
+    assert lr["quality_signals"]["lane"] == "IMPORTANT_QUESTIONS"
+    assert lr["quality_signals"]["search_score"] == 0.9
+    src = by_table["source_records"][0][1]
+    assert src["quality_signals"]["lane"] == "IMPORTANT_QUESTIONS"
+    # The API-facing record keeps the signals for the UI.
+    assert record["quality_signals"]["lane"] == "IMPORTANT_QUESTIONS"
