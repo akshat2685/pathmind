@@ -18,6 +18,8 @@ import time
 import uuid
 
 from backend.core.college_schemas import (
+    coerce_model,
+    model_as_dict,
     CollegeLearningPlan,
     CollegePlanPhase,
     CollegeActivity,
@@ -260,7 +262,7 @@ class CollegeLearningService:
             if not raw_ctx:
                 raise ValueError(
                     "ACADEMIC_CONTEXT_REQUIRED: Please complete academic onboarding first.")
-            ctx = AcademicContext(**raw_ctx)
+            ctx = coerce_model(AcademicContext, raw_ctx)
 
             branch = await self._resolve_branch(uid)
             scoped_subjects = await self._resolve_scoped_subjects(
@@ -665,9 +667,10 @@ class CollegeLearningService:
         code when it cannot proceed; never silently keeps stale activities.
         """
         raw_plan = await self.store.get_college_learning_plan(uid)
-        if not raw_plan or raw_plan.get("plan_id") != plan_id:
+        plan_dict = model_as_dict(raw_plan) or {}
+        if not raw_plan or plan_dict.get("plan_id") != plan_id:
             raise ValueError("PLAN_NOT_FOUND")
-        phases = raw_plan.get("phases") or []
+        phases = plan_dict.get("phases") or []
         target = next(
             (ph for ph in phases if ph.get("phase_id") == phase_id), None)
         if not target:

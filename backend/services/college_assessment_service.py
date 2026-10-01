@@ -25,6 +25,7 @@ import uuid
 from datetime import datetime, timezone
 
 from backend.core.college_schemas import (
+    coerce_model,
     AssessmentKind,
     CollegeAssessment,
     CollegeAssessmentQuestion,
@@ -864,7 +865,7 @@ Make the first two MCQs and the last one SHORT_ANSWER.
             if not raw_asmt:
                 raise ValueError("ASSESSMENT_NOT_FOUND")
 
-            assessment = CollegeAssessment(**raw_asmt)
+            assessment = coerce_model(CollegeAssessment, raw_asmt)
             total_marks = sum(float(q.marks or 0) for q in assessment.questions)
             earned_marks = 0.0
             topic_results: List[Dict[str, Any]] = []

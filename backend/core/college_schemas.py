@@ -522,3 +522,42 @@ class TodaySchedule(BaseModel):
     streak_days: int = 0
     total_planned_minutes: int = 0
     total_completed_minutes: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Store-shape coercion (round 11, 2026-10-01)
+#
+# Two store contracts feed the same services: CollegeStore getters return
+# pydantic MODELS, while the legacy FirestoreStore delegates and returns
+# DICTS (model_dump). Services constructed with a CollegeStore (the ADK
+# toolkit + runtime) crashed on `Model(**raw)` / `raw.get(...)` whenever a
+# getter handed them a model — the ADK mentor path died with
+# "AcademicContext() argument after ** must be a mapping, not
+# AcademicContext" before any model call, hidden behind the generic
+# fallback until error details were surfaced. These helpers accept either
+# shape so a service behaves identically under both stores.
+# ---------------------------------------------------------------------------
+
+def coerce_model(model_cls, raw):
+    """Return `raw` as `model_cls`: passthrough for the model itself,
+    construction for a dict, model_dump round-trip for another model."""
+    if raw is None or isinstance(raw, model_cls):
+        return raw
+    if isinstance(raw, dict):
+        return model_cls(**raw)
+    dump = getattr(raw, "model_dump", None)
+    if callable(dump):
+        return model_cls(**dump())
+    return raw
+
+
+def model_as_dict(raw):
+    """Dict view of a store result that may be a dict or a pydantic
+    model (mode='json' so enums/datetimes serialize like the legacy
+    store's dumps)."""
+    if raw is None or isinstance(raw, dict):
+        return raw
+    dump = getattr(raw, "model_dump", None)
+    if callable(dump):
+        return dump(mode="json")
+    return raw

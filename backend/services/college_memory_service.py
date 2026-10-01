@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from backend.core.college_schemas import (
     CollegeShortMemory,
     CollegeLongMemory,
-    LearningSignal
+    LearningSignal,
+    coerce_model
 )
 from backend.services.store import FirestoreStore
 
@@ -43,7 +44,7 @@ class CollegeMemoryService:
 
     async def get_short_term_memories(self, uid: str) -> List[CollegeShortMemory]:
         raw = await self.store.get_college_short_memories(uid)
-        return [CollegeShortMemory(**m) for m in raw]
+        return [coerce_model(CollegeShortMemory, m) for m in raw]
 
     async def record_long_term_memory(
         self,
@@ -103,7 +104,7 @@ class CollegeMemoryService:
 
     async def get_long_term_memories(self, uid: str) -> List[CollegeLongMemory]:
         raw = await self.store.get_college_long_memories(uid)
-        return [CollegeLongMemory(**m) for m in raw]
+        return [coerce_model(CollegeLongMemory, m) for m in raw]
 
     async def record_learning_signal(
         self,
@@ -131,4 +132,4 @@ class CollegeMemoryService:
 
     async def get_learning_signals(self, uid: str) -> List[LearningSignal]:
         raw = await self.store.get_learning_signals(uid)
-        return [LearningSignal(**s) for s in raw]
+        return [coerce_model(LearningSignal, s) for s in raw]

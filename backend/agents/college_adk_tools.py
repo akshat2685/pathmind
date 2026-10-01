@@ -32,6 +32,7 @@ except ImportError:  # pragma: no cover - envs without a working google.adk
     _ADK_TOOLS_OK = False
 
 from backend.core.college_schemas import (
+    model_as_dict,
     CollegeAssessmentSubmission,
     CommitmentStatus,
     EngineeringBranch,
@@ -110,7 +111,8 @@ class CollegeToolKit:
         raw = await self.store.get_college_academic_context(uid)
         if not raw:
             return {"status": "NEEDS_CONTEXT", "subjects": []}
-        ids = await self.store.get_context_subject_ids(raw.get("context_id"))
+        ids = await self.store.get_context_subject_ids(
+            (model_as_dict(raw) or {}).get("context_id"))
         return {"status": "ok", "subjects": ids}
 
     async def get_active_goal(self, tool_context: ToolContext) -> Dict[str, Any]:
