@@ -12,6 +12,7 @@ Guardrails (non-negotiable):
 """
 
 from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -116,4 +117,59 @@ async def intelligence_health() -> Dict[str, Any]:
         "readiness_model_version": READINESS_MODEL_VERSION,
         "resources_kb_version": RESOURCES_KB_VERSION,
         "professions_kb_version": PROFESSIONS_KB_VERSION,
+    }
+
+
+def fetch_live_jobs(
+    query: str, limit: int = 5, _get=None
+) -> List[Dict[str, Any]]:
+    """
+    Live job postings via the Arbeitnow API (free, no key).
+    Every result is labeled with source + fetched_at — observed data, never
+    presented as PathMind-curated. Fail-soft: [] on any failure. `_get` is
+    injectable for hermetic tests.
+    """
+    get = _get or __import__("httpx").get
+    try:
+        resp = get(
+            "https://www.arbeitnow.com/api/job-board-api",
+            params={"search": query},
+            timeout=8,
+        )
+        data = resp.json().get("data") or []
+    except Exception:
+        return []
+    out = []
+    for j in data[: max(1, min(limit, 20))]:
+        if not isinstance(j, dict):
+            continue
+        out.append({
+            "title": j.get("title"),
+            "company": j.get("company_name"),
+            "location": j.get("location"),
+            "remote": j.get("remote"),
+            "url": j.get("url"),
+            "posted_at": j.get("created_at"),
+            "source": "arbeitnow.com",
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        })
+    return [j for j in out if j.get("title") and j.get("url")]
+
+
+@router.get("/jobs")
+async def search_jobs(
+    q: str = Query(..., min_length=2, description="Job search query"),
+    k: int = Query(5, ge=1, le=20),
+    person_id: str = Depends(get_authenticated_person),
+) -> Dict[str, Any]:
+    """
+    Live open roles (observed postings, source-labeled) to ground the
+    professions KB's estimates in reality. Empty list when the upstream is
+    unreachable — never fabricated.
+    """
+    return {
+        "query": q,
+        "results": fetch_live_jobs(q, limit=k),
+        "disclaimer": "Live postings via arbeitnow.com (free API). "
+                      "Listings change constantly — verify on the source page.",
     }
