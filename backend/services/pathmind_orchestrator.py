@@ -38,6 +38,7 @@ from backend.services.roadmap_engine import RoadmapEngine
 from backend.services.assessment_blueprint_service import AssessmentBlueprintService
 from backend.core.assessment_schemas import CounselingProfile, CounselingFact, AssessmentResult, AssessmentResponse
 from backend.core.roadmap_schemas import EvidenceSubmission, Roadmap, Stage
+from backend.services.intelligence_service import get_intelligence_service
 
 class PathmindOrchestrator:
     """
@@ -750,6 +751,29 @@ class PathmindOrchestrator:
             )
         except Exception:
             pass
+
+        # Intelligence pack: readiness-to-change screening on the learner's own
+        # aspiration text. Stored as {stage, confidence, note, model_version,
+        # assessed_at} on the journey state AND the person record. The output
+        # is a SCREENING HEURISTIC, never a diagnosis — the disclaimer travels
+        # in `note`. Classifier failures never break the journey flow.
+        try:
+            readiness = get_intelligence_service().predict_readiness(
+                f"{clean_aspiration} {' '.join(clean_constraints)}"
+            )
+        except Exception:
+            readiness = None
+        if readiness:
+            state["readiness"] = readiness
+            state["updated_at"] = datetime.now(timezone.utc).isoformat()
+            await self.store.save_journey_state(person_id, state)
+            try:
+                person = await self.store.get_person_record(person_id) or {}
+                person["person_id"] = person_id
+                person["readiness"] = readiness
+                await self.store.save_person_record(person_id, person)
+            except Exception:
+                pass
 
         return state
 
