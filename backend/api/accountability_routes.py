@@ -188,3 +188,42 @@ async def accountability_check_in(person_id: str = Depends(get_person_id)):
         "week_plan_vs_actual": week,
         "intervention": intervention,
     }
+
+
+@router.get("/projection")
+async def adaptive_projection(person_id: str = Depends(get_person_id)):
+    """
+    Adaptive timeline from demonstrated pace (not a generic template):
+    open commitments divided by the learner's own completions-per-week over
+    the trailing 28 days. Honest about sparse data — no projection without
+    a measured pace, never a fabricated date.
+    """
+    from backend.services.trajectory_service import TrajectoryService
+
+    svc = TrajectoryService()
+    pace = await svc.pace(person_id)
+    try:
+        open_items = [
+            c for c in await svc.commitment_service.list_commitments(person_id)
+            if c.get("status") == "planned"
+        ]
+    except Exception:
+        open_items = []
+    per_week = pace.get("completions_per_week") or 0
+    projected_weeks = (
+        round(len(open_items) / per_week, 1) if per_week > 0 else None
+    )
+    if projected_weeks is None:
+        note = ("No measured pace yet — complete a few commitments first and "
+                "I'll project from your actual rate, not a template.")
+    else:
+        note = (f"At your measured pace ({per_week}/week), {len(open_items)} "
+                f"open commitments project to ~{projected_weeks} weeks.")
+    return {
+        "person_id": person_id,
+        "open_commitments": len(open_items),
+        "completions_per_week_28d": per_week,
+        "completion_rate_28d": pace.get("completion_rate"),
+        "projected_weeks_remaining": projected_weeks,
+        "note": note,
+    }
