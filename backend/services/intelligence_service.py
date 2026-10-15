@@ -127,7 +127,11 @@ class IntelligenceService:
     # ------------------------------------------------------------------
     # 1. Readiness classifier (the actual trained ML model)
     # ------------------------------------------------------------------
-    def predict_readiness(self, text: str) -> Optional[Dict[str, Any]]:
+    def predict_readiness(
+        self,
+        text: str,
+        personal_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         Classify onboarding free text into a readiness stage.
 
@@ -135,6 +139,14 @@ class IntelligenceService:
         or None when the classifier is unavailable. `note` always carries the
         screening-heuristic disclaimer — it must travel with the prediction
         into storage and any downstream use.
+
+        personal_context (optional, honest personalization): behavioral facts
+        about THIS learner, e.g. {"completions_per_week": 1.5, "lapsed": 2}.
+        It never changes the stage label (honest held-out accuracy 0.4927 —
+        the label stays a weak generic signal); it only appends a momentum
+        sentence to `note` so downstream steering reflects the person's own
+        demonstrated pace. This is the data foundation a future personal
+        model trains on — recorded, not pretended.
         """
         if not self._ensure_loaded():
             return None
@@ -144,10 +156,30 @@ class IntelligenceService:
             return None
         if not isinstance(result, dict) or result.get("stage") not in READINESS_STAGES:
             return None
+        note = result.get("note", "")
+        if personal_context:
+            try:
+                per_week = personal_context.get("completions_per_week")
+                lapsed = personal_context.get("lapsed", 0) or 0
+                bits = []
+                if isinstance(per_week, (int, float)) and per_week > 0:
+                    bits.append(
+                        f"their own measured pace is {per_week} commitments/week"
+                    )
+                if lapsed:
+                    bits.append(
+                        f"{lapsed} commitment{'s' if lapsed != 1 else ''} lapsed "
+                        f"unfinished"
+                    )
+                if bits:
+                    note = (note + " Personal momentum (" + "; ".join(bits) +
+                            ") — from this learner's behavior, not the model.").strip()
+            except Exception:
+                pass
         return {
             "stage": result["stage"],
             "confidence": result.get("confidence", 0.0),
-            "note": result.get("note", ""),
+            "note": note,
             "model_version": READINESS_MODEL_VERSION,
             "assessed_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -236,8 +268,12 @@ def build_evidence_block(
 ) -> Optional[str]:
     """
     Retrieve intelligence-pack evidence for a counselor turn and format it as
-    a prompt block with hard grounding instructions. Returns None when nothing
-    useful was retrieved (the counselor must then say so, not invent).
+    a prompt block with hard grounding instructions.
+
+    Calibrated uncertainty: when nothing relevant is retrieved, returns an
+    explicit NO_VERIFIED_RESULTS marker (not None) so the counselor says
+    plainly that it has no verified data instead of inventing an answer.
+    Returns None only when the service itself is unavailable.
     """
     service = get_intelligence_service()
     if not service.available:
@@ -248,7 +284,12 @@ def build_evidence_block(
     prof_hits = [h for h in service.retrieve_professions(query, k=k) if h["score"] >= _SCORE_FLOOR]
     res_hits = [h for h in service.retrieve_resources(query, k=k) if h["score"] >= _SCORE_FLOOR]
     if not prof_hits and not res_hits:
-        return None
+        return (
+            "NO_VERIFIED_RESULTS: the intelligence pack has no verified "
+            "entries relevant to this message. Say plainly that you don't "
+            "have verified data on this topic — do NOT answer from general "
+            "knowledge as if it were verified."
+        )
 
     parts = [
         "INTELLIGENCE EVIDENCE — verified PathMind knowledge. Cite these entries "
