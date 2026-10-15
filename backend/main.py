@@ -35,6 +35,7 @@ from backend.api.market_routes import router as market_router
 from backend.api.verification_routes import router as verification_router
 from backend.api.test_routes import router as test_router
 from backend.api.intelligence_routes import router as intelligence_router
+from backend.api.skill_profile_routes import router as skill_profile_router
 from backend.api.accountability_routes import router as accountability_router
 from backend.api.memory_tier_routes import router as memory_tier_router
 from backend.core.security import SecurityHeadersMiddleware, StructuredErrorMiddleware
@@ -117,6 +118,7 @@ app.include_router(orchestrator_router)
 app.include_router(market_router)
 app.include_router(verification_router)
 app.include_router(intelligence_router)
+app.include_router(skill_profile_router)
 app.include_router(test_router)
 app.include_router(accountability_router)
 app.include_router(memory_tier_router)
