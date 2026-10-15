@@ -120,6 +120,66 @@ async def journey_context(person_id: str = Depends(get_person_id)):
     return await get_service().journey_context(person_id)
 
 
+@router.get("/trajectory")
+async def trajectory(person_id: str = Depends(get_person_id)):
+    """
+    Computed trajectory intelligence (not narrated): 28-day pace,
+    decision pivots with reasons, skill velocity, lapsed commitments.
+    Derived from stored data only — nulls when data is sparse, never
+    invented. Fail-soft: returns empty sections, never 500.
+    """
+    from backend.services.trajectory_service import TrajectoryService
+
+    try:
+        return await TrajectoryService().summary(person_id)
+    except Exception:
+        return {"person_id": person_id, "pace_28d": {}, "pivots": [],
+                "skill_velocity": {}, "lapsed": []}
+
+
+class DecisionRequest(BaseModel):
+    title: str = Field(..., min_length=3, max_length=200)
+    reason: str = Field(..., min_length=3, max_length=2000)
+    alternatives_rejected: List[str] = Field(default_factory=list)
+
+
+@router.post("/decisions")
+async def record_decision(
+    req: DecisionRequest,
+    person_id: str = Depends(get_person_id),
+):
+    """
+    Decision journal: what was decided, why, what was rejected.
+    First-class so pivots stay explainable months later.
+    """
+    try:
+        mem = await get_service().record_long_term(
+            person_id=person_id,
+            title=req.title,
+            content=req.reason,
+            memory_type="EPISODIC",
+            importance="HIGH",
+            metadata={
+                "nature": "DECISION",
+                "alternatives_rejected": req.alternatives_rejected[:10],
+            },
+        )
+        return {"memory_id": mem.get("memory_id"), "title": req.title}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record decision: {e}")
+
+
+@router.get("/decisions")
+async def list_decisions(person_id: str = Depends(get_person_id)):
+    """Decision journal, chronological."""
+    from backend.services.trajectory_service import TrajectoryService
+
+    try:
+        return {"decisions": await TrajectoryService().pivots(person_id)}
+    except Exception:
+        return {"decisions": []}
+
+
 @router.get("/journey-timeline")
 async def journey_timeline(
     person_id: str = Depends(get_person_id),
@@ -141,14 +201,18 @@ async def journey_timeline(
     try:
         long_term = await get_service().get_long_term(person_id, limit=lim)
         for m in long_term or []:
+            meta = m.get("metadata") if isinstance(m, dict) else {}
+            meta = meta or {}
             get = (lambda k, d=None: m.get(k, d)) if isinstance(m, dict) else (
                 lambda k, d=None: getattr(m, k, d))
+            kind = str(meta.get("nature") or get("memory_type")
+                       or get("nature") or "MEMORY")
             events.append({
                 "at": get("created_at"),
-                "kind": str(get("memory_type") or get("nature") or "MEMORY"),
+                "kind": kind,
                 "title": get("title"),
                 "detail": (get("content") or get("summary") or "")[:280],
-                "evidence": get("evidence_verification_status"),
+                "evidence": meta.get("evidence_verification_status") or get("evidence_verification_status"),
                 "source": "memory",
             })
     except Exception:
