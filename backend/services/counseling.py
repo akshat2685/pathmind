@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from backend.core.config import settings
@@ -13,6 +14,46 @@ from backend.core.assessment_schemas import (
 )
 from backend.core.memory_schemas import MemoryItem
 from backend.services.knowledge import KnowledgeService
+from backend.services.intelligence_service import readiness_steering_text
+
+# --- Verified-not-vibes: skill-claim detection --------------------------------
+# When the learner claims a skill ("I know Python", "I'm experienced in X"),
+# the counselor must not accept it as established fact. These patterns catch
+# the common phrasings; the claim text is passed through for the nudge.
+_SKILL_CLAIM_PATTERNS = [
+    re.compile(r"\bi\s+(?:know|understand|am good at|am skilled in|am experienced in)\s+([a-zA-Z][a-zA-Z0-9+#.\s]{1,40})", re.I),
+    re.compile(r"\bi'?m\s+experienced\s+in\s+([a-zA-Z][a-zA-Z0-9+#.\s]{1,40})", re.I),
+    re.compile(r"\bi\s+(?:have|got)\s+(?:experience|expertise)\s+(?:in|with)\s+([a-zA-Z][a-zA-Z0-9+#.\s]{1,40})", re.I),
+    re.compile(r"\bi\s+(?:built|made|created|completed|finished)\s+(?:a|an|my)?\s*([a-zA-Z][a-zA-Z0-9+#.\s]{1,40}?)(?:\s+project|\s+app|\s+website|$)", re.I),
+]
+
+
+def detect_skill_claims(text: str) -> list:
+    """Return claimed skill phrases from free text; [] when none found."""
+    claims = []
+    for pat in _SKILL_CLAIM_PATTERNS:
+        for m in pat.finditer(text or ""):
+            claim = m.group(1).strip().rstrip(".,!?")
+            if 2 <= len(claim) <= 45 and claim.lower() not in claims:
+                claims.append(claim.lower())
+    return claims
+
+
+def verification_nudge_text(claims: list) -> str | None:
+    """Prompt block: treat claims as UNVERIFIED, propose evidence, never flatter."""
+    if not claims:
+        return None
+    listed = ", ".join(f'"{c}"' for c in claims)
+    return (
+        "UNVERIFIED SKILL CLAIM(S): the learner claims knowledge of "
+        f"{listed}. This is SELF-REPORTED, not verified. Do NOT treat it as "
+        "established fact and do NOT flatter them about it. If the claim "
+        "matters to your advice, propose verifying it: ask them to share a "
+        "code sample, repo link, or work sample via evidence submission "
+        "(POST /api/journey/evidence), which is deterministically verified. "
+        "Until then, qualify any skill-dependent advice."
+    )
+
 
 # --- Transparent, Configurable Evidence Weighting Matrix ---
 EVIDENCE_WEIGHTS = {
@@ -561,7 +602,11 @@ Input Data:
         profile: CounselingProfile,
         history: List[CounselingMessage] = None,
         memories: Optional[List[MemoryItem]] = None,
-        longitudinal_brief: Optional[str] = None
+        longitudinal_brief: Optional[str] = None,
+        readiness_stage: Optional[str] = None,
+        evidence_block: Optional[str] = None,
+        trajectory_brief: Optional[str] = None,
+        verification_nudge: Optional[str] = None
     ) -> CounselingMessage:
         """
         Interactive counseling dialogue that explains findings, answers questions,
@@ -577,10 +622,39 @@ Input Data:
         LongitudinalMemoryService.build_context_brief(). Injected verbatim so
         every turn is grounded in this learner's own short-term and long-term
         memory.
+
+        readiness_stage: intelligence-pack readiness screening (heuristic, NOT
+        a diagnosis). Steers tone only — never surfaced as a verdict.
+
+        evidence_block: intelligence-pack grounded evidence (verified resources
+        + professions entries with hard grounding rules). Injected into the
+        prompt; the deterministic fallback surfaces the entries directly.
+
+        trajectory_brief: one-or-two-line journey trajectory (when the journey
+        started, current aspiration, durable patterns count). Lets the
+        counselor demonstrate it remembers the whole journey, not just the
+        current turn.
+
+        verification_nudge: UNVERIFIED skill-claim guidance from
+        verification_nudge_text(). Steers the counselor to propose evidence
+        instead of accepting claims at face value.
         """
         history = history or []
         memory_block = self._format_memory_context(memories or [])
         brief_block = f"\n{longitudinal_brief}\n" if longitudinal_brief else ""
+
+        # Intelligence pack: stage steers tone (never a user-facing verdict);
+        # evidence block carries hard grounding rules for the LLM.
+        readiness_prompt = ""
+        if readiness_stage:
+            steering = readiness_steering_text(readiness_stage)
+            if steering:
+                readiness_prompt = f"\n{steering}\n"
+        evidence_prompt = f"\n{evidence_block}\n" if evidence_block else ""
+        trajectory_prompt = f"\n{trajectory_brief}\n" if trajectory_brief else ""
+        verification_prompt = (
+            f"\n{verification_nudge}\n" if verification_nudge else ""
+        )
 
         # Polite mentor dialogue generation
         if self.model:
@@ -596,10 +670,12 @@ Active Profile Summary:
 - Contradictions: {json.dumps([c.model_dump() for c in profile.contradictions])}
 - Evidence Gaps: {json.dumps(profile.evidence_gaps)}
 {memory_block}
-{brief_block}GUIDELINES:
+{brief_block}{readiness_prompt}{evidence_prompt}{trajectory_prompt}{verification_prompt}GUIDELINES:
 - Warm, polite, supportive, mentor-like tone.
 - Explain evidence backing recommendations.
 - Clarify contradictions gently.
+- GOAL-FIRST: take the learner's stated aspiration literally and at face value. Never steer them toward software/tech/AI careers unless they asked for one. A tea shop, a trade, teaching, nursing, design, or creator work deserves the same seriousness as an ML engineer path. Do not funnel every conversation toward coding.
+- VERIFIED, NOT VIBES: treat user-claimed skills as UNVERIFIED until evidence exists. Never flatter ("you're great at X") without evidence; when a claim matters to the advice, propose verifying it (share code, a repo, or a work sample) rather than accepting it.
 - Memories marked DURABLE are established patterns in this learner's history: use them to personalize (e.g. reference known strengths, preferences, recurring struggles).
 - Memories marked CANDIDATE are tentative emerging patterns: you may probe them gently ("I've noticed... does that sound right?") but never assert them as fact.
 - Encourage sharing portfolio links or domain-specific artifacts to substantiate milestones.
@@ -620,6 +696,17 @@ Active Profile Summary:
 
         # Deterministic fallback response
         parts = ["Thank you for sharing that."]
+        # Intelligence pack: stage steers tone even without the LLM — motivational
+        # when readiness is low, concrete when the learner is ready to move.
+        if readiness_stage in ("precontemplation", "contemplation"):
+            parts.append(
+                "There's no pressure to commit to a plan right now — "
+                "let's first explore what matters most to you."
+            )
+        elif readiness_stage in ("preparation", "action", "maintenance"):
+            parts.append(
+                "Since you're ready to move, let's get concrete about next steps."
+            )
         durable = [m for m in (memories or []) if m.promotion_status == "DURABLE"]
         if durable:
             top = durable[0]
@@ -635,6 +722,28 @@ Active Profile Summary:
             parts.append("Once you declare a target outcome or complete a diagnostic assessment, we can map out tailored candidate pathways.")
 
         parts.append("Feel free to share your primary goal or any specific projects, background, and constraints to help calibrate your plan.")
+
+        # Intelligence pack: surface the retrieved verified entries directly
+        # (dropping the LLM-facing header and HARD RULES instructions).
+        if evidence_block:
+            entry_text = evidence_block.split("HARD RULES:")[0].split("\n", 1)[-1].strip()
+            if entry_text:
+                parts.append("Verified entries relevant to your question:\n" + entry_text)
+
+        # Longitudinal memory as product: the fallback also demonstrates the
+        # journey is remembered, not just the current turn.
+        if trajectory_brief:
+            parts.append(trajectory_brief)
+
+        # Verified, not vibes: never accept a skill claim at face value, even
+        # without the LLM — propose evidence instead of flattery.
+        if verification_nudge:
+            parts.append(
+                "I don't take skill claims at face value — if you'd like that "
+                "to count toward your plan, share a code sample, repo link, "
+                "or work sample as evidence and I'll verify it properly."
+            )
+
         reply_content = " ".join(parts)
         return CounselingMessage(
             role="counselor",
