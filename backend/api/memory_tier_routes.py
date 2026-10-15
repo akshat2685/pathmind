@@ -118,3 +118,62 @@ async def get_signals(
 async def journey_context(person_id: str = Depends(get_person_id)):
     """Compact memory snapshot for grounding prompts."""
     return await get_service().journey_context(person_id)
+
+
+@router.get("/journey-timeline")
+async def journey_timeline(
+    person_id: str = Depends(get_person_id),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """
+    Longitudinal memory as a product: the learner's whole journey as a
+    chronological timeline — decisions, goals, skills with evidence status,
+    completed commitments. This is the visible "system that remembers your
+    whole journey": progress and course-corrections over time, not one-shot
+    chat. Aggregate view only; failures return an empty timeline, never 500.
+    """
+    # `limit` arrives as a FastAPI Query object when the route is called
+    # directly (unit tests); normalize to int up front so every use below
+    # (service calls, slicing) gets a real number.
+    lim = limit if isinstance(limit, int) and not isinstance(limit, bool) else 50
+    lim = max(1, min(lim, 200))
+    events = []
+    try:
+        long_term = await get_service().get_long_term(person_id, limit=lim)
+        for m in long_term or []:
+            get = (lambda k, d=None: m.get(k, d)) if isinstance(m, dict) else (
+                lambda k, d=None: getattr(m, k, d))
+            events.append({
+                "at": get("created_at"),
+                "kind": str(get("memory_type") or get("nature") or "MEMORY"),
+                "title": get("title"),
+                "detail": (get("content") or get("summary") or "")[:280],
+                "evidence": get("evidence_verification_status"),
+                "source": "memory",
+            })
+    except Exception:
+        pass
+    try:
+        from backend.services.commitment_service import CommitmentService
+
+        commitments = await CommitmentService().list_commitments(
+            person_id, status="completed"
+        )
+        for c in commitments[:lim]:
+            events.append({
+                "at": c.get("completed_at") or c.get("updated_at"),
+                "kind": "COMMITMENT_COMPLETED",
+                "title": c.get("title"),
+                "detail": "",
+                "evidence": None,
+                "source": "accountability",
+            })
+    except Exception:
+        pass
+    events = [e for e in events if e.get("at")]
+    events.sort(key=lambda e: e["at"])
+    return {
+        "person_id": person_id,
+        "event_count": len(events),
+        "timeline": events[:lim],
+    }
