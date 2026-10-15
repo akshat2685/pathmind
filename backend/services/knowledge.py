@@ -5,6 +5,7 @@ from backend.core.schemas import KnowledgeResponse, Occupation, ProviderContext
 from backend.providers.esco import EscoProvider
 from backend.providers.nco import NcoProvider
 from backend.providers.nptel_swayam import NptelSwayamProvider
+from backend.providers.intelligence_providers import IntelligenceProfessionsProvider
 from backend.services.pm_store import get_pm_store
 
 class KnowledgeService:
@@ -14,7 +15,10 @@ class KnowledgeService:
             "nco": NcoProvider(),
             # P1: NPTEL/SWAYAM slot. Currently SOURCE_UNAVAILABLE (no public
             # API as of 2026-09-26); returns zero results, never fabricated.
-            "nptel_swayam": NptelSwayamProvider()
+            "nptel_swayam": NptelSwayamProvider(),
+            # PathMind intelligence pack: professions encyclopedia KB
+            # (curated, verified, ML-indexed — NOT a "trained model").
+            "intelligence_professions": IntelligenceProfessionsProvider(),
         }
         self.store = store or get_pm_store()
 
@@ -62,3 +66,32 @@ class KnowledgeService:
             await self.store.set_cached_knowledge(cache_key, response.model_dump(mode="json"))
 
         return response
+
+    async def search_learning_resources(
+        self, query: str, limit: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Search the PathMind intelligence pack's Indian learning-resources KB
+        (curated, verified, ML-indexed — NOT a "trained model").
+
+        Mirrors the provider cache pattern: results are cached in pm knowledge
+        cache; names/URLs/costs come from the entry, never from LLM memory.
+        Returns raw entry dicts (see intelligence/schemas/resources_schema.md).
+        """
+        from backend.services.intelligence_service import get_intelligence_service
+
+        cache_key = self._generate_cache_key(
+            "search_learning_resources", {"query": query, "limit": limit}
+        )
+
+        cached_data = await self.store.get_cached_knowledge(cache_key)
+        if cached_data:
+            return cached_data.get("results", [])
+
+        service = get_intelligence_service()
+        entries = [h["entry"] for h in service.retrieve_resources(query, k=limit)]
+
+        if entries:
+            await self.store.set_cached_knowledge(cache_key, {"results": entries})
+
+        return entries
