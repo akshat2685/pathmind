@@ -15,6 +15,7 @@ from backend.services.pm_store import get_pm_store
 from backend.services.counseling import CounselingAgent
 from backend.services.second_brain_service import SecondBrainService
 from backend.services.longitudinal_memory_service import LongitudinalMemoryService
+from backend.services.intelligence_service import build_evidence_block
 
 router = APIRouter(prefix="/api/counseling", tags=["Counseling"])
 store = get_pm_store()
@@ -179,13 +180,89 @@ async def counseling_chat(
         except Exception:
             longitudinal_brief = None
 
+        # Intelligence pack: the readiness stage (screening heuristic, stored
+        # at onboarding) steers the counselor's tone; KB retrieval grounds the
+        # answer in verified entries. Failures never break the chat.
+        readiness_stage = None
+        journey_aspiration = None
+        try:
+            jstate = await store.get_journey_state(active_person_id)
+            if jstate:
+                journey_aspiration = jstate.get("aspiration")
+                rd = jstate.get("readiness")
+                if isinstance(rd, dict) and rd.get("stage"):
+                    readiness_stage = rd["stage"]
+        except Exception:
+            pass
+        try:
+            evidence_block = build_evidence_block(
+                req.message, aspiration=journey_aspiration
+            )
+        except Exception:
+            evidence_block = None
+
+        # Longitudinal memory as product: compact trajectory so the counselor
+        # demonstrates it remembers the whole journey, not just this turn.
+        # Verified, not vibes: skill claims are flagged UNVERIFIED — the
+        # counselor proposes evidence instead of accepting them. Both
+        # fail-soft; chat never breaks on them.
+        trajectory_brief = None
+        verification_nudge = None
+        try:
+            from backend.services.counseling import (
+                detect_skill_claims,
+                verification_nudge_text,
+            )
+
+            claims = detect_skill_claims(req.message)
+            if claims:
+                verification_nudge = verification_nudge_text(claims)
+        except Exception:
+            pass
+        try:
+            if jstate:
+                started = (jstate.get("created_at") or jstate.get("started_at")
+                           or "")[:10]
+                bits = []
+                if journey_aspiration:
+                    bits.append(f"working toward '{journey_aspiration}'")
+                if started:
+                    bits.append(f"since {started}")
+                try:
+                    durable = await longitudinal_memory.get_long_term(
+                        active_person_id, limit=50
+                    )
+                    n_durable = sum(
+                        1 for m in durable
+                        if (m.get("promotion_status") or m.get("status"))
+                        == "DURABLE"
+                    )
+                except Exception:
+                    n_durable = 0
+                if n_durable:
+                    bits.append(
+                        f"{n_durable} durable pattern"
+                        f"{'s' if n_durable != 1 else ''} remembered"
+                    )
+                if bits:
+                    trajectory_brief = (
+                        "Journey trajectory (demonstrate you remember this "
+                        "learner's whole journey): " + "; ".join(bits) + "."
+                    )
+        except Exception:
+            pass
+
         reply = agent.counsel_chat(
             person_id=active_person_id,
             user_message=req.message,
             profile=profile,
             history=req.history or [],
             memories=injected_memories,
-            longitudinal_brief=longitudinal_brief
+            longitudinal_brief=longitudinal_brief,
+            readiness_stage=readiness_stage,
+            evidence_block=evidence_block,
+            trajectory_brief=trajectory_brief,
+            verification_nudge=verification_nudge
         )
 
         try:
