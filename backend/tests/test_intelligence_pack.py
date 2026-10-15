@@ -97,8 +97,11 @@ class TestEvidenceBlock:
 
     def test_block_none_when_irrelevant(self, service):
         # Gibberish should not force irrelevant evidence into the prompt.
+        # Calibrated uncertainty: an explicit NO_VERIFIED_RESULTS marker
+        # (not None) so the counselor says it plainly instead of inventing.
         block = build_evidence_block("zxqvkw blorpt fnord")
-        assert block is None
+        assert block is not None
+        assert block.startswith("NO_VERIFIED_RESULTS")
 
 
 class TestReadinessSteering:
