@@ -64,6 +64,40 @@ async def get_current_roadmap_view(person_id: str = Depends(get_person_id)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve current roadmap: {str(e)}")
 
+@router.get("/gates")
+async def stage_gates(person_id: str = Depends(get_person_id)):
+    """
+    Stage gates made visible: every stage with its locked/unlocked state
+    and the prerequisite for locked ones. The 403 enforcement lives on
+    GET /stage/{stage_id} — this endpoint explains the gates instead of
+    just enforcing them. Fail-soft: empty list, never 500.
+    """
+    try:
+        roadmap = await engine.get_or_create_roadmap(person_id=person_id)
+        flat = engine.get_all_stages_flat(roadmap)
+    except Exception:
+        return {"stages": []}
+    out = []
+    for i, s in enumerate(flat):
+        locked = bool(getattr(s, "locked", False))
+        is_current = getattr(s, "stage_id", None) == getattr(
+            roadmap, "current_stage_id", None)
+        reason = None
+        if locked and not is_current:
+            prev = flat[i - 1] if i > 0 else None
+            prev_title = getattr(prev, "title", "the previous stage") if prev else "the previous stage"
+            reason = (f"Complete '{prev_title}' and submit passing evidence "
+                      f"to unlock.")
+        out.append({
+            "stage_id": getattr(s, "stage_id", None),
+            "title": getattr(s, "title", None),
+            "locked": locked,
+            "is_current": is_current,
+            "unlock_requirement": reason,
+        })
+    return {"stages": out}
+
+
 @router.get("/stage/{stage_id}", response_model=Stage)
 async def get_protected_stage(
     stage_id: str,
