@@ -85,3 +85,106 @@ async def update_commitment(
 async def today_schedule(person_id: str = Depends(get_person_id)):
     """Today's schedule: open commitments, due/overdue, streak, completion rate."""
     return await get_service().get_today_schedule(person_id)
+
+
+@router.get("/check-in")
+async def accountability_check_in(person_id: str = Depends(get_person_id)):
+    """
+    The accountability loop: weekly check-in with plan-vs-actual.
+
+    Returns overdue commitments, this week's planned-vs-completed numbers,
+    and — for the most overdue item — a non-judgmental intervention with
+    concrete options (continue / reschedule / report blocker / adjust).
+    This is the difference between a chatbot and a coach: the system checks
+    whether the plan was followed and adapts. Fail-soft: check-in problems
+    never break the rest of the API.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    svc = get_service()
+    try:
+        commitments = await svc.list_commitments(person_id)
+    except Exception:
+        commitments = []
+
+    def _parse(ts):
+        try:
+            return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+
+    overdue = []
+    due_this_week = []
+    for c in commitments:
+        due = _parse(c.get("due_at"))
+        if not due:
+            continue
+        if due < now and c.get("status") == "planned":
+            overdue.append(c)
+        if week_ago <= due <= now:
+            due_this_week.append(c)
+    overdue.sort(key=lambda c: c.get("due_at") or "")
+
+    completed_week = [c for c in due_this_week if c.get("status") == "completed"]
+    week = {
+        "planned": len(due_this_week),
+        "completed": len(completed_week),
+        "completion_rate": (
+            round(len(completed_week) / len(due_this_week), 2)
+            if due_this_week else None
+        ),
+    }
+
+    intervention = None
+    if overdue:
+        most = overdue[0]
+        due = _parse(most.get("due_at"))
+        days_overdue = max(1, (now - due).days) if due else 1
+        try:
+            from backend.services.execution_intelligence_agent import (
+                ExecutionIntelligenceAgent,
+            )
+            from backend.core.execution_schemas import CanonicalAction
+
+            action = CanonicalAction(
+                person_id=person_id,
+                title=most.get("title", "commitment"),
+                description=most.get("title", "commitment"),
+                due_at=most.get("due_at"),
+            )
+            iv = await ExecutionIntelligenceAgent().generate_accountability_intervention(
+                person_id, action, days_overdue
+            )
+            intervention = iv.model_dump(mode="json")
+        except Exception:
+            # Deterministic fallback: same shape, no LLM needed.
+            intervention = {
+                "person_id": person_id,
+                "action_title": most.get("title"),
+                "days_overdue": days_overdue,
+                "non_judgmental_message": (
+                    f"'{most.get('title')}' was due earlier and is still open. "
+                    "No judgment — plans slip. Pick what fits: continue today, "
+                    "reschedule by a few days, or report a blocker."
+                ),
+                "suggested_options": [
+                    "Continue with active plan (work on it today)",
+                    "Reschedule deadline by 3 days",
+                    "Report a blocker and explore a workaround",
+                ],
+            }
+
+    return {
+        "person_id": person_id,
+        "checked_at": now.isoformat(),
+        "overdue": [
+            {"title": c.get("title"), "due_at": c.get("due_at"),
+             "status": c.get("status")}
+            for c in overdue
+        ],
+        "week_plan_vs_actual": week,
+        "intervention": intervention,
+    }
