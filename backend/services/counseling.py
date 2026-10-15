@@ -16,6 +16,32 @@ from backend.core.memory_schemas import MemoryItem
 from backend.services.knowledge import KnowledgeService
 from backend.services.intelligence_service import readiness_steering_text
 
+# --- Decision-journal: pivot detection --------------------------------------
+# When the learner talks about switching direction, the counselor should
+# nudge them to record the decision with its reason — pivots stay
+# explainable months later via POST /api/memory/decisions.
+_PIVOT_PATTERNS = [
+    re.compile(r"\bi\s+(?:want to|am going to|will|should)\s+(?:switch|change|quit|leave|drop|pivot)", re.I),
+    re.compile(r"\b(?:thinking of|considering)\s+(?:switching|changing|quitting|leaving|dropping)", re.I),
+    re.compile(r"\bnot\s+(?:sure|certain)\b.{0,40}\b(?:anymore|still)\b", re.I),
+]
+
+
+def detect_pivot_talk(text: str) -> bool:
+    """True when the message sounds like a direction change worth journaling."""
+    return any(p.search(text or "") for p in _PIVOT_PATTERNS)
+
+
+def pivot_nudge_text() -> str:
+    return (
+        "POSSIBLE PIVOT: the learner sounds like they may be changing "
+        "direction. Don't just roll with it — ask what changed and what "
+        "they're choosing instead, and suggest recording the decision with "
+        "its reason (POST /api/memory/decisions) so the choice stays "
+        "explainable later."
+    )
+
+
 # --- Verified-not-vibes: skill-claim detection --------------------------------
 # When the learner claims a skill ("I know Python", "I'm experienced in X"),
 # the counselor must not accept it as established fact. These patterns catch
@@ -606,7 +632,10 @@ Input Data:
         readiness_stage: Optional[str] = None,
         evidence_block: Optional[str] = None,
         trajectory_brief: Optional[str] = None,
-        verification_nudge: Optional[str] = None
+        verification_nudge: Optional[str] = None,
+        accountability_prompt: Optional[str] = None,
+        failure_prompt: Optional[str] = None,
+        pivot_nudge: Optional[str] = None
     ) -> CounselingMessage:
         """
         Interactive counseling dialogue that explains findings, answers questions,
@@ -638,6 +667,17 @@ Input Data:
         verification_nudge: UNVERIFIED skill-claim guidance from
         verification_nudge_text(). Steers the counselor to propose evidence
         instead of accepting claims at face value.
+
+        accountability_prompt: proactive accountability block — overdue
+        commitments the counselor should raise naturally instead of waiting
+        to be asked. The coach initiates.
+
+        failure_prompt: failure-memory block — lapsed commitments framed as
+        "what didn't work", so planning references the learner's real
+        history instead of generic advice.
+
+        pivot_nudge: POSSIBLE PIVOT guidance from pivot_nudge_text().
+        Prompts the counselor to journal the decision with its reason.
         """
         history = history or []
         memory_block = self._format_memory_context(memories or [])
@@ -655,6 +695,25 @@ Input Data:
         verification_prompt = (
             f"\n{verification_nudge}\n" if verification_nudge else ""
         )
+        accountability_block = (
+            f"\n{accountability_prompt}\n" if accountability_prompt else ""
+        )
+        failure_block = f"\n{failure_prompt}\n" if failure_prompt else ""
+        pivot_block = f"\n{pivot_nudge}\n" if pivot_nudge else ""
+
+        # Constraint-honest planning: hard limits rendered verbatim so the
+        # model negotiates with them instead of silently ignoring them.
+        constraints_block = ""
+        try:
+            cons = [f.claim for f in (profile.constraints or []) if getattr(f, "claim", None)]
+            if cons:
+                constraints_block = (
+                    "\nRecorded constraints (HARD LIMITS — never propose a "
+                    "plan that violates these; if the math doesn't fit, say "
+                    "so and present the tradeoff):\n- " + "\n- ".join(cons[:8]) + "\n"
+                )
+        except Exception:
+            pass
 
         # Polite mentor dialogue generation
         if self.model:
@@ -670,12 +729,14 @@ Active Profile Summary:
 - Contradictions: {json.dumps([c.model_dump() for c in profile.contradictions])}
 - Evidence Gaps: {json.dumps(profile.evidence_gaps)}
 {memory_block}
-{brief_block}{readiness_prompt}{evidence_prompt}{trajectory_prompt}{verification_prompt}GUIDELINES:
+{brief_block}{readiness_prompt}{evidence_prompt}{trajectory_prompt}{verification_prompt}{accountability_block}{failure_block}{pivot_block}{constraints_block}GUIDELINES:
 - Warm, polite, supportive, mentor-like tone.
 - Explain evidence backing recommendations.
 - Clarify contradictions gently.
 - GOAL-FIRST: take the learner's stated aspiration literally and at face value. Never steer them toward software/tech/AI careers unless they asked for one. A tea shop, a trade, teaching, nursing, design, or creator work deserves the same seriousness as an ML engineer path. Do not funnel every conversation toward coding.
 - VERIFIED, NOT VIBES: treat user-claimed skills as UNVERIFIED until evidence exists. Never flatter ("you're great at X") without evidence; when a claim matters to the advice, propose verifying it (share code, a repo, or a work sample) rather than accepting it.
+- CALIBRATED UNCERTAINTY: if the evidence block reports NO_VERIFIED_RESULTS, say plainly that you don't have verified data on the topic. Never fill the gap with general knowledge presented as verified fact.
+- CONSTRAINT-HONEST: the learner's recorded constraints are hard limits, not suggestions. If a plan can't fit their time, money, or location constraints, say so and present the tradeoff explicitly — never silently propose something that violates them.
 - Memories marked DURABLE are established patterns in this learner's history: use them to personalize (e.g. reference known strengths, preferences, recurring struggles).
 - Memories marked CANDIDATE are tentative emerging patterns: you may probe them gently ("I've noticed... does that sound right?") but never assert them as fact.
 - Encourage sharing portfolio links or domain-specific artifacts to substantiate milestones.
@@ -725,10 +786,19 @@ Active Profile Summary:
 
         # Intelligence pack: surface the retrieved verified entries directly
         # (dropping the LLM-facing header and HARD RULES instructions).
+        # Calibrated uncertainty: a NO_VERIFIED_RESULTS marker is honesty,
+        # not evidence — say so instead of surfacing it as entries.
         if evidence_block:
-            entry_text = evidence_block.split("HARD RULES:")[0].split("\n", 1)[-1].strip()
-            if entry_text:
-                parts.append("Verified entries relevant to your question:\n" + entry_text)
+            if evidence_block.strip().startswith("NO_VERIFIED_RESULTS"):
+                parts.append(
+                    "I don't have verified data on that specific topic, so "
+                    "I won't guess — tell me more about what you're trying "
+                    "to do and I'll work with what I can verify."
+                )
+            else:
+                entry_text = evidence_block.split("HARD RULES:")[0].split("\n", 1)[-1].strip()
+                if entry_text:
+                    parts.append("Verified entries relevant to your question:\n" + entry_text)
 
         # Longitudinal memory as product: the fallback also demonstrates the
         # journey is remembered, not just the current turn.
@@ -742,6 +812,30 @@ Active Profile Summary:
                 "I don't take skill claims at face value — if you'd like that "
                 "to count toward your plan, share a code sample, repo link, "
                 "or work sample as evidence and I'll verify it properly."
+            )
+
+        # The coach initiates: surface overdue work naturally, no lecture.
+        if accountability_prompt:
+            parts.append(
+                "Quick check-in from me: you have overdue commitments on "
+                "your plan. Want to talk about what got in the way, or "
+                "should we reschedule them into something smaller?"
+            )
+
+        # Failure memory: planning that ignores what lapsed is generic advice.
+        if failure_prompt:
+            parts.append(
+                "I've noticed some commitments lapsed unfinished before — "
+                "let's keep this next step small enough that it survives a "
+                "bad week."
+            )
+
+        # Pivot journaling nudge.
+        if pivot_nudge:
+            parts.append(
+                "It sounds like you might be changing direction — what "
+                "changed? If we record the decision and your reason, your "
+                "future self will thank you."
             )
 
         reply_content = " ".join(parts)
