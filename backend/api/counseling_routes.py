@@ -208,15 +208,71 @@ async def counseling_chat(
         # fail-soft; chat never breaks on them.
         trajectory_brief = None
         verification_nudge = None
+        accountability_prompt = None
+        failure_prompt = None
+        pivot_nudge = None
         try:
             from backend.services.counseling import (
+                detect_pivot_talk,
                 detect_skill_claims,
+                pivot_nudge_text,
                 verification_nudge_text,
             )
 
             claims = detect_skill_claims(req.message)
             if claims:
                 verification_nudge = verification_nudge_text(claims)
+            if detect_pivot_talk(req.message):
+                pivot_nudge = pivot_nudge_text()
+        except Exception:
+            pass
+        # The coach initiates: overdue commitments surface proactively.
+        # Failure memory: lapsed work shapes planning, not generic advice.
+        try:
+            from backend.services.trajectory_service import TrajectoryService
+
+            traj = TrajectoryService()
+            overdue_now = []
+            try:
+                from backend.services.commitment_service import CommitmentService
+                from datetime import datetime, timezone as _tz
+
+                now = datetime.now(_tz.utc)
+                for c in await CommitmentService().list_commitments(active_person_id):
+                    if c.get("status") != "planned" or not c.get("due_at"):
+                        continue
+                    try:
+                        due = datetime.fromisoformat(
+                            str(c["due_at"]).replace("Z", "+00:00"))
+                        if due < now:
+                            overdue_now.append(c)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            if overdue_now:
+                titles = ", ".join(
+                    f"'{c.get('title')}'" for c in overdue_now[:3])
+                accountability_prompt = (
+                    "PROACTIVE ACCOUNTABILITY: the learner has "
+                    f"{len(overdue_now)} overdue commitment(s): {titles}. "
+                    "Raise the most overdue one naturally in conversation — "
+                    "ask what got in the way, offer reschedule/smaller-step/"
+                    "blocker-workaround options. Warm, never shaming, never "
+                    "a lecture."
+                )
+            lapsed = await traj.lapsed(active_person_id)
+            if lapsed:
+                lapsed_titles = ", ".join(
+                    f"'{e['title']}'" for e in lapsed[:3])
+                failure_prompt = (
+                    "WHAT DIDN'T WORK (failure memory — use it when planning): "
+                    f"these commitments lapsed unfinished: {lapsed_titles}. "
+                    "Reference this pattern explicitly when proposing next "
+                    "steps: smaller scope, shorter horizon, named blocker "
+                    "workarounds. Do not propose the same shape of plan that "
+                    "lapsed before."
+                )
         except Exception:
             pass
         try:
@@ -262,7 +318,10 @@ async def counseling_chat(
             readiness_stage=readiness_stage,
             evidence_block=evidence_block,
             trajectory_brief=trajectory_brief,
-            verification_nudge=verification_nudge
+            verification_nudge=verification_nudge,
+            accountability_prompt=accountability_prompt,
+            failure_prompt=failure_prompt,
+            pivot_nudge=pivot_nudge
         )
 
         try:
