@@ -68,8 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Route guards: unauthenticated -> /login, authenticated on /login -> /onboarding
   useEffect(() => {
     if (loading) return;
+    // usePathname() can be null before the router state is ready (notably on
+    // the first client render after hydration). A null pathname is "unknown",
+    // not "private": never redirect on it — the effect re-runs once the
+    // pathname is known. Redirecting on null sent every fresh visitor to
+    // /login, including from the public landing page at /.
+    if (!pathname) return;
     const isPublic = PUBLIC_ROUTES.some(
-      (r) => pathname === r || pathname?.startsWith(r + "/")
+      (r) => pathname === r || pathname.startsWith(r + "/")
     );
     if (!user && !isPublic) {
       router.replace("/login");

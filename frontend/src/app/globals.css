@@ -281,3 +281,10 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(253, 250, 231, 0.9);
   box-shadow: 2px 3px 0 rgba(61, 52, 48, 0.08);
 }
+/* Decorative fixed elements (login page blur washes) extend past the
+ * viewport edge by design; clip horizontal overflow at the document level
+ * so they can never create a horizontal scrollbar at any width. */
+html,
+body {
+  overflow-x: clip;
+}
