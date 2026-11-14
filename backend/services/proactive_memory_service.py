@@ -21,8 +21,35 @@ class ProactiveMemoryService:
     4. Current explicit input / newer verified state dominance over historical memory.
     5. Durable memory-write policy (ignoring trivial UI interactions).
     """
-    def __init__(self, store: Optional[Any] = None):
-        self.store = store or get_pm_store()
+    def __init__(self, store: Optional[Any] = None, memory_service: Optional[Any] = None):
+        # Unified constructor: main callers pass store= (PmStore);
+        # college callers pass memory_service= (CollegeMemoryService) or
+        # pass it positionally. A CollegeMemoryService wraps a store in
+        # its .store attribute — unwrap it so the store-based
+        # implementation below always works against a real store.
+        # The memory service itself is kept for the college agent-tool
+        # methods (retrieve/promote/supersede), which operate on
+        # CollegeMemoryService, not on the raw store. Default store is
+        # PmStore (main); a bare CollegeMemoryService() would default
+        # its own store to FirestoreStore, which must never leak into
+        # the main path.
+        # Positional compatibility: college callers pass a CollegeMemoryService
+        # positionally — college's signature was (memory_service, store),
+        # main's is (store, memory_service). A memory service is not a
+        # store: real stores (PmStore / FirestoreStore / InMemoryStore)
+        # all expose get_personal_memories, CollegeMemoryService does not.
+        if memory_service is None and store is not None and not hasattr(store, "get_personal_memories"):
+            memory_service = store
+            store = None
+        if store is None and memory_service is not None:
+            store = getattr(memory_service, "store", None) or memory_service
+        if store is None:
+            store = get_pm_store()
+        self.store = store
+        if memory_service is None:
+            from backend.services.college_memory_service import CollegeMemoryService
+            memory_service = CollegeMemoryService(store=store)
+        self.memory_service = memory_service
 
     # --- Step 8: Explicit Memory-Write Policy ---
     DURABLE_EVENT_TYPES = {
@@ -109,7 +136,9 @@ class ProactiveMemoryService:
         constraints: Optional[Dict[str, Any]] = None,
         explicit_user_input: Optional[str] = None,
         target_direction: Optional[str] = None,
-        include_observed: bool = False
+        include_observed: bool = False,
+        uid: Optional[str] = None,
+        current_task: Optional[str] = None
     ) -> ProactiveMemoryContext:
         """
         Proactively retrieves the smallest useful set of relevant personal memories
@@ -119,8 +148,49 @@ class ProactiveMemoryService:
         proactive behavior. OBSERVED memories are single unconfirmed sightings —
         pass include_observed=True to opt in (e.g. for debugging).
         """
+        # College call style: get_proactive_memory_context(uid, "free-text
+        # query") or (uid=..., current_task=...). The 2nd positional is then
+        # a relevance query, not a task-type enum — normalize it and use
+        # the text as the relevance query (concept) for scoring.
+        _KNOWN_TASK_TYPES = {"NEXT_LEARNING_ACTION", "RESUME_GENERATION",
+            "ROADMAP_GENERATION", "GOAL_CHANGE", "CAREER_DIRECTION",
+            "EVIDENCE_EVALUATION", "OPPORTUNITY_MATCHING",
+            "DECISION_SUPPORT", "GENERAL_CONTEXT"}
+        person_id = person_id or uid
+        _college_style = (uid is not None or current_task is not None
+                          or task_type not in _KNOWN_TASK_TYPES)
+        _query_text = current_task
+        if _query_text is None and task_type not in _KNOWN_TASK_TYPES:
+            _query_text = task_type
+            task_type = "NEXT_LEARNING_ACTION"
+        if _college_style and _query_text and not current_concept:
+            current_concept = _query_text
+
         raw_mems = await self.store.get_personal_memories(person_id)
         all_memories = [MemoryItem(**m) for m in raw_mems]
+
+        # College long-term memories live in the CollegeMemoryService, not
+        # in the personal-memories store. Merge them (college-style calls
+        # only) so the college mentor / pipeline see promoted memories.
+        if _college_style and _query_text and hasattr(
+                self.memory_service, "get_long_term_memories"):
+            try:
+                for _d in await self.retrieve_relevant_memories(
+                        person_id, _query_text):
+                    all_memories.append(MemoryItem(
+                        memory_id=_d.get("memory_id") or f"mem_college_{len(all_memories)}",
+                        person_id=person_id,
+                        title=_d.get("title", ""),
+                        content=_d.get("content", ""),
+                        topic=_d.get("topic", "General"),
+                        nature=_d.get("nature", "EXPERIENCE"),
+                        promotion_status="DURABLE",
+                        lifecycle_status="CURRENT",
+                        source_type="COLLEGE_LONG_TERM",
+                        source_reference="College long-term memory",
+                    ))
+            except Exception:
+                pass
 
         if not all_memories:
             return ProactiveMemoryContext(
@@ -340,3 +410,68 @@ class ProactiveMemoryService:
             status=status,
             proactive_summary=summary
         )
+
+    # --- College agent tools (unified app) -------------------------------
+    # These operate on CollegeMemoryService (long-term college memories).
+    # Main callers never invoke them; college callers (orchestrator, tests)
+    # rely on them. Kept verbatim from the college branch.
+
+    async def retrieve_relevant_memories(self, uid: str, query: str) -> List[Dict[str, Any]]:
+        """
+        Agent Tool: Retrieves relevant long-term memories for a user given a query.
+        """
+        mems = await self.memory_service.get_long_term_memories(uid)
+        active_mems = [m for m in mems if m.status == "CURRENT"]
+
+        # Simple relevance: check if any query word is in the content or title
+        query_words = set(query.lower().split())
+        relevant = []
+        for mem in active_mems:
+            content_words = set(f"{mem.title} {mem.content}".lower().split())
+            if query_words.intersection(content_words):
+                relevant.append(mem)
+
+        # Fallback to all if no strong match found
+        if not relevant:
+            relevant = active_mems
+
+        return [m.model_dump(mode="json") for m in relevant[:5]]
+
+    async def promote_to_long_term_memory(
+        self,
+        uid: str,
+        title: str,
+        content: str,
+        nature: str = "EXPERIENCE"
+    ) -> Dict[str, Any]:
+        """
+        Agent Tool: Promotes a new insight or preference to long-term memory.
+        """
+        mem = await self.memory_service.record_long_term_memory(
+            uid=uid,
+            title=title,
+            content=content,
+            nature=nature,
+            source_type="AGENT_INFERENCE",
+            confidence="HIGH",
+            importance="MEDIUM"
+        )
+        return mem.model_dump(mode="json")
+
+    async def supersede_memory(
+        self,
+        uid: str,
+        old_memory_id: str,
+        new_title: str,
+        new_content: str
+    ) -> Dict[str, Any]:
+        """
+        Agent Tool: Replaces an outdated memory with a new current memory.
+        """
+        mem = await self.memory_service.supersede_long_term_memory(
+            uid=uid,
+            old_memory_id=old_memory_id,
+            new_title=new_title,
+            new_content=new_content
+        )
+        return mem.model_dump(mode="json")

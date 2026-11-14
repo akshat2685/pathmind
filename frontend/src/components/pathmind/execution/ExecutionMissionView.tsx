@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { extractErrorMessage } from "@/lib/api/client";
 import {
   Target,
   CheckCircle2,
@@ -172,8 +173,9 @@ export function ExecutionMissionView() {
       });
       if (res.ok) fetchData();
       else {
-        const err = await res.json();
-        alert(err.detail || "Cannot start action.");
+        const err = await res.json().catch(() => ({}));
+        // detail may be a FastAPI 422 ARRAY — normalize, don't alert the raw value
+        alert(extractErrorMessage(err, "Cannot start action."));
       }
     } catch (err) {
       console.error(err);

@@ -33,3 +33,6 @@ client_secret.json
 .idea/
 .gemini/
 .render-cli/
+scratch/
+test_auth.json
+*.zip

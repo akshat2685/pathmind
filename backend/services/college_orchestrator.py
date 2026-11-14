@@ -1,0 +1,396 @@
+"""
+College Agent Orchestrator for PATHMIND College Engineering MVP.
+Conforms to TRD Section 4 & 23: RootLearnerAgent orchestrating Academic, Learning,
+Assessment, and Accountability capabilities with Groq reasoning and deterministic fallbacks.
+"""
+
+from typing import Dict, Any, List, Optional
+import asyncio
+import json
+import logging
+import re
+from backend.core.config import settings
+from backend.core.college_logging import log_event
+from backend.core.gemini import LLMServiceError, classify_llm_error
+from backend.core.college_schemas import (
+    AcademicContext,
+    coerce_model,
+)
+from backend.services.academic_service import AcademicService
+from backend.services.college_learning_service import CollegeLearningService
+from backend.services.pyq_service import PYQService
+from backend.services.college_accountability_service import CollegeAccountabilityService
+from backend.services.college_memory_service import CollegeMemoryService
+from backend.services.store import FirestoreStore
+
+logger = logging.getLogger(__name__)
+
+def _error_detail(exc: BaseException, limit: int = 240) -> str:
+    """
+    Bounded "Type: message <- Type: message" walk of an exception chain.
+
+    Error responses carry this so an "LLM unavailable" is verifiable —
+    the operator (and the learner's support path) can see whether the
+    cause was a quota 429, a retired model 404, or a local defect —
+    instead of every failure collapsing into one opaque code. Messages
+    are truncated; provider errors never contain the API key.
+    """
+    parts: List[str] = []
+    seen = set()
+    cur: Optional[BaseException] = exc
+    while cur is not None and id(cur) not in seen and len(parts) < 3:
+        seen.add(id(cur))
+        cause = getattr(cur, "cause", None)
+        msg = str(cur)[:160] if str(cur) else ""
+        parts.append(f"{type(cur).__name__}: {msg}".rstrip(": "))
+        cur = cause if isinstance(cause, BaseException) \
+            else cur.__cause__ or cur.__context__
+    return " <- ".join(parts)[:limit]
+
+
+class CollegeOrchestrator:
+    def __init__(self, store: Optional[FirestoreStore] = None):
+        self.store = store or FirestoreStore()
+        self.academic_service = AcademicService(self.store)
+        self.learning_service = CollegeLearningService(self.store)
+        self.pyq_service = PYQService()
+        self.accountability_service = CollegeAccountabilityService(self.store)
+        self.memory_service = CollegeMemoryService(self.store)
+
+    async def _generate_mentor_reply(
+        self,
+        uid: str,
+        user_message: str,
+        ctx,
+        pref_texts: List[str],
+        countdown,
+    ) -> Optional[str]:
+        """
+        Calls the configured LLM (Groq) for the mentor reply with retries and backoff. Raises
+        the last exception when all attempts fail so the caller can answer
+        honestly instead of fabricating a reply. Returns None only when no
+        model is configured (caller then reports unavailability).
+        """
+        from backend.core.gemini import get_gemini_model as _shared_model
+
+        try:
+            model = _shared_model("mentor")
+        except TypeError:
+            # No-arg test doubles patch the shared accessor.
+            model = _shared_model()
+        if model is None:
+            return None
+
+        from backend.services.proactive_memory_service import ProactiveMemoryService
+        proactive_mem_service = ProactiveMemoryService(self.memory_service)
+
+        # Fetch proactive memory context
+        proactive_ctx = await proactive_mem_service.get_proactive_memory_context(
+            uid, user_message)
+        mems_context = ""
+        for m in proactive_ctx.get("retrieved_memories", []):
+            mems_context += f"[{m.get('memory_id')}] {m.get('title')}: {m.get('content')}\n"
+
+        # Fetch today's schedule for deeper context
+        today_schedule = await self.accountability_service.get_today_schedule(uid)
+        active_tasks = [a.title for a in today_schedule.active_activities]
+
+        # Prompt labels come from fields the college AcademicContext
+        # actually has. (Bug found live 2026-10-01: this f-string used
+        # ctx.university_name and ctx.branch.value — neither exists on
+        # the college context model — so EVERY mentor call with a saved
+        # context crashed here, before any LLM call, and the failure
+        # was misclassified as LLM_UNAVAILABLE. The branch lives on the
+        # learner profile as supported_path.) getattr + a guarded
+        # profile read keep a future field drift from ever again
+        # masquerading as an AI outage.
+        university_label = (getattr(ctx, "university_id", None)
+                            or "Engineering College")
+        branch_label = "General Engineering"
+        if ctx is not None:
+            try:
+                getter = getattr(self.store, "get_college_user_profile",
+                                 None)
+                profile = await getter(uid) if getter else None
+                supported = None
+                if isinstance(profile, dict):
+                    supported = profile.get("supported_path")
+                elif profile is not None:
+                    supported = getattr(profile, "supported_path", None)
+                if supported:
+                    branch_label = str(supported).replace(
+                        "_", " ").title()
+            except Exception:
+                pass
+
+        prompt = f"""
+        You are PATHMIND, an expert engineering-college academic mentor.
+        Learner Context:
+        - University: {university_label}
+        - Engineering Branch: {branch_label}
+        - Semester: {ctx.semester if ctx else 'Undergraduate'}
+        - Active Subjects: {', '.join(ctx.subjects) if ctx else 'Core Engineering'}
+        - Exam countdown: {countdown} days remaining
+        - Known Learning Preferences: {'; '.join(pref_texts) if pref_texts else 'Standard technical explanations with examples'}
+        - Active Tasks Today: {', '.join(active_tasks) if active_tasks else 'None currently planned'}
+
+        Retrieved Memory Context:
+        {mems_context if mems_context else "No specific past memories matched."}
+
+        Student Query: "{user_message}"
+
+        Respond concisely (2-4 sentences) with grounded, rigorous pedagogical advice matching their university curriculum and today's schedule. Use the retrieved memories to personalize the advice.
+        If the question is not about academics, answer it briefly and honestly anyway — never reply with an empty message.
+
+        If the user states a new durable preference, goal, or learning insight, append exactly one of the following JSON blocks to your output:
+        ```json
+        {{"action": "promote", "title": "Brief title", "content": "Detailed memory"}}
+        ```
+        OR if an old memory (provide its ID from context) is no longer valid:
+        ```json
+        {{"action": "supersede", "old_memory_id": "ID", "title": "New Title", "content": "New content"}}
+        ```
+        """
+        last_exc: Optional[Exception] = None
+        for attempt in range(3):
+            try:
+                # generate_content is blocking: keep it off the event loop.
+                resp = await asyncio.to_thread(model.generate_content, prompt)
+                text = (getattr(resp, "text", None) or "").strip()
+                if not text:
+                    raise RuntimeError("LLM returned an empty response")
+
+                # Extract Memory Actions
+                json_match = re.search(r'```json\n(.*?)\n```', text, re.DOTALL)
+                if json_match:
+                    try:
+                        action_data = json.loads(json_match.group(1))
+                        if action_data.get("action") == "promote":
+                            await proactive_mem_service.promote_to_long_term_memory(
+                                uid, action_data.get("title", ""),
+                                action_data.get("content", ""))
+                        elif action_data.get("action") == "supersede":
+                            await proactive_mem_service.supersede_memory(
+                                uid, action_data.get("old_memory_id", ""),
+                                action_data.get("title", ""),
+                                action_data.get("content", ""))
+                        text = text.replace(json_match.group(0), "").strip()
+                    except Exception as e:
+                        logger.warning(f"Failed to parse memory action: {e}")
+                if not text:
+                    raise RuntimeError(
+                        "LLM response contained only a memory action block")
+                return text
+            except Exception as exc:
+                error_code = classify_llm_error(exc)
+                logger.warning("Mentor LLM attempt %d/3 failed: %s (%s): %s",
+                               attempt + 1, type(exc).__name__, error_code,
+                               str(exc)[:240])
+                # Quota exhaustion, a rejected key and a retired model do
+                # not heal between retries — fail fast instead of burning
+                # the serverless budget (and more quota) on doomed calls.
+                if error_code in ("LLM_QUOTA", "LLM_AUTH",
+                                  "LLM_MODEL_NOT_FOUND"):
+                    raise LLMServiceError(error_code, exc) from exc
+                last_exc = exc
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+        assert last_exc is not None
+        raise LLMServiceError(classify_llm_error(last_exc), last_exc) \
+            from last_exc
+
+    async def interact(self, uid: str, user_message: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Processes learner message, retrieves academic context and memories,
+        and produces structured UI blocks and recommended actions.
+        """
+        # 1. Fetch learner context & memories
+        raw_ctx = await self.store.get_college_academic_context(uid)
+        ctx = coerce_model(AcademicContext, raw_ctx) if raw_ctx else None
+        
+        long_mems = await self.memory_service.get_long_term_memories(uid)
+        pref_texts = [m.content for m in long_mems if m.memory_type == "LEARNING_PREFERENCE"]
+
+        raw_plan = await self.learning_service.get_current_plan(uid)
+        countdown = await self.accountability_service.calculate_exam_countdown(uid)
+
+        # 2. Record short term session memory
+        if session_id:
+            await self.memory_service.record_short_term_context(
+                uid=uid,
+                session_id=session_id,
+                content=f"Learner asked: {user_message}"
+            )
+
+        # 3. Check for specific subject or PYQ intent
+        msg_lower = user_message.lower()
+        if "pyq" in msg_lower or "previous year" in msg_lower or "past paper" in msg_lower:
+            if not ctx:
+                return {
+                    "message": "I need your academic context (university, branch, semester) before I can look up previous year questions. Please complete onboarding first.",
+                    "state": "NEEDS_CONTEXT",
+                    "ui_blocks": [
+                        {
+                            "type": "NEXT_ACTION",
+                            "data": {
+                                "label": "Complete academic setup",
+                                "action": "OPEN_ONBOARDING"
+                            }
+                        }
+                    ],
+                    "sources": []
+                }
+            subject_ids = await self.store.get_context_subject_ids(ctx.context_id)
+            if not subject_ids:
+                return {
+                    "message": "Your academic context has no subjects linked yet, so I can't look up previous year questions.",
+                    "state": "NEEDS_CONTEXT",
+                    "ui_blocks": [
+                        {
+                            "type": "NEXT_ACTION",
+                            "data": {
+                                "label": "Update academic context",
+                                "action": "OPEN_ONBOARDING"
+                            }
+                        }
+                    ],
+                    "sources": []
+                }
+            sub_id = subject_ids[0]
+            pyq_result = await self.pyq_service.get_pyqs(ctx.university_id, sub_id)
+
+            if pyq_result.get("status") == "PYQ_NOT_AVAILABLE":
+                return {
+                    "message": pyq_result.get("message") or "Verified previous year questions are currently unavailable for this subject.",
+                    "state": "PYQ_REVIEW",
+                    "ui_blocks": [
+                        {
+                            "type": "NEXT_ACTION",
+                            "data": {
+                                "label": "Continue studying",
+                                "action": "OPEN_DASHBOARD"
+                            }
+                        }
+                    ],
+                    "sources": []
+                }
+
+            pyq_set = pyq_result.get("pyq_set") or {}
+            sources = [pyq_set["source_id"]] if isinstance(pyq_set, dict) and pyq_set.get("source_id") else []
+            return {
+                "message": f"Here are the verified previous year questions for {sub_id}.",
+                "state": "PYQ_REVIEW",
+                "ui_blocks": [
+                    {
+                        "type": "PYQ_VIEW",
+                        "data": pyq_result
+                    },
+                    {
+                        "type": "NEXT_ACTION",
+                        "data": {
+                            "label": "Attempt Question 1",
+                            "action": "SOLVE_PYQ"
+                        }
+                    }
+                ],
+                "sources": sources
+            }
+
+        # 4. Generate intelligent guidance with the LLM if configured.
+        # Retried with backoff: a transient rate-limit must not silently
+        # degrade into a fabricated "roadmap" summary. If the LLM is truly
+        # unreachable we say so honestly (state ERROR) instead of inventing
+        # a reply the model never wrote.
+        ai_response_text = None
+        mentor_error = False
+        mentor_error_code: Optional[str] = None
+        mentor_error_detail: Optional[str] = None
+        if settings.GEMINI_API_KEY:
+            try:
+                ai_response_text = await self._generate_mentor_reply(
+                    uid, user_message, ctx, pref_texts, countdown)
+            except Exception as e:
+                mentor_error_code = getattr(e, "error_code", None) \
+                    or classify_llm_error(e)
+                mentor_error_detail = _error_detail(e)
+                logger.error("Mentor LLM failed after retries: %s",
+                             str(e), exc_info=True)
+                log_event("college.mentor.llm_failed", user_id=uid,
+                          outcome="error", error_code=mentor_error_code)
+                mentor_error = True
+        else:
+            mentor_error_code = "LLM_NOT_CONFIGURED"
+            mentor_error_detail = "GEMINI_API_KEY is not configured"
+
+        if mentor_error or not (ai_response_text or "").strip():
+            if mentor_error_code == "LLM_QUOTA":
+                unavailable_msg = (
+                    "The AI mentor has reached its usage limit for now, "
+                    "so it cannot answer at the moment. Please try again "
+                    "after some time.")
+            elif mentor_error_code in ("LLM_AUTH", "LLM_MODEL_NOT_FOUND",
+                                       "LLM_NOT_CONFIGURED"):
+                unavailable_msg = (
+                    "The AI mentor is unavailable right now — the AI "
+                    "service needs attention from the PathMind team.")
+            else:
+                unavailable_msg = (
+                    "The AI mentor is temporarily unavailable "
+                    "(the language service could not be reached). "
+                    "Please try asking again in a moment.")
+            return {
+                "message": (unavailable_msg + " "
+                            "Your study plan, assessments and PYQs below are "
+                            "unaffected. "
+                            "Nothing was fabricated in place of the answer."),
+                "state": "ERROR",
+                "error_code": mentor_error_code or "LLM_UNAVAILABLE",
+                "error_detail": mentor_error_detail or "",
+                "ui_blocks": [
+                    {
+                        "type": "NEXT_ACTION",
+                        "data": {
+                            "label": "Retry your question",
+                            "action": "OPEN_MENTOR"
+                        }
+                    }
+                ],
+                "sources": []
+            }
+
+        ai_response_text = ai_response_text.strip()
+
+        # Compile active steps
+        steps = []
+        subject_ids = await self.store.get_context_subject_ids(ctx.context_id) if ctx else []
+        if raw_plan and raw_plan.phases:
+            for act in raw_plan.phases[0].activities[:3]:
+                steps.append({
+                    "title": act.title,
+                    "activity_type": act.activity_type.value,
+                    "status": act.status,
+                    "instructions": act.instructions
+                })
+
+        return {
+            "message": ai_response_text,
+            "state": "LEARNING",
+            "ui_blocks": [
+                {
+                    "type": "LEARNING_PLAN",
+                    "data": {
+                        "subject": subject_ids[0] if subject_ids else "Core Engineering",
+                        "steps": steps
+                    }
+                },
+                {
+                    "type": "NEXT_ACTION",
+                    "data": {
+                        "label": "Continue Study Session",
+                        "action": "START_ACTIVITY"
+                    }
+                }
+            ],
+            # No verified sources back this generic reply — never claim any.
+            "sources": []
+        }

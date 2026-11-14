@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { extractErrorMessage } from "@/lib/api/client";
 import { motion } from "framer-motion";
 import {
   Sparkles,
@@ -269,7 +270,8 @@ export function ProgressiveJourney() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Evidence evaluation failed");
+        // detail may be a FastAPI 422 ARRAY — normalize before Error()
+        throw new Error(extractErrorMessage(errData, "Evidence evaluation failed"));
       }
 
       const result: EvaluationResultItem = await res.json();

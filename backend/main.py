@@ -32,6 +32,8 @@ from backend.api.execution_routes import router as execution_router
 from backend.api.opportunity_routes import router as opportunity_router
 from backend.api.orchestrator_routes import router as orchestrator_router
 from backend.api.market_routes import router as market_router
+from backend.api.college_routes import router as college_router
+from backend.api.health_routes import router as connectivity_health_router
 from backend.api.verification_routes import router as verification_router
 from backend.api.test_routes import router as test_router
 from backend.api.intelligence_routes import router as intelligence_router
@@ -80,8 +82,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://akshat2685.github.io"
+        "http://127.0.0.1:3000",
+        "https://akshat2685.github.io",
+        settings.FRONTEND_ORIGIN,
     ],
+    # Allow every Vercel preview deployment (*.vercel.app): each redeploy mints
+    # a new preview URL, and a single hardcoded origin would break the web app's
+    # API calls (the browser blocks them as CORS failures, surfacing as
+    # "Failed to fetch") after every deploy.
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -116,6 +125,8 @@ app.include_router(execution_router)
 app.include_router(opportunity_router)
 app.include_router(orchestrator_router)
 app.include_router(market_router)
+app.include_router(college_router)
+app.include_router(connectivity_health_router)
 app.include_router(verification_router)
 app.include_router(intelligence_router)
 app.include_router(skill_profile_router)

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Source_Serif_4, Be_Vietnam_Pro, Caveat } from "next/font/google";
+import { Providers } from "./providers";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 
@@ -53,7 +54,9 @@ export default function RootLayout({
       >
         <div className="watercolor-overlay"></div>
         <div className="paper-texture"></div>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <Providers>{children}</Providers>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -34,7 +34,17 @@ class GeminiUnavailable(Exception):
         self.quota_scope = quota_scope
 
 
-def get_gemini_model() -> Optional[object]:
+def get_gemini_model(purpose: Optional[str] = None) -> Optional[object]:
+    # Unified accessor (main + college). Main callers pass no purpose and get
+    # the real Gemini model below. College callers pass a task purpose
+    # ("mentor" / "direct" / "light" / ...) and get the Groq wrapper for
+    # that pool from backend.core.llm — the college MVP's only LLM provider
+    # (AJ, 2026-10-01). The purpose parameter keeps both call conventions
+    # working; college wrappers already fall back to the no-arg call on
+    # TypeError, so no-arg test doubles keep working unchanged.
+    if purpose is not None:
+        from backend.core.llm import get_gemini_model as _groq_model
+        return _groq_model(purpose)
     from backend.core.config import settings
     if not settings.GEMINI_API_KEY:
         return None
@@ -44,7 +54,15 @@ def get_gemini_model() -> Optional[object]:
         return genai.GenerativeModel(settings.GEMINI_MODEL)
     except Exception as exc:
         logger.warning("gemini.unavailable error=%s", type(exc).__name__)
-        return None
+        # College compatibility: the no-arg call historically returned the
+        # Groq "direct" wrapper (college gemini.py was a re-export of
+        # backend.core.llm). A key is configured but the Gemini SDK is
+        # not importable here, so fall back to Groq rather than None.
+        try:
+            from backend.core.llm import get_gemini_model as _groq_model
+            return _groq_model("direct")
+        except Exception:
+            return None
 
 
 def _build_model(model_id: str) -> Optional[object]:
@@ -143,3 +161,21 @@ def generate_text_resilient(
         f"{str(last_exc)[:200] if last_exc else ''})",
         quota_scope=scope,
     ) from last_exc
+
+# --- College-slice LLM names (unified app) ---------------------------------
+# The college MVP's provider layer lives in backend.core.llm (Groq). These
+# names are re-exported here so college services keep their historical import
+# path (`from backend.core.gemini import generate_fast`, ...). get_gemini_model
+# above stays the main product's Gemini accessor; college callers that pass a
+# purpose (e.g. get_gemini_model("mentor")) already fall back to the no-arg
+# call on TypeError. New college code should import from backend.core.llm.
+from backend.core.llm import (  # noqa: F401,E402
+    GROQ_BASE_URL,
+    LLMProviderError,
+    LLMServiceError,
+    classify_llm_error,
+    fast_generation_config,
+    generate_fast,
+    groq_chat,
+    model_id_for_purpose,
+)

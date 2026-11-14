@@ -2,8 +2,8 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { OnboardingFlow } from "@/components/pathmind/OnboardingFlow";
 
 export const metadata = {
-  title: "Welcome to PATHMIND",
-  description: "Create your longitudinal learning profile.",
+  title: "Academic Initiation — PATHMIND College",
+  description: "Configure your university engineering curriculum and study horizon.",
 };
 
 export default function OnboardingPage() {
@@ -17,3 +17,4 @@ export default function OnboardingPage() {
 function OnboardingPageInner() {
   return <OnboardingFlow />;
 }
+

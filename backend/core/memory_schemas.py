@@ -45,6 +45,17 @@ class MemoryItem(BaseModel):
     evidence_verification_status: str = "VERIFIED"  # VERIFIED, UNVERIFIED, OBSERVED, SELF_REPORTED
     details: Dict[str, Any] = Field(default_factory=dict)
 
+    def get(self, key, default=None):
+        """Dict-style read for college callers (ctx.get('retrieved_memories'))."""
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        return default
+
+    def __getitem__(self, key):
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        raise KeyError(key)
+
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     @model_validator(mode="before")
@@ -185,6 +196,17 @@ class ProactiveMemoryContext(BaseModel):
     status: str = "ACTIVE_RECALL"  # ACTIVE_RECALL, NO_RELEVANT_MEMORY, CONFLICT_DETECTED, SUPERSEDED_BY_CURRENT_INPUT, UNVERIFIED_MEMORY_ONLY
     proactive_summary: Optional[str] = None
     retrieved_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def get(self, key, default=None):
+        """Dict-style read for college callers (ctx.get('retrieved_memories'))."""
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        return default
+
+    def __getitem__(self, key):
+        if key in type(self).model_fields:
+            return getattr(self, key)
+        raise KeyError(key)
 
     model_config = ConfigDict(populate_by_name=True)
 

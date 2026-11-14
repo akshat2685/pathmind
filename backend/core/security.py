@@ -1,3 +1,4 @@
+import concurrent.futures
 import re
 import time
 import uuid
@@ -8,9 +9,95 @@ from typing import Optional, Dict, List, Tuple
 from fastapi import Header, HTTPException, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+from backend.services.supabase_adapter import get_supabase_adapter
+import httpx
 
 # Valid person_id regex: 3-64 chars, alphanumeric with hyphens, underscores, dots
 PERSON_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]{3,64}$")
+
+# Upper bound for one Supabase auth round-trip (auth.get_user). The supabase-py
+# sync auth client exposes no per-call timeout, so get_authenticated_person
+# runs it on a worker thread and caps the wait (see below). On Python 3.11+
+# concurrent.futures.TimeoutError is an alias of builtin TimeoutError, so the
+# infra-error tuple in get_authenticated_person covers it.
+AUTH_VERIFY_TIMEOUT_SECONDS = 10
+# Transient infra failures (timeouts, connect errors) get a bounded retry: a
+# single slow Supabase response must not become a user-facing 503. Attempts
+# are capped so worst case stays well inside the serverless window.
+AUTH_VERIFY_MAX_ATTEMPTS = 3
+AUTH_VERIFY_BACKOFF_SECONDS = 0.5
+# A successful verification is cached briefly per token: the dashboard fires
+# many authenticated calls per page load and each one otherwise pays a full
+# Supabase Auth round-trip. Entries expire with the token or after this TTL,
+# whichever comes first. This does not weaken revocation semantics: Supabase
+# access tokens are not revoked server-side on sign-out either.
+AUTH_VERIFY_CACHE_TTL_SECONDS = 120
+_INFRA_ERRORS = (
+    httpx.TimeoutException,
+    httpx.ConnectError,
+    ConnectionError,
+    TimeoutError,
+)
+
+# Module-level pool for bounding auth.get_user(): a bounded worker pool means
+# timed-out calls can't leak threads unboundedly. NOTE: a genuinely hung
+# socket still occupies one worker until it returns; on serverless hosts the
+# container is recycled between invocations so this cannot accumulate.
+_auth_verify_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+
+# Short-lived cache of successful verifications, keyed by a hash of the token
+# (never the raw token). token -> (user_id, monotonic expiry).
+_auth_verify_cache: Dict[str, Tuple[str, float]] = {}
+
+
+def _token_expiry_seconds(token: str) -> Optional[float]:
+    """Best-effort read of the JWT `exp` claim (no signature check — the
+    signature is still verified by Supabase on a cache miss). Returns seconds
+    until expiry, or None when the claim cannot be read."""
+    try:
+        import base64
+        import json
+
+        payload_b64 = token.split(".")[1]
+        payload_b64 += "=" * (-len(payload_b64) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+        exp = payload.get("exp")
+        if not isinstance(exp, (int, float)):
+            return None
+        return float(exp) - time.time()
+    except Exception:
+        return None
+
+
+def _auth_cache_get(token: str) -> Optional[str]:
+    import hashlib
+
+    key = hashlib.sha256(token.encode()).hexdigest()
+    entry = _auth_verify_cache.get(key)
+    if entry is None:
+        return None
+    user_id, expires_at = entry
+    if time.monotonic() >= expires_at:
+        _auth_verify_cache.pop(key, None)
+        return None
+    return user_id
+
+
+def _auth_cache_put(token: str, user_id: str) -> None:
+    import hashlib
+
+    remaining = _token_expiry_seconds(token)
+    ttl = AUTH_VERIFY_CACHE_TTL_SECONDS
+    if remaining is not None:
+        ttl = min(ttl, max(0.0, remaining - 5))
+    if ttl <= 0:
+        return
+    if len(_auth_verify_cache) > 512:  # bound memory on long-lived containers
+        _auth_verify_cache.clear()
+    _auth_verify_cache[hashlib.sha256(token.encode()).hexdigest()] = (
+        user_id,
+        time.monotonic() + ttl,
+    )
 
 def validate_person_id_format(person_id: str) -> bool:
     if not person_id or not isinstance(person_id, str):
@@ -25,47 +112,82 @@ def get_authenticated_person(
 ) -> str:
     """
     Extracts and verifies the authenticated person identity via Supabase Auth JWT.
-    The Bearer token is verified server-side against Supabase Auth; the returned
+    The Bearer <redacted> is verified server-side against Supabase Auth; the returned
     user id is the only trusted identity. Self-asserted X-Person-ID headers are
     NOT accepted (they allowed trivial impersonation).
+
+    Unified verification (main + college): a verified token is cached briefly
+    (college), transient Supabase Auth failures are retried a bounded number
+    of times (college, live symptom 2026-09-30), and the call goes through
+    the adapter's verify_jwt when available (main's seam). Adapters without
+    verify_jwt (college test doubles) fall back to a bounded get_user call
+    on the shared pool thread. Transport failure after retries is a 503
+    (outage, not a bad token); a bad token is a 401.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
-            detail="MISSING_AUTHORIZATION: Bearer token is required."
+            detail="MISSING_AUTHORIZATION: Bearer <redacted> is required."
         )
 
-    token = authorization[7:].strip()
+    token = authorization.split(" ", 1)[1].strip()
     if not token:
         raise HTTPException(
             status_code=401,
-            detail="MISSING_AUTHORIZATION: Bearer token is required."
+            detail="MISSING_AUTHORIZATION: Bearer <redacted> is required."
         )
 
-    from backend.services.supabase_adapter import get_supabase_adapter
+    cached_user_id = _auth_cache_get(token)
+    if cached_user_id is not None:
+        return cached_user_id
+
     adapter = get_supabase_adapter()
-    if not adapter.client:
-        raise HTTPException(
-            status_code=500,
-            detail="DATABASE_UNAVAILABLE: Unable to connect to Supabase for authentication."
-        )
-
-    try:
-        return adapter.verify_jwt(token)
-    except HTTPException:
-        raise
-    except (httpx.TimeoutException, httpx.ConnectError, ConnectionError, TimeoutError) as err:
-        # Transport-level failure talking to Supabase Auth — an outage, not a
-        # bad token. Return 503 so callers retry instead of re-authenticating.
-        raise HTTPException(
-            status_code=503,
-            detail=f"AUTH_SERVICE_UNAVAILABLE: authentication service is temporarily unavailable ({type(err).__name__}); please retry."
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=401,
-            detail="INVALID_TOKEN: Supabase JWT verification failed."
-        )
+    last_infra_exc: Optional[BaseException] = None
+    for attempt in range(AUTH_VERIFY_MAX_ATTEMPTS):
+        try:
+            verify = getattr(adapter, "verify_jwt", None)
+            if callable(verify):
+                user_id = verify(token)
+            else:
+                # No verify_jwt on this adapter: bound get_user call.
+                if not adapter.client:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="DATABASE_UNAVAILABLE: Unable to connect to Supabase for authentication."
+                    )
+                user_resp = _auth_verify_pool.submit(
+                    adapter.client.auth.get_user, token
+                ).result(timeout=AUTH_VERIFY_TIMEOUT_SECONDS)
+                if not user_resp or not user_resp.user:
+                    raise ValueError("No user found")
+                user_id = user_resp.user.id
+            _auth_cache_put(token, user_id)
+            return user_id
+        except HTTPException:
+            raise
+        except _INFRA_ERRORS as infra_exc:
+            last_infra_exc = infra_exc
+            if attempt + 1 < AUTH_VERIFY_MAX_ATTEMPTS:
+                time.sleep(AUTH_VERIFY_BACKOFF_SECONDS * (attempt + 1))
+        except RuntimeError:
+            # Adapter has no usable client (e.g. Supabase unconfigured):
+            # an outage/config failure, not a bad token.
+            raise HTTPException(
+                status_code=503,
+                detail="AUTH_SERVICE_UNAVAILABLE: authentication service is temporarily unavailable; please retry."
+            )
+        except Exception:
+            raise HTTPException(
+                status_code=401,
+                detail="INVALID_TOKEN: <redacted>"
+            )
+    raise HTTPException(
+        status_code=503,
+        detail=(
+            "AUTH_SERVICE_UNAVAILABLE: authentication service unavailable "
+            f"({type(last_infra_exc).__name__})."
+        ),
+    )
 
 def enforce_person_ownership(authenticated_id: str, target_person_id: str) -> None:
     """

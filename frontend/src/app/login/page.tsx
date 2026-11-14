@@ -2,23 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 
-/**
- * PATHMIND sign-in / sign-up.
- *
- * Works with the project's Supabase Auth configuration either way:
- * - Email confirmation OFF (mailer_autoconfirm): sign-up returns a session
- *   immediately and the traveler goes straight in — no email is promised.
- * - Email confirmation ON: the traveler is told to check their inbox, with
- *   a "resend confirmation email" affordance.
- */
 export default function LoginPage() {
   const { signUp, signIn, resendConfirmation, resetPassword } = useAuth();
   const router = useRouter();
-  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -34,30 +26,20 @@ export default function LoginPage() {
       if (isSignUp) {
         const { needsConfirmation } = await signUp(email, password);
         if (needsConfirmation) {
-          // A session is returned only when confirmation is required.
           setMessage("Welcome! Please check your email to confirm your account before logging in.");
           setShowResend(true);
         } else {
           setMessage("Welcome! You are signed in. Taking you to onboarding…");
-          // Explicit navigation for reliability (route guard also handles this).
           setTimeout(() => router.replace("/onboarding"), 800);
         }
-        // The AuthProvider's route guard moves the traveler to /onboarding
-        // as soon as the session is active.
       } else {
         await signIn(email, password);
-        // Sign-in succeeded: give immediate feedback and navigate explicitly.
-        // (The AuthProvider route guard also redirects, but an explicit push
-        // is reliable even if the auth-state listener is delayed.)
         setMessage("Welcome back! Taking you to your journey…");
-        // Small delay so the message is visible, then go to onboarding.
-        // The route guard will also handle this if the user state updates first.
-        setTimeout(() => router.replace("/onboarding"), 800);
+        setTimeout(() => router.replace("/"), 800);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       setError(msg);
-      // An unconfirmed account trying to sign in gets a clear path forward.
       if (/confirm|verified|not confirmed/i.test(msg)) setShowResend(true);
     } finally {
       setLoading(false);
@@ -83,141 +65,328 @@ export default function LoginPage() {
 
   const handleResetPassword = async () => {
     if (!email) {
-      setError("Enter your email address first, then reset your password.");
+      setError("Please enter your email to reset your password.");
       return;
     }
     setLoading(true);
     setError(null);
+    setMessage(null);
     try {
       await resetPassword(email);
-      setMessage("Password reset email sent — check your inbox.");
+      setMessage("Password reset link sent to your email.");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Could not send the reset email.");
+      setError(err instanceof Error ? err.message : "Failed to send reset link.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1
-            className="text-4xl font-bold tracking-tight text-[#1c1c11]"
-            style={{ fontFamily: "var(--font-bricolage), sans-serif" }}
-          >
-            PATHMIND
-          </h1>
-          <p
-            className="mt-2 text-xl text-[#4a654e]"
-            style={{ fontFamily: "var(--font-caveat), cursive" }}
-          >
-            {isSignUp ? "begin your journey, traveler" : "welcome back, traveler"}
+    <div className="min-h-screen flex flex-col justify-between relative overflow-x-hidden selection:bg-[#8ba88e]/40 selection:text-[#252321] font-sans antialiased text-[#252321] bg-[#f7f4e7]">
+      {/* Background Notebook Grid Pattern */}
+      <div 
+        className="fixed inset-0 pointer-events-none opacity-80 -z-20"
+        style={{
+          backgroundImage: "linear-gradient(to right, rgba(90, 80, 70, 0.05) 1px, transparent 1px), linear-gradient(to bottom, rgba(90, 80, 70, 0.05) 1px, transparent 1px)",
+          backgroundSize: "28px 28px"
+        }}
+      />
+
+      {/* Ambient Watercolor Washes */}
+      <div 
+        className="fixed top-0 left-0 w-[550px] h-[550px] pointer-events-none -z-10 blur-2xl"
+        style={{
+          background: "radial-gradient(circle at 30% 40%, rgba(139, 168, 142, 0.35) 0%, rgba(139, 168, 142, 0.08) 55%, transparent 75%)"
+        }}
+      />
+      <div 
+        className="fixed -bottom-20 -right-20 w-[650px] h-[650px] pointer-events-none -z-10 blur-3xl"
+        style={{
+          background: "radial-gradient(circle at 70% 30%, rgba(206, 166, 107, 0.25) 0%, rgba(206, 166, 107, 0.05) 50%, transparent 70%)"
+        }}
+      />
+
+      {/* TopBar */}
+      <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
+        <Link href="/" className="flex items-center gap-3.5 group">
+          <div className="w-10 h-10 rounded-full border-[1.75px] border-[#252321]/80 overflow-hidden bg-[#fdfae7] shadow-sm flex items-center justify-center transition-transform group-hover:-rotate-3">
+            <span className="material-symbols-outlined text-[#4a654e] text-2xl">
+              auto_stories
+            </span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-bold text-2xl tracking-tight leading-none text-[#252321]">
+              Path
+            </span>
+            <span className="font-note-handwritten text-sm text-[#68635e] tracking-wide -mt-0.5">
+              living sketchbook
+            </span>
+          </div>
+        </Link>
+
+        <div className="hidden sm:flex items-center gap-4 text-xs font-serif text-[#68635e] italic">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#8ba88e] border border-[#252321]/40"></span>
+            Volume IV • Traveler Registry
+          </span>
+          <span className="text-[#252321]/30">|</span>
+          <span className="text-[#252321] underline decoration-[#252321]/30 decoration-wavy underline-offset-4 cursor-default">
+            Mindful Learning Path Companion
+          </span>
+        </div>
+      </header>
+
+      {/* Main Content Section */}
+      <main className="flex-grow flex items-center justify-center px-4 sm:px-6 lg:px-8 py-6 z-10">
+        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          
+          {/* LEFT COLUMN: Registered Scholars Directory & Field Note */}
+          <section className="lg:col-span-5 flex flex-col justify-center order-2 lg:order-1 space-y-5">
+            
+            {/* Scholars in Residence Box */}
+            <div 
+              className="relative bg-[#fdfae7] p-5 sm:p-6 rotate-[-0.8deg] transition-transform hover:rotate-0 duration-300"
+              style={{
+                border: "1.5px solid #252321",
+                borderRadius: "12px 18px 10px 22px / 20px 10px 24px 12px",
+                boxShadow: "4px 6px 0px rgba(37, 35, 33, 0.9), 12px 16px 28px rgba(70, 60, 50, 0.08)"
+              }}
+            >
+              {/* Tape Effect */}
+              <div className="absolute -top-3.5 left-8 w-32 h-6 bg-amber-100/90 backdrop-blur-sm border border-[#252321]/20 rotate-[-2deg] shadow-xs flex items-center justify-center">
+                <span className="text-[10px] tracking-widest uppercase font-serif text-[#252321]/80 font-bold">
+                  Scholars in Residence
+                </span>
+              </div>
+
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-3 border-b border-[#252321]/20 pb-2">
+                  <h3 className="font-serif italic font-bold text-base text-[#252321] flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm text-[#4a654e]">info</span>
+                    Authentication Notice
+                  </h3>
+                </div>
+
+                <div className="py-4">
+                  <p className="text-xs text-[#68635e] font-serif italic mb-4">
+                    The traveler registry is now securely managed. To enter your academic journey, please authenticate using your email and password.
+                  </p>
+                  <p className="text-[11px] text-[#252321]/70">
+                    If you are a new scholar, use the &quot;New Traveler&quot; option to register your credentials. You will be signed in immediately.
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer Note */}
+              <div className="mt-4 pt-2.5 border-t border-dashed border-[#252321]/20 flex items-center justify-between text-[11px]">
+                <span className="font-note-handwritten text-[#68635e]">
+                  Isolated Personal Memory
+                </span>
+                <span className="font-serif italic text-[10px] text-[#4a654e] font-semibold">
+                  Privacy Preserved
+                </span>
+              </div>
+            </div>
+
+            {/* Field Note Card */}
+            <div 
+              className="relative bg-[#fdfae7] p-4 rotate-[0.6deg]"
+              style={{
+                border: "1.5px solid #252321",
+                borderRadius: "10px 14px 8px 16px / 14px 8px 16px 10px",
+                boxShadow: "3px 4px 0px rgba(37, 35, 33, 0.8)"
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-lg text-[#4a654e] mt-0.5 shrink-0">
+                  verified
+                </span>
+                <div>
+                  <h4 className="text-xs font-bold text-[#252321]">
+                    One notebook, every journey
+                  </h4>
+                  <p className="text-[11px] text-[#68635e] mt-0.5 font-sans leading-relaxed">
+                    College, career, business or a fresh switch — your path is built from verified evidence, not vibes. The college slice (syllabus, PYQs, NPTEL) lives inside the same app.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </section>
+
+          {/* RIGHT COLUMN: Authentication & Entry Desk Card */}
+          <section className="lg:col-span-7 order-1 lg:order-2">
+            <div 
+              className="bg-[#fdfae7]/95 p-6 sm:p-10 relative rotate-[0.5deg]"
+              style={{
+                border: "1.75px solid #252321",
+                borderRadius: "255px 15px 225px 15px / 15px 225px 15px 255px",
+                boxShadow: "4px 6px 0px rgba(37, 35, 33, 0.9), 12px 16px 28px rgba(70, 60, 50, 0.08)"
+              }}
+            >
+              {/* Header inside the desk card */}
+              <div className="mb-8">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#8ba88e]/20 border border-[#8ba88e] text-[#252321] text-xs font-medium mb-3">
+                  <span className="material-symbols-outlined text-sm">
+                    ink_pen
+                  </span>
+                  The Scholar’s Desk
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#252321]">
+                  Resume your trail.
+                </h1>
+                <p className="font-serif italic text-[#68635e] mt-1.5 text-base">
+                  Step back into your living notebook to sketch thoughts and trace horizons.
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 border border-[#ba1a1a] bg-[#ffdad6]/40 text-[#93000a] text-xs rounded-md">
+                  {error}
+                </div>
+              )}
+              {message && (
+                <div className="mb-4 p-3 border border-[#4a654e] bg-[#8ba88e]/20 text-[#252321] text-xs rounded-md">
+                  {message}
+                </div>
+              )}
+              {showResend && (
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={loading}
+                  className="mb-4 text-xs font-note-handwritten text-[#4a654e] underline underline-offset-4 cursor-pointer"
+                >
+                  Resend confirmation email
+                </button>
+              )}
+
+              {/* Entry Form */}
+                <form onSubmit={handleAuth} className="space-y-5">
+                  {/* Traveler Email */}
+                  <div>
+                    <div className="flex justify-between items-baseline mb-1.5">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-[#252321]" htmlFor="email">
+                        Traveler&apos;s Email
+                      </label>
+                      <span className="text-xs font-note-handwritten text-[#68635e]">
+                        inked identifier
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="e.g., scholar@university.edu"
+                        className="w-full px-3.5 py-3 rounded-md text-sm text-[#252321] placeholder:text-[#68635e]/50 placeholder:font-note-handwritten placeholder:text-lg bg-[#fdfae7]/70 border-[1.5px] border-[#4a453f] focus:bg-white focus:border-[#252321] focus:outline-none focus:shadow-[2px_3px_0px_#252321] transition-all"
+                        required
+                      />
+                      <div className="absolute right-3.5 top-3.5 pointer-events-none text-[#252321]/50">
+                        <span className="material-symbols-outlined text-lg">mail</span>
+                      </div>
+                    </div>
+                  </div>
+  
+                  {/* Password / Secret Seal */}
+                  <div>
+                    <div className="flex justify-between items-baseline mb-1.5">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-[#252321]" htmlFor="password">
+                        Keyphrase / Secret Seal
+                      </label>
+                      <span 
+                        onClick={handleResetPassword}
+                        className="text-xs font-note-handwritten text-[#a65959] cursor-pointer hover:underline"
+                      >
+                        forgot keyphrase?
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full px-3.5 py-3 rounded-md text-sm text-[#252321] placeholder:text-[#252321]/40 tracking-widest bg-[#fdfae7]/70 border-[1.5px] border-[#4a453f] focus:bg-white focus:border-[#252321] focus:outline-none focus:shadow-[2px_3px_0px_#252321] transition-all"
+                        required
+                      />
+                      <div className="absolute right-3.5 top-3.5 pointer-events-none text-[#252321]/50">
+                        <span className="material-symbols-outlined text-lg">lock</span>
+                      </div>
+                    </div>
+                  </div>
+  
+                  {/* Remember-me is not offered: supabase-js v2 sets session
+                      persistence at client creation (@/lib/auth-context), not
+                      per sign-in call, so a checkbox here would be misleading. */}
+  
+                  {/* Primary Submission Button */}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full mt-3 py-3.5 px-6 bg-[#252321] hover:bg-[#383430] text-[#fdfae7] font-semibold text-base rounded-md border-2 border-[#252321] transition-all flex items-center justify-center gap-2 group cursor-pointer shadow-[2px_3px_0px_rgba(37,35,33,0.9)] hover:shadow-[3px_5px_0px_rgba(37,35,33,0.9)] active:translate-x-0.5 active:translate-y-0.5"
+                  >
+                    <span>{loading ? "Verifying Registry..." : (isSignUp ? "Sign Up" : "Enter the Path")}</span>
+                    <span className="group-hover:translate-x-1 transition-transform font-serif text-lg leading-none">
+                      →
+                    </span>
+                  </button>
+                </form>
+  
+                {/* Alternative Pathways Divider */}
+                <div className="relative my-7 text-center">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-dashed border-[#252321]/30"></div>
+                  </div>
+                  <span className="relative bg-[#fdfae7] px-3 text-xs font-serif italic text-[#68635e]">
+                    or alternate registration
+                  </span>
+                </div>
+  
+                {/* Secondary Actions */}
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setIsSignUp(!isSignUp)}
+                    className="py-2.5 px-4 bg-transparent hover:bg-[#8ba88e]/20 text-[#252321] text-xs font-semibold rounded-md border-[1.5px] border-[#252321]/70 transition-all hover:-translate-y-0.5 flex items-center justify-center gap-1.5 cursor-pointer"
+                    style={{
+                      borderRadius: "12px 18px 10px 22px / 20px 10px 24px 12px"
+                    }}
+                  >
+                    <span className="material-symbols-outlined text-sm">{isSignUp ? "login" : "person_add"}</span>
+                    {isSignUp ? "Already have a journal? Sign In" : "New Traveler? Sign Up"}
+                  </button>
+                </div>
+
+              {/* Charcoal corner stamp */}
+              <div className="absolute bottom-2 right-3 pointer-events-none opacity-25">
+                <span className="font-note-handwritten text-[11px] uppercase tracking-widest text-[#252321]">
+                  PathMind • Edition 2026
+                </span>
+              </div>
+            </div>
+          </section>
+
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full max-w-5xl mx-auto px-6 py-6 text-center z-10">
+        <div className="inline-block border-b border-dashed border-[#252321]/30 pb-1 mb-2">
+          <p className="font-serif italic text-sm text-[#423e3b]">
+            &quot;Every return is a continuation of the first step.&quot;
           </p>
         </div>
-
-        <div className="rounded-2xl border-2 border-[#333333]/70 bg-[#fdfae7]/80 p-6 shadow-[4px_5px_0_rgba(61,52,48,0.15)]">
-          <div className="flex rounded-full border-2 border-[#333333]/60 overflow-hidden mb-6">
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(false); setError(null); setMessage(null); setShowResend(false); }}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${!isSignUp ? "bg-[#4a654e] text-white" : "text-[#1c1c11]"}`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => { setIsSignUp(true); setError(null); setMessage(null); setShowResend(false); }}
-              className={`flex-1 py-2 text-sm font-semibold transition-colors ${isSignUp ? "bg-[#4a654e] text-white" : "text-[#1c1c11]"}`}
-            >
-              New traveler
-            </button>
-          </div>
-
-          <form onSubmit={handleAuth} className="space-y-5">
-            <div>
-              <label htmlFor="email" className="block text-sm font-semibold text-[#1c1c11] mb-1">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="hand-drawn-input w-full px-1 py-2"
-                autoComplete="email"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-semibold text-[#1c1c11] mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={isSignUp ? "at least 6 characters" : "your password"}
-                className="hand-drawn-input w-full px-1 py-2"
-                autoComplete={isSignUp ? "new-password" : "current-password"}
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm font-medium text-[#8b4c50] bg-[#8b4c50]/10 border border-[#8b4c50]/40 rounded-lg px-3 py-2">
-                {error}
-              </p>
-            )}
-            {message && (
-              <p className="text-sm font-medium text-[#4a654e] bg-[#4a654e]/10 border border-[#4a654e]/40 rounded-lg px-3 py-2">
-                {message}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="ink-wash-btn-primary w-full py-3 disabled:opacity-60"
-            >
-              {loading ? "One moment…" : isSignUp ? "Begin the journey" : "Continue the journey"}
-            </button>
-          </form>
-
-          <div className="mt-4 flex flex-col gap-2 text-center">
-            {showResend && (
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={loading}
-                className="ink-wash-btn w-full py-2 text-sm disabled:opacity-60"
-              >
-                Resend confirmation email
-              </button>
-            )}
-            {!isSignUp && (
-              <button
-                type="button"
-                onClick={handleResetPassword}
-                disabled={loading}
-                className="text-sm text-[#4a654e] underline underline-offset-2 hover:text-[#3b523e] disabled:opacity-60"
-              >
-                Forgot your password?
-              </button>
-            )}
-          </div>
+        <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-[#68635e]">
+          <span>Handcrafted in the Living Sketchbook System</span>
+          <span>•</span>
+          <span>One product, every journey</span>
+          <span>•</span>
+          <span>College, career &amp; beyond</span>
         </div>
-
-        <p
-          className="mt-6 text-center text-lg text-[#68635e]"
-          style={{ fontFamily: "var(--font-caveat), cursive" }}
-        >
-          your journey, your pace — pick up right where you left off
-        </p>
-      </div>
-    </main>
+      </footer>
+    </div>
   );
 }

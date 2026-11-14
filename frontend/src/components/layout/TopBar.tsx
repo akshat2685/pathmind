@@ -70,7 +70,7 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
         localStorage.removeItem("pathmind_user_goal");
         localStorage.removeItem("pathmind_user_evidence");
       }
-      router.replace("/signin");
+      router.replace("/login");
     }
   };
 

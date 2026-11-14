@@ -1,0 +1,926 @@
+"""
+Resource research pipeline for the PathMind College MVP (TRD §7–9, §13).
+
+Live internet research for plan-time resources. Honest by construction:
+
+  - Every resource URL comes from a real search/API result, never fabricated.
+  - Every URL is reachability-checked (HTTP HEAD/GET) before being marked
+    VERIFIED. Unreachable URLs are rejected, never promoted.
+  - Aggressive caching in Supabase (source_records / resource_records /
+    learning_resources) so repeated plans do not re-research.
+  - Video resources carry timestamps: real chapters parsed from YouTube
+    descriptions where available, clearly labeled "estimated" otherwise.
+
+Provider priority (free-tier only, no keys required for the primary):
+  1. DuckDuckGo HTML endpoint (no API key)
+  2. Tavily search API (backup; needs TAVILY_API_KEY env)
+  3. YouTube Data API v3 (video metadata + statistics; needs YOUTUBE_API_KEY)
+  4. youtube-transcript-api (transcript/chapter extraction; no key)
+
+All network I/O is async httpx with short timeouts and a global time budget
+(Vercel caps execution at 60s). No LLM calls in this module — verification
+signals are deterministic (status codes, domain tiers, view/like counts).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import logging
+import math
+import os
+import re
+import time
+import urllib.parse
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
+
+import httpx
+
+from backend.core.college_logging import log_event, timed_stage
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Deterministic tier rules (TRD §9). Domain authority is observable, not
+# model-judged: suffix/infix lists only.
+# ---------------------------------------------------------------------------
+
+_TIER_A_INFIXES = (
+    ".ac.in",          # Indian universities
+    ".edu",            # generic universities
+    "ugc.gov.in",
+    "aicte-india.org",
+)
+_TIER_B_INFIXES = (
+    "nptel.ac.in",
+    "swayam.gov.in",
+    "iitb.ac.in", "iitm.ac.in", "iitd.ac.in", "iitkgp.ac.in",
+    "iitk.ac.in", "iitr.ac.in", "iitg.ac.in",
+)
+_TIER_C_DOMAINS = (
+    "geeksforgeeks.org",
+    "tutorialspoint.com",
+    "javatpoint.com",
+    "coursera.org",
+    "edx.org",
+    "khanacademy.org",
+    "udemy.com",
+)
+# Official YouTube channels of tier-A/B institutions are promoted.
+_OFFICIAL_YT_HANDLES = ("nptel", "iit", "swayam", "ugc")
+
+YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3"
+TAVILY_API_URL = "https://api.tavily.com/search"
+DDG_HTML_URL = "https://html.duckduckgo.com/html/"
+
+
+def tier_for_domain(domain: str) -> str:
+    """Deterministic TRD §9 tier assignment from an observable domain."""
+    d = (domain or "").lower()
+    if any(inf in d for inf in _TIER_A_INFIXES):
+        return "A"
+    if any(inf in d for inf in _TIER_B_INFIXES):
+        return "B"
+    if d in _TIER_C_DOMAINS or any(d.endswith(x) for x in _TIER_C_DOMAINS):
+        return "C"
+    if "youtube.com" in d or "youtu.be" in d:
+        return "D"  # promoted to B only if an official channel is confirmed
+    return "D"
+
+
+def _tier_rank(tier: str) -> int:
+    return {"A": 4, "B": 3, "C": 2, "D": 1}.get(tier, 1)
+
+
+def _engagement_score(quality_signals: Any) -> float:
+    """Deterministic engagement signal from real platform statistics.
+
+    Log-scaled views (reach), like/view ratio (approval), log-scaled
+    comments (discussion depth). Returns 0.0 when no statistics exist —
+    documents and hand-seeded rows carry none, so their relative order
+    is exactly what it was before engagement ranking existed. The
+    numbers ranked here are real YouTube Data API statistics captured
+    at research time, never estimates or model guesses.
+    """
+    if not isinstance(quality_signals, dict):
+        return 0.0
+
+    def _num(key: str) -> float:
+        try:
+            return float(quality_signals.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    views = _num("view_count")
+    if views <= 0:
+        return 0.0
+    likes = _num("like_count")
+    comments = _num("comment_count")
+    return (math.log10(views + 1) * 10.0
+            + min(likes / views, 0.25) * 40.0
+            + math.log10(comments + 1) * 2.0)
+
+
+def _candidate_quality(cand: Dict[str, Any]) -> float:
+    """Kind-native quality signal, ranked FIRST (AJ's qualification rule).
+
+    Videos: real engagement (views/likes/comments) — the most-watched,
+    best-liked lecture on the topic wins. Documents and free online
+    courses found via Tavily: the search engine's SEO/AEO relevance
+    score (0..1), scaled x100 so it sits in the same numeric range as
+    engagement. Missing scores rank 0 — no signal, no boost.
+
+    On top of the kind-native signal sits a bounded STUDENT-INTENT lane
+    bonus (India student research, 2026-10-01): what students actually
+    search for before an exam is, in order, unit-wise one-shot videos,
+    solved PYQs, important-questions lists and notes PDFs — not generic
+    lectures. The bonus (~one order of magnitude of views) reorders
+    near-ties toward the format students came for; it never overrides a
+    decisively more-watched video or a decisively more relevant doc.
+    """
+    if cand.get("kind") == "VIDEO":
+        base = _engagement_score(cand.get("quality_signals"))
+    else:
+        base = 0.0
+        qs = cand.get("quality_signals")
+        if isinstance(qs, dict):
+            for key in ("search_score", "tavily_score"):
+                try:
+                    base = float(qs.get(key)) * 100.0
+                    break
+                except (TypeError, ValueError):
+                    continue
+    return base + _lane_bonus(cand)
+
+
+# ---------------------------------------------------------------------------
+# Student-intent lanes (deterministic, title/URL only — never model-judged).
+# Patterns mirror the verbatim query/title conventions Indian engineering
+# students use ("dbms unit 3 one shot", "dbms pyq rgpv", "important
+# questions", "notes pdf"). Priority order = the exam-prep ranking from
+# the research: PYQ material and important-questions outrank one-shots
+# for documents; for videos the one-shot is the night-before format.
+# ---------------------------------------------------------------------------
+
+_LANE_PATTERNS = (
+    ("PYQ", re.compile(
+        r"\bpyq\b|previous year|past papers?|question papers?|solved papers?",
+        re.I)),
+    ("IMPORTANT_QUESTIONS", re.compile(
+        r"important questions?|expected questions|important topics|"
+        r"most important", re.I)),
+    ("ONE_SHOT", re.compile(
+        r"one\s?shot|in one video|in a single video|complete .{0,40}in one",
+        re.I)),
+    ("NOTES", re.compile(r"\bnotes\b|handwritten", re.I)),
+)
+
+_LANE_BONUS = {
+    "VIDEO": {"ONE_SHOT": 12.0, "IMPORTANT_QUESTIONS": 10.0,
+              "PYQ": 8.0, "NOTES": 0.0},
+    "WEB": {"PYQ": 10.0, "IMPORTANT_QUESTIONS": 10.0,
+            "NOTES": 6.0, "ONE_SHOT": 4.0},
+}
+
+
+def classify_lane(title: str, url: str = "") -> Optional[str]:
+    """First matching student-intent lane for a candidate, or None."""
+    text = f"{title or ''} {url or ''}"
+    for lane, pattern in _LANE_PATTERNS:
+        if pattern.search(text):
+            return lane
+    return None
+
+
+def _lane_bonus(cand: Dict[str, Any]) -> float:
+    lane = classify_lane(cand.get("title", ""), cand.get("url", ""))
+    if not lane:
+        return 0.0
+    return _LANE_BONUS.get(cand.get("kind", ""), {}).get(lane, 0.0)
+
+
+def _candidate_rank_key(cand: Dict[str, Any]):
+    """Best-first ordering for research candidates (round 7).
+
+    Quality FIRST: engagement for videos, Tavily SEO/AEO relevance for
+    documents and free courses (see _candidate_quality). Institutional
+    tier only breaks ties — trust is still enforced absolutely by the
+    mandatory reachability verification below, so an obscure page no
+    longer outranks the resource learners actually watch and like.
+    """
+    url = cand.get("url") or ""
+    domain = (urllib.parse.urlparse(url).netloc or "").lower()
+    domain = domain.replace("www.", "")
+    tier = tier_for_domain(domain)
+    if cand.get("kind") == "VIDEO" and tier == "D":
+        channel = (cand.get("quality_signals", {})
+                   .get("channel_title") or "").lower()
+        if any(h in channel for h in _OFFICIAL_YT_HANDLES):
+            tier = "B"
+    return (_candidate_quality(cand), _tier_rank(tier))
+
+
+def _chapter_ts_to_seconds(ts: str) -> int:
+    parts = [int(p) for p in ts.split(":")]
+    total = 0
+    for p in parts:
+        total = total * 60 + p
+    return total
+
+
+_TIMESTAMP_RE = re.compile(
+    r"(?P<ts>(?:\d{1,2}:)?\d{1,2}:\d{2})\s+[-–—:\s]*(?P<label>[^\n]{3,80})"
+)
+
+
+def parse_video_chapters(description: str) -> List[Dict[str, Any]]:
+    """
+    Parse real chapter timestamps from a YouTube description.
+    Only real timestamped lines are kept; nothing is invented.
+    """
+    chapters: List[Dict[str, Any]] = []
+    for match in _TIMESTAMP_RE.finditer(description or ""):
+        try:
+            start = _chapter_ts_to_seconds(match.group("ts"))
+        except ValueError:
+            continue
+        label = match.group("label").strip()
+        if label and start >= 0:
+            chapters.append({"start_seconds": start, "label": label})
+    # Deduplicate while preserving order.
+    seen = set()
+    unique: List[Dict[str, Any]] = []
+    for ch in sorted(chapters, key=lambda c: c["start_seconds"]):
+        key = (ch["start_seconds"], ch["label"].lower())
+        if key not in seen:
+            seen.add(key)
+            unique.append(ch)
+    return unique
+
+
+class CollegeResourcePipeline:
+    """Live research + verification + caching for learning resources."""
+
+    def __init__(self, store=None):
+        # Imported lazily to avoid circulars in test collection.
+        from backend.services.college_store import college_store as _default_store
+        self.store = store or _default_store
+        self._tavily_key = os.environ.get("TAVILY_API_KEY")
+        self._youtube_key = os.environ.get("YOUTUBE_API_KEY")
+
+    # ------------------------------------------------------------------
+    # Public entry points
+    # ------------------------------------------------------------------
+
+    async def get_verified_resources(
+        self,
+        subject_id: str,
+        topic: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Return VERIFIED cached resources for a subject (+ optional topic).
+
+        Never fabricates: when nothing cached is verified, returns an explicit
+        RESOURCE_ENRICHMENT_PENDING status so the caller can offer the
+        /resources/enrich endpoint instead of showing unverified links.
+        """
+        try:
+            rows = self._read_cache(subject_id, topic)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.error("Resource cache read failed: %s", str(e))
+            return {"status": "RESOURCE_UNAVAILABLE", "resources": [],
+                    "message": "PERSISTENCE_UNAVAILABLE"}
+        if rows:
+            return {"status": "VERIFIED", "resources": rows}
+        return {
+            "status": "RESOURCE_ENRICHMENT_PENDING",
+            "resources": [],
+            "message": (
+                "No verified resources are cached for this topic yet. "
+                "Run POST /api/college/resources/enrich to research them live."
+            ),
+        }
+
+    async def research_topic(
+        self,
+        subject_id: str,
+        topic: str,
+        university_name: Optional[str] = None,
+        subject_name: Optional[str] = None,
+        time_budget_seconds: float = 45.0,
+    ) -> Dict[str, Any]:
+        """
+        Bounded live research for one topic. Writes VERIFIED records into
+        source_records / resource_records / learning_resources.
+
+        Returns {"status": ..., "resources_added": int, "resources": [...]}.
+        """
+        deadline = time.monotonic() + max(5.0, float(time_budget_seconds))
+        with timed_stage("college.resources.research", subject_id=subject_id,
+                         topic=topic):
+            sctx = self._resolve_subject_context(subject_id, topic)
+            query_sets = self._build_queries(
+                subject_id=subject_id,
+                subject_name=subject_name or sctx.get("name"),
+                topic=topic,
+                university_name=university_name or sctx.get("university"),
+                subject_code=sctx.get("code"), unit=sctx.get("unit"),
+                university_short=sctx.get("university_short"))
+            candidates: List[Dict[str, Any]] = []
+            seen_urls: set = set()
+
+            # 1+2. Web search (DuckDuckGo primary, Tavily backup) and
+            # YouTube research run CONCURRENTLY. They used to run
+            # sequentially under one shared deadline: a single slow
+            # provider leg (DDG's HTML endpoint can hang to its full
+            # timeout from datacenter IPs) starved every later leg and
+            # the whole verification step, so research returned zero
+            # resources despite healthy providers. Wall time is now the
+            # slowest leg, not the sum.
+            web_queries = query_sets["web"][:3]
+            yt_queries = query_sets["youtube"][:2]
+            web_results, yt_results = await asyncio.gather(
+                asyncio.gather(
+                    *[self._search_web(q, deadline) for q in web_queries],
+                    return_exceptions=True),
+                asyncio.gather(
+                    *[self._search_youtube(q, deadline) for q in yt_queries],
+                    return_exceptions=True))
+
+            for hits in web_results:
+                if isinstance(hits, Exception):
+                    continue
+                for hit in hits:
+                    url = hit.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    cand: Dict[str, Any] = {
+                        "kind": "WEB", "url": url,
+                        "title": hit.get("title", ""),
+                        "snippet": hit.get("snippet", ""),
+                        "provider": hit.get("provider", "web"),
+                        "quality_signals": hit.get("quality_signals", {}),
+                    }
+                    # A YouTube watch page surfaced by web search is a
+                    # VIDEO, not a document — mislabeling it DOCUMENT is
+                    # how course-portal pages crowded out real videos in
+                    # the cached resource list.
+                    host = urllib.parse.urlparse(url).netloc.lower()
+                    if "youtube.com" in host or "youtu.be" in host:
+                        vid = self._youtube_id_from_url(url)
+                        if vid:
+                            cand["kind"] = "VIDEO"
+                            cand["video_id"] = vid
+                            cand["provider"] = "youtube.com"
+                    candidates.append(cand)
+
+            for videos in yt_results:
+                if isinstance(videos, Exception):
+                    continue
+                for video in videos:
+                    url = video.get("url", "")
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+                    candidates.append({"kind": "VIDEO", **video})
+
+            # Rank best-first before verifying: verification is the
+            # deadline-bounded step, so it must spend itself on the
+            # strongest candidates (institutional tier, then real
+            # engagement) rather than whatever order search returned.
+            candidates.sort(key=_candidate_rank_key, reverse=True)
+
+            # 3. Verify reachability + persist the survivors.
+            added: List[Dict[str, Any]] = []
+            async with httpx.AsyncClient(
+                    timeout=12.0, follow_redirects=True,
+                    headers={"User-Agent": "PathMind-CollegeMVP/1.0"}) as http:
+                for cand in candidates:
+                    if time.monotonic() > deadline:
+                        break
+                    record = await self._verify_and_persist(
+                        http, cand, subject_id, topic)
+                    if record:
+                        added.append(record)
+
+            outcome = "ok" if added else "skipped"
+            log_event("college.resources.researched", subject_id=subject_id,
+                      topic=topic, candidates=len(candidates),
+                      added=len(added), outcome=outcome)
+            return {
+                "status": "VERIFIED" if added else "RESOURCE_ENRICHMENT_PENDING",
+                "resources_added": len(added),
+                "resources": added,
+            }
+
+    # ------------------------------------------------------------------
+    # Cache reads/writes
+    # ------------------------------------------------------------------
+
+    def _read_cache(self, subject_id: str, topic: Optional[str]) -> List[Dict]:
+        adapter = getattr(self.store, "adapter", None)
+        client = getattr(adapter, "client", None)
+        if client is None:
+            return []
+        res = (client.table("learning_resources").select("*")
+               .eq("subject_id", subject_id)
+               .eq("verification_status", "VERIFIED")
+               .execute())
+        rows = list(res.data or [])
+        if topic:
+            needle = topic.lower()
+            rows = [r for r in rows
+                    if needle in (r.get("title") or "").lower()
+                    or any(needle in str(t).lower()
+                           for t in (r.get("topic_ids") or []))]
+        return rows
+
+    async def _verify_and_persist(
+        self, http: httpx.AsyncClient, cand: Dict[str, Any],
+        subject_id: str, topic: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Reachability check; persist VERIFIED records. Returns None if rejected."""
+        url = cand["url"]
+        parsed = urllib.parse.urlparse(url)
+        domain = (parsed.netloc or "").lower().replace("www.", "")
+        tier = tier_for_domain(domain)
+
+        # Promote official-institution YouTube channels to tier B.
+        if cand["kind"] == "VIDEO" and tier == "D":
+            channel = (cand.get("quality_signals", {}).get("channel_title") or "").lower()
+            if any(h in channel for h in _OFFICIAL_YT_HANDLES):
+                tier = "B"
+
+        # Reachability is mandatory — unverifiable URLs are REJECTED.
+        try:
+            resp = await http.head(url)
+            if resp.status_code >= 400:
+                get_resp = await http.get(url)
+                if get_resp.status_code >= 400:
+                    log_event("college.resources.url_rejected", subject_id=subject_id,
+                              outcome="error", error_code="URL_UNREACHABLE")
+                    return None
+            canonical = str(resp.url)
+        except Exception:
+            log_event("college.resources.url_rejected", subject_id=subject_id,
+                      outcome="error", error_code="URL_UNREACHABLE")
+            return None
+
+        # Deduplicate against cache by canonical URL.
+        if self._url_known(subject_id, canonical):
+            return None
+
+        source_id = f"src_{hashlib.sha256(canonical.encode()).hexdigest()[:12]}"
+        resource_id = f"res_{uuid.uuid4().hex[:12]}"
+        now = datetime.now(timezone.utc).isoformat()
+
+        quality_signals = dict(cand.get("quality_signals", {}))
+        quality_signals.update({
+            "domain": domain, "tier": tier,
+            "reachability_checked_at": now, "reachable": True,
+        })
+        # Persist the engagement score alongside the raw statistics so
+        # plan-time attachment can rank without recomputing (and so the
+        # raw views/likes/comments stay auditable on the record).
+        quality_signals["engagement_score"] = round(
+            _engagement_score(quality_signals), 3)
+        # Student-intent lane (one-shot / PYQ / important-questions /
+        # notes), persisted so the plan UI and later ranking passes can
+        # show and use the format the student actually came for.
+        lane = classify_lane(cand.get("title", ""), cand.get("url", ""))
+        if lane:
+            quality_signals["lane"] = lane
+        if cand["kind"] != "VIDEO":
+            # Persist the Tavily SEO/AEO relevance score under the
+            # stable "search_score" key so plan-time attachment ranks
+            # documents by the same signal that ordered research.
+            # YouTube rows rank by engagement_score instead and are
+            # left untouched.
+            raw_score = quality_signals.get(
+                "search_score", quality_signals.get("tavily_score"))
+            if raw_score is not None:
+                try:
+                    quality_signals["search_score"] = round(
+                        float(raw_score), 4)
+                except (TypeError, ValueError):
+                    pass
+
+        if cand["kind"] == "VIDEO":
+            timestamps = await self._video_timestamps(cand, http)
+            resource_type = "VIDEO"
+        else:
+            timestamps = []
+            resource_type = "DOCUMENT"
+
+        adapter = getattr(self.store, "adapter", None)
+        client = getattr(adapter, "client", None)
+        if client is None:
+            return None  # honest: no persistence available, do not fake cache
+
+        try:
+            client.table("source_records").upsert({
+                "source_id": source_id,
+                "url": canonical,
+                "canonical_url": canonical,
+                "title": cand.get("title") or canonical,
+                "domain": domain,
+                "provider_name": cand.get("provider", domain),
+                "provider_type": "VIDEO" if cand["kind"] == "VIDEO" else "WEB",
+                "source_tier": tier,
+                "verification_status": "VERIFIED",
+                "quality_signals": quality_signals,
+                "topic_ids": [topic],
+                "last_verified_at": now,
+            }, on_conflict="source_id").execute()
+
+            row = {
+                "resource_id": resource_id,
+                "title": cand.get("title") or canonical,
+                "resource_type": resource_type,
+                "provider": cand.get("provider", domain),
+                "url": canonical,
+                "source_id": source_id,
+                "source_tier": tier,
+                "estimated_minutes": cand.get("estimated_minutes"),
+                "topic_ids": [topic],
+                "video_timestamps": timestamps,
+                "document_sections": [],
+                "verification_status": "VERIFIED",
+                "last_verified_at": now,
+                "learner_preference_metadata": {"researched": True},
+            }
+            # resource_records has NO quality_signals column — sending
+            # it makes PostgREST reject the insert (PGRST204), which
+            # silently zeroed every live research run. The signals live
+            # on learning_resources (the read model) and source_records.
+            client.table("resource_records").insert(row).execute()
+            # learning_resources is the read-model get_verified_resources serves.
+            client.table("learning_resources").upsert({
+                **row, "subject_id": subject_id,
+                "quality_signals": quality_signals,
+            }, on_conflict="resource_id").execute()
+        except Exception as e:
+            logger.error("Resource persist failed: %s", str(e))
+            return None
+
+        log_event("college.resources.verified", subject_id=subject_id,
+                  resource_id=resource_id, tier=tier, outcome="ok")
+        return {**row, "quality_signals": quality_signals}
+
+    def _url_known(self, subject_id: str, url: str) -> bool:
+        try:
+            adapter = getattr(self.store, "adapter", None)
+            client = getattr(adapter, "client", None)
+            if client is None:
+                return False
+            res = (client.table("learning_resources").select("resource_id")
+                   .eq("subject_id", subject_id).eq("url", url).execute())
+            return bool(res.data)
+        except Exception:
+            return False
+
+    # ------------------------------------------------------------------
+    # Query building
+    # ------------------------------------------------------------------
+
+    def _resolve_subject_context(self, subject_id: str,
+                                 topic: str) -> Dict[str, Any]:
+        """Resolve subject code/name, the unit a topic belongs to, and the
+        university's short name from the verified curriculum tables, so
+        research queries can use the identifiers students actually search
+        with ("7CS4-01", "Unit 3", "RTU"). Any failure degrades to an
+        empty/partial dict — research never breaks because resolution did.
+        """
+        ctx: Dict[str, Any] = {}
+        try:
+            adapter = getattr(self.store, "adapter", None)
+            client = getattr(adapter, "client", None)
+            if client is None:
+                return ctx
+            sres = (client.table("subjects").select("code,name")
+                    .eq("subject_id", subject_id).limit(1).execute())
+            if sres.data:
+                code = (sres.data[0].get("code") or "").strip()
+                name = (sres.data[0].get("name") or "").strip()
+                if code:
+                    ctx["code"] = code
+                if name:
+                    ctx["name"] = name
+            needle = (topic or "").strip().lower()
+            if needle:
+                ures = (client.table("curriculum_units")
+                        .select("unit,title,topics")
+                        .eq("subject_id", subject_id).execute())
+                for row in ures.data or []:
+                    topics = [str(t).lower()
+                              for t in (row.get("topics") or []) if t]
+                    title = (row.get("title") or "").lower()
+                    if any(needle in t or t in needle for t in topics) \
+                            or needle in title:
+                        ctx["unit"] = row.get("unit")
+                        break
+            csres = (client.table("curriculum_subjects")
+                     .select("curriculum_id")
+                     .eq("subject_id", subject_id).limit(1).execute())
+            if csres.data:
+                cur = (client.table("curricula").select("university_id")
+                       .eq("curriculum_id", csres.data[0]["curriculum_id"])
+                       .limit(1).execute())
+                if cur.data:
+                    uni = (client.table("universities").select("name")
+                           .eq("university_id",
+                               cur.data[0]["university_id"])
+                           .limit(1).execute())
+                    if uni.data:
+                        full = (uni.data[0].get("name") or "").strip()
+                        if full:
+                            ctx["university"] = full
+                            words = [w for w in
+                                     re.findall(r"[A-Za-z]+", full)
+                                     if w[0].isupper()]
+                            if len(words) >= 2:
+                                ctx["university_short"] = "".join(
+                                    w[0] for w in words).upper()
+        except Exception:
+            return ctx
+        return ctx
+
+    @staticmethod
+    def _youtube_id_from_url(url: str) -> Optional[str]:
+        try:
+            parsed = urllib.parse.urlparse(url)
+            if "youtu.be" in parsed.netloc.lower():
+                return parsed.path.strip("/").split("/")[0] or None
+            vids = urllib.parse.parse_qs(parsed.query).get("v")
+            return vids[0] if vids else None
+        except Exception:
+            return None
+
+    def _build_queries(self, *, subject_id: str, subject_name: Optional[str],
+                       topic: str, university_name: Optional[str],
+                       subject_code: Optional[str] = None,
+                       unit: Optional[Any] = None,
+                       university_short: Optional[str] = None
+                       ) -> Dict[str, List[str]]:
+        """Query spec from the India student-learning research (2026-10-01).
+
+        Students do not search like academics. Their verbatim patterns:
+        "<subject> unit <n> one shot", "<subject> important questions",
+        "<subject> pyq <university>", "<subject code> question paper",
+        "<subject> notes pdf". YouTube lanes lead with the one-shot; web
+        lanes lead with PYQs and important questions, notes third.
+        Institutional lectures (NPTEL etc.) stay reachable through
+        ranking and tiering — they no longer own the query set.
+        """
+        S = (subject_name or subject_id or "").strip()
+        T = (topic or "").strip()
+        base = f"{S} {T}".strip()
+        unit_bit = f" unit {unit}" if unit else ""
+        youtube = [
+            f"{base} one shot{unit_bit}".strip(),
+            f"{base} in one video",
+            f"{base} lecture",
+        ]
+        uni_bit = (university_short or university_name or "").strip()
+        web: List[str] = []
+        if subject_code:
+            web.append(f"{subject_code} {S} previous year question paper "
+                       f"{uni_bit}".strip())
+        web.append(f"{base} important questions")
+        if not subject_code:
+            web.append(f"{base} pyq solved {uni_bit}".strip())
+        web.append(f"{base} notes pdf")
+        return {"web": web[:3], "youtube": youtube}
+
+    # ------------------------------------------------------------------
+    # Search providers
+    # ------------------------------------------------------------------
+
+    async def _search_web(self, query: str, deadline: float) -> List[Dict]:
+        """DuckDuckGo primary, Tavily backup. Returns [{url, title, snippet}]."""
+        if time.monotonic() > deadline:
+            return []
+        hits = await self._search_duckduckgo(query)
+        if not hits and self._tavily_key and time.monotonic() <= deadline:
+            hits = await self._search_tavily(query)
+        return hits
+
+    async def _search_duckduckgo(self, query: str) -> List[Dict]:
+        """DuckDuckGo HTML endpoint: no API key, real organic results."""
+        try:
+            async with httpx.AsyncClient(
+                    timeout=8.0,
+                    headers={"User-Agent": "Mozilla/5.0"}) as http:
+                resp = await http.post(
+                    DDG_HTML_URL, data={"q": query, "kl": "in-en"})
+                if resp.status_code != 200:
+                    return []
+                html = resp.text
+        except Exception as e:
+            logger.warning("DuckDuckGo search failed: %s", type(e).__name__)
+            return []
+
+        hits: List[Dict] = []
+        # result__a anchors carry the real destination in href.
+        for m in re.finditer(
+                r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>',
+                html, re.DOTALL):
+            raw_href, raw_title = m.group(1), m.group(2)
+            title = re.sub(r"<[^>]+>", "", raw_title).strip()
+            url = self._ddg_unwrap(raw_href)
+            if not url or not url.startswith("http"):
+                continue
+            domain = urllib.parse.urlparse(url).netloc.lower()
+            if not domain or "duckduckgo.com" in domain:
+                continue
+            hits.append({
+                "url": url, "title": title[:200], "snippet": "",
+                "provider": domain.replace("www.", ""),
+                "quality_signals": {"search_engine": "duckduckgo"},
+            })
+            if len(hits) >= 6:
+                break
+        return hits
+
+    @staticmethod
+    def _ddg_unwrap(href: str) -> str:
+        """DuckDuckGo wraps destinations as //duckduckgo.com/l/?uddg=<encoded>."""
+        parsed = urllib.parse.urlparse(href)
+        if "duckduckgo.com" in parsed.netloc:
+            qs = urllib.parse.parse_qs(parsed.query)
+            uddg = qs.get("uddg")
+            if uddg:
+                return urllib.parse.unquote(uddg[0])
+            return ""
+        return href if href.startswith("http") else ""
+
+    async def _search_tavily(self, query: str) -> List[Dict]:
+        if not self._tavily_key:
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as http:
+                resp = await http.post(TAVILY_API_URL, json={
+                    "api_key": self._tavily_key,
+                    "query": query, "max_results": 6,
+                    "include_answer": False,
+                    "search_depth": "basic",
+                })
+                if resp.status_code != 200:
+                    return []
+                data = resp.json()
+        except Exception as e:
+            logger.warning("Tavily search failed: %s", type(e).__name__)
+            return []
+        hits = []
+        for r in data.get("results", []) or []:
+            url = r.get("url") or ""
+            if not url.startswith("http"):
+                continue
+            hits.append({
+                "url": url, "title": (r.get("title") or "")[:200],
+                "snippet": (r.get("content") or "")[:300],
+                "provider": urllib.parse.urlparse(url).netloc
+                    .lower().replace("www.", ""),
+                "quality_signals": {
+                    "search_engine": "tavily",
+                    "search_score": r.get("score"),
+                    "tavily_score": r.get("score"),
+                },
+            })
+        return hits
+
+    async def _search_youtube(self, query: str, deadline: float) -> List[Dict]:
+        """YouTube Data API v3: real video metadata + statistics."""
+        if not self._youtube_key or time.monotonic() > deadline:
+            return []
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as http:
+                resp = await http.get(
+                    f"{YOUTUBE_API_URL}/search",
+                    params={"key": self._youtube_key, "q": query,
+                            "part": "snippet", "type": "video",
+                            "maxResults": 6, "regionCode": "IN",
+                            "safeSearch": "strict"})
+                if resp.status_code != 200:
+                    return []
+                items = resp.json().get("items", [])
+                video_ids = [i["id"]["videoId"] for i in items
+                             if i.get("id", {}).get("videoId")]
+                if not video_ids:
+                    return []
+                stats_resp = await http.get(
+                    f"{YOUTUBE_API_URL}/videos",
+                    params={"key": self._youtube_key,
+                            "id": ",".join(video_ids),
+                            "part": "snippet,statistics,contentDetails"})
+                if stats_resp.status_code != 200:
+                    return []
+                details = {v["id"]: v
+                           for v in stats_resp.json().get("items", [])}
+        except Exception as e:
+            logger.warning("YouTube search failed: %s", type(e).__name__)
+            return []
+
+        videos = []
+        for vid in video_ids:
+            v = details.get(vid)
+            if not v:
+                continue
+            snippet = v.get("snippet", {})
+            stats = v.get("statistics", {})
+            videos.append({
+                "url": f"https://www.youtube.com/watch?v={vid}",
+                "video_id": vid,
+                "title": snippet.get("title", "")[:200],
+                "description": snippet.get("description", ""),
+                "snippet": snippet.get("description", "")[:300],
+                "provider": snippet.get("channelTitle", "YouTube"),
+                "estimated_minutes": self._iso8601_minutes(
+                    v.get("contentDetails", {}).get("duration")),
+                "quality_signals": {
+                    "channel_title": snippet.get("channelTitle"),
+                    "view_count": stats.get("viewCount"),
+                    "like_count": stats.get("likeCount"),
+                    "comment_count": stats.get("commentCount"),
+                    "published_at": snippet.get("publishedAt"),
+                },
+            })
+        return videos
+
+    @staticmethod
+    def _iso8601_minutes(duration: Optional[str]) -> Optional[int]:
+        if not duration:
+            return None
+        m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration)
+        if not m:
+            return None
+        hours = int(m.group(1) or 0)
+        minutes = int(m.group(2) or 0)
+        seconds = int(m.group(3) or 0)
+        return hours * 60 + minutes + (1 if seconds else 0)
+
+    # ------------------------------------------------------------------
+    # Video chapters / transcripts
+    # ------------------------------------------------------------------
+
+    async def _video_timestamps(
+        self, video: Dict[str, Any], http: httpx.AsyncClient,
+    ) -> List[Dict[str, Any]]:
+        """
+        Real chapters parsed from the video description where available.
+        If none, clearly labeled "estimated" segments from the duration —
+        never presented as real chapters.
+        """
+        description = video.get("description") or ""
+        chapters = parse_video_chapters(description)
+        if chapters:
+            stamps = []
+            for idx, chapter in enumerate(chapters[:12]):
+                start = chapter["start_seconds"]
+                end = (chapters[idx + 1]["start_seconds"]
+                       if idx + 1 < len(chapters) else start)
+                stamps.append({"start_seconds": start,
+                               "end_seconds": end,
+                               "label": chapter["label"],
+                               "purpose": chapter["label"],
+                               "source": "video_description"})
+            return stamps
+
+        # Optional: transcript check that the topic is actually discussed.
+        if await self._transcript_confirms_topic(video):
+            minutes = video.get("estimated_minutes") or 20
+            thirds = [0, minutes * 60 // 3, minutes * 120 // 3]
+            return [{"start_seconds": s,
+                     "end_seconds": (thirds[i + 1]
+                                     if i + 1 < len(thirds) else s),
+                     "label": "estimated segment (no chapter markers)",
+                     "purpose": "estimated segment (no chapter markers)",
+                     "source": "estimated"}
+                    for i, s in enumerate(thirds)]
+
+        # Duration only: still "estimated", never masquerading as chapters.
+        minutes = video.get("estimated_minutes")
+        if minutes:
+            return [{"start_seconds": 0,
+                     "end_seconds": minutes * 60,
+                     "label": "full video",
+                     "purpose": "full video",
+                     "source": "estimated"}]
+        return []
+
+    async def _transcript_confirms_topic(self, video: Dict[str, Any]) -> bool:
+        """Best-effort: confirm via transcript that content is on-topic."""
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            video_id = video.get("video_id")
+            if not video_id:
+                return False
+            transcript = YouTubeTranscriptApi.get_transcript(video_id)
+            text = " ".join(seg.get("text", "") for seg in transcript).lower()
+            title_words = [w for w in re.findall(r"\w{4,}", video.get("title", "").lower())]
+            return any(w in text for w in title_words[:5])
+        except Exception:
+            return False
