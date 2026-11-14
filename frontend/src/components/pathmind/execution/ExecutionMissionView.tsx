@@ -259,7 +259,7 @@ export function ExecutionMissionView() {
     const url = plan.is_paused ? "/api/execution/resume" : "/api/execution/pause";
     const body = plan.is_paused ? {} : { reason: "Learner-requested pause to focus on university exams." };
     try {
-      await fetch(url, {
+      await authedFetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

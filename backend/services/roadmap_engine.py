@@ -11,7 +11,6 @@ from backend.core.roadmap_schemas import (
     Resource,
     EvidenceSubmission,
     EvaluationResult,
-    MasteryDimensions,
     DisclosedRoadmapView,
     DisclosedStageView,
     AdaptConstraintRequest
@@ -637,8 +636,11 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
         submission: EvidenceSubmission
     ) -> EvaluationResult:
         """
-        ADK EvidenceEvaluatorAgent + Progression Loop:
-        1. Evaluates evidence against stage criteria.
+        Honest deterministic evidence check + progression loop:
+        1. Confirms the submission is substantive (non-trivial length plus
+           domain markers) — a content-presence heuristic, NOT a mastery
+           measurement. No rubric has scored this evidence, so
+           mastery_dimensions stays None and requires_review stays True.
         2. If PASS: Unlocks next stage on backend, triggers Personal Agent Learning Loop.
         3. If REINFORCE: Inserts remediation mission, tracks learning signal.
         """
@@ -656,7 +658,10 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
         # Save submission
         await self.store.save_evidence_submission(person_id, submission.model_dump(mode="json"))
 
-        # Evaluate evidence: Substantive content verification
+        # Evaluate evidence: substantive-content heuristic ONLY. This checks
+        # that something non-trivial was submitted (length + domain markers);
+        # it does not measure understanding, application, or transfer. Mastery
+        # scores are never invented here — see requires_review on the result.
         payload = submission.content_payload or {}
         evidence_text = str(payload.get("code", "") or payload.get("repo_url", "") or payload.get("explanation", "") or payload.get("text", "") or payload.get("artifact_url", "")).strip()
 
@@ -686,8 +691,10 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
                 mission_id=submission.mission_id,
                 status="PASS",
                 # Honest: the keyword heuristic confirms substantive content, but
-                # no rubric has measured mastery yet. Scores stay None.
+                # no rubric has measured mastery yet. Scores stay None and the
+                # result requires rubric review before it can support a mastery claim.
                 mastery_dimensions=None,
+                requires_review=True,
                 demonstrated=demonstrated_skills,
                 missing=[],
                 feedback=f"Submission accepted by automated check for {target_stage.title}. Detailed mastery assessment pending rubric review.",
@@ -726,18 +733,16 @@ Make sure stage 1 is locked=false and status="ACTIVE", and other stages are lock
                 stage_id=submission.stage_id,
                 mission_id=submission.mission_id,
                 status="REINFORCE",
-                mastery_dimensions=MasteryDimensions(
-                    understanding=65.0,
-                    application=60.0,
-                    transfer=55.0,
-                    accuracy=68.0,
-                    explanation=70.0
-                ),
+                # Honest: no rubric has measured mastery on this submission, so
+                # no mastery scores are reported here (previously hardcoded
+                # 65/60/55/68/70). The result requires rubric review.
+                mastery_dimensions=None,
+                requires_review=True,
                 demonstrated=["Preliminary conceptual alignment attempted."],
                 missing=[f"Verifiable artifact for {target_stage.title}", "Detailed methodology documentation"],
-                feedback=f"Evidence is preliminary. We need a verifiable artifact or documentation to confirm competency in {target_stage.title}.",
+                feedback=f"Evidence is preliminary. We need a verifiable artifact or documentation to confirm competency in {target_stage.title}. No mastery score has been measured yet — this result awaits rubric review.",
                 recommended_next_action=f"Review targeted guidance and submit completed milestone artifact for {target_stage.title}.",
-                confidence="MEDIUM",
+                confidence="LOW",
                 evaluated_at=datetime.now(timezone.utc).isoformat()
             )
             target_stage.status = "REINFORCEMENT"

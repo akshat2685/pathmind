@@ -112,9 +112,12 @@ export function Sidebar() {
       <div className="px-5 mb-6 flex items-center justify-between">
         <Link href="/" className="group block">
           <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-secondary text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-              auto_stories
-            </span>
+            <img
+              src="/pathmind-mark.svg"
+              alt=""
+              aria-hidden="true"
+              className="w-7 h-7"
+            />
             <h1 className="font-headline-md text-secondary text-xl tracking-tight group-hover:text-primary transition-colors">
               PATHMIND
             </h1>

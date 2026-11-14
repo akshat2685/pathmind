@@ -8,9 +8,12 @@ import { VerificationStep } from "@/components/pathmind/steps/VerificationStep";
 import { AspirationTestStep } from "@/components/pathmind/steps/AspirationTestStep";
 import { authedFetch } from "@/lib/api";
 import { ClaimBadge } from "@/components/pathmind/trust/ClaimBadge";
+import { useAuth } from "@/lib/auth-context";
+import { getSupabaseClient } from "@/lib/supabase";
+import { LandingPage } from "@/components/pathmind/LandingPage";
 import type { TestEvaluation } from "@/components/pathmind/steps/AspirationTestStep";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
 
 export interface EvidenceItem {
   source: string;
@@ -146,6 +149,11 @@ const JOURNEY_STEPS = [
 ];
 
 export default function GuidedJourneyPage() {
+  // Landing gate: when auth is configured and there is no session, visitors
+  // see the landing page instead of the journey. While the session check
+  // is pending (or auth is unconfigured) the journey renders as before.
+  const { user: authUser, loading: authLoading } = useAuth();
+
   // Current step in state machine (0 to 5)
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -613,6 +621,12 @@ export default function GuidedJourneyPage() {
       setLoading(false);
     }
   };
+
+  // Public front door: configured auth + no session => landing page.
+  // Degraded mode (Supabase unconfigured) keeps the journey as today.
+  if (getSupabaseClient() !== null && !authLoading && !authUser) {
+    return <LandingPage />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
@@ -1339,8 +1353,8 @@ export default function GuidedJourneyPage() {
                 </p>
 
                 <div className="grid sm:grid-cols-2 gap-3 text-xs pt-1">
-                  <div className="p-3 rounded bg-emerald-500/10 border border-emerald-500/20 text-on-surface">
-                    <strong className="text-emerald-700 dark:text-emerald-300 block mb-1">
+                  <div className="p-3 rounded bg-[#4a654e]/10 border border-[#4a654e]/20 text-on-surface">
+                    <strong className="text-[#4a654e] block mb-1">
                       Verified Strengths:
                     </strong>
                     <ul className="list-disc pl-4 space-y-0.5">
@@ -1490,7 +1504,7 @@ export default function GuidedJourneyPage() {
                       <div
                         className={`inline-flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold uppercase ${
                           isActive
-                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                            ? "bg-[#4a654e]/15 text-[#4a654e] border border-[#4a654e]/30"
                             : "bg-outline/10 text-outline border border-outline/20"
                         }`}
                       >
@@ -1580,7 +1594,7 @@ export default function GuidedJourneyPage() {
                     <div
                       className={`p-4 rounded border text-xs font-body-md ${
                         phaseEvalResult.status === "PASS"
-                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200"
+                          ? "bg-[#4a654e]/10 border-[#4a654e]/30 text-[#4a654e]"
                           : "bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-200"
                       }`}
                     >

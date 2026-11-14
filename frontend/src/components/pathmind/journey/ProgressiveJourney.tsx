@@ -193,17 +193,16 @@ export function ProgressiveJourney() {
     setLoading(true);
     setError(null);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
-        : "scholar-user";
-
-      const roadmapUrl = versionNum 
-        ? `${baseUrl}/api/roadmap/version/${versionNum}`
-        : `${baseUrl}/api/roadmap/current`;
+      // Roadmap is fetched via authedFetch (absolute API base + Supabase
+      // Bearer <redacted>). The previous raw fetch() sent no Authorization header
+      // and derived identity from a localStorage name slug, so the backend
+      // answered 401 once JWT verification was enforced.
+      const roadmapUrl = versionNum
+        ? `/api/roadmap/version/${versionNum}`
+        : `/api/roadmap/current`;
 
       const [resRoadmap, resIntel, resVersions] = await Promise.all([
-        fetch(roadmapUrl, { headers: {} }),
+        authedFetch(roadmapUrl, { headers: {} }),
         authedFetch(`/api/adaptation/state`, { headers: {} }),
         authedFetch(`/api/roadmap/versions`, { headers: {} })
       ]);
@@ -246,7 +245,6 @@ export function ProgressiveJourney() {
 
     setIsSubmitting(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";
@@ -295,11 +293,6 @@ export function ProgressiveJourney() {
     if (!roadmap) return;
     setIsAdapting(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
-        : "scholar-user";
-
       const res = await authedFetch(`/api/adaptation/constraint-change`, {
         method: "POST",
         headers: {
@@ -325,11 +318,6 @@ export function ProgressiveJourney() {
   const handleGoalChangeSubmit = async () => {
     setIsChangingGoal(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
-      const personId = typeof window !== "undefined"
-        ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
-        : "scholar-user";
-
       const res = await authedFetch(`/api/adaptation/goal-change`, {
         method: "POST",
         headers: {
@@ -357,7 +345,6 @@ export function ProgressiveJourney() {
   const handleAdaptationDecision = async (adaptationId: string, action: "APPROVE" | "REJECT") => {
     setIsDeciding(true);
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "https://pathmind-api.onrender.com";
       const personId = typeof window !== "undefined"
         ? (localStorage.getItem("pathmind_user_name")?.toLowerCase().replace(/\s+/g, "-") || "")
         : "scholar-user";

@@ -78,11 +78,12 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
     <header className="w-full flex justify-between items-center px-4 sm:px-8 py-3.5 bg-surface-container-low/90 backdrop-blur-md border-b border-outline/30 sticky top-0 z-40">
       <div className="flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2.5 group" aria-label="PATHMIND Homepage">
-          <div className="w-9 h-9 rounded-full bg-secondary/15 text-secondary border border-secondary/30 flex items-center justify-center group-hover:scale-105 transition-transform">
-            <span className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>
-              auto_stories
-            </span>
-          </div>
+          <img
+            src="/pathmind-mark.svg"
+            alt=""
+            aria-hidden="true"
+            className="w-9 h-9 group-hover:scale-105 transition-transform"
+          />
           <div className="flex flex-col">
             <span className="font-headline-md text-xl tracking-tight text-secondary font-bold">
               PATHMIND
@@ -106,8 +107,8 @@ export function TopBar({ scholarName: propName, personId: propId }: TopBarProps 
           </div>
         )}
 
-        <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#4a654e]/10 border border-[#4a654e]/30 text-[#4a654e] text-xs font-medium">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4a654e] animate-pulse" />
           <span>Ready</span>
         </div>
 

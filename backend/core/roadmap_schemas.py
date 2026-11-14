@@ -104,6 +104,12 @@ class EvaluationResult(BaseModel):
     mission_id: Optional[str] = None
     status: str = "PASS"  # PASS, REINFORCE, INSUFFICIENT_EVIDENCE
     mastery_dimensions: Optional[MasteryDimensions] = None
+    # True until a real rubric (human or LLM-with-rubric) measures mastery.
+    # The automated check below only confirms substantive content; it never
+    # measures understanding/application/transfer, so no evaluation from it
+    # may claim mastery scores. Consumers must treat requires_review=True
+    # results as provisional.
+    requires_review: bool = True
     demonstrated: List[str] = Field(default_factory=list)
     missing: List[str] = Field(default_factory=list)
     feedback: str

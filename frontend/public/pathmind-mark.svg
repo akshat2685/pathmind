@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 90 400 180">
+  <!-- PathMind open-book mark (extracted from the wordmark lockup) -->
+  <g fill="none" stroke="#171512" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 60 150 Q 150 110 240 150 L 240 250 Q 150 210 60 250 Z"/>
+    <path d="M 240 150 Q 330 110 420 150 L 420 250 Q 330 210 240 250 Z"/>
+    <path d="M 240 150 L 240 250"/>
+  </g>
+  <path d="M 90 215 Q 180 175 240 185 Q 310 195 390 145" fill="none" stroke="#C73E1D" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="398" cy="140" r="13" fill="#C73E1D"/>
+</svg>

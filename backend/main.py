@@ -46,7 +46,10 @@ import logging
 import sys
 
 if not settings.GEMINI_API_KEY:
-    logging.critical("CRITICAL: GEMINI_API_KEY is missing. Production startup aborted.")
+    # Honest wording: under uvicorn this does NOT abort startup — the app
+    # boots degraded and /health reports gemini MISSING. Only the direct
+    # `python main.py` path exits below.
+    logging.critical("CRITICAL: GEMINI_API_KEY is missing. AI features will run degraded; set GEMINI_API_KEY in the Render dashboard.")
     if __name__ == "__main__":
         sys.exit(1)
 

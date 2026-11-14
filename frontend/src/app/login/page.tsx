@@ -110,9 +110,7 @@ export default function LoginPage() {
       <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-10">
         <Link href="/" className="flex items-center gap-3.5 group">
           <div className="w-10 h-10 rounded-full border-[1.75px] border-[#252321]/80 overflow-hidden bg-[#fdfae7] shadow-sm flex items-center justify-center transition-transform group-hover:-rotate-3">
-            <span className="material-symbols-outlined text-[#4a654e] text-2xl">
-              auto_stories
-            </span>
+            <img src="/pathmind-mark.svg" alt="PathMind" className="w-8 h-8" />
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-2xl tracking-tight leading-none text-[#252321]">

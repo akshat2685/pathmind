@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+  <!-- PathMind wordmark: open-book mark + PATH (ink) / MIND (sindoor) + tagline -->
+  <!-- Open book mark -->
+  <g fill="none" stroke="#171512" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 60 150 Q 150 110 240 150 L 240 250 Q 150 210 60 250 Z"/>
+    <path d="M 240 150 Q 330 110 420 150 L 420 250 Q 330 210 240 250 Z"/>
+    <path d="M 240 150 L 240 250"/>
+  </g>
+  <!-- Rising path with destination dot -->
+  <path d="M 90 215 Q 180 175 240 185 Q 310 195 390 145" fill="none" stroke="#C73E1D" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="398" cy="140" r="13" fill="#C73E1D"/>
+  <!-- Wordmark -->
+  <text x="480" y="215" font-family="Georgia, 'Times New Roman', serif" font-size="104" font-weight="bold" letter-spacing="2">
+    <tspan fill="#171512">PATH</tspan><tspan fill="#C73E1D">MIND</tspan>
+  </text>
+  <!-- Tagline -->
+  <text x="484" y="272" font-family="Georgia, 'Times New Roman', serif" font-size="27" letter-spacing="6" fill="#5A554E">MINDFUL LEARNING PATH COMPANION</text>
+</svg>
